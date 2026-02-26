@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <!-- Left Antenna -->
+  <path d="M 43 25 Q 25 5 10 15" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>
+  <!-- Right Antenna -->
+  <path d="M 57 25 Q 75 5 90 15" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Left Legs -->
+  <path d="M 40 45 Q 28 45 22 53" fill="none" stroke="#dc2626" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 40 55 Q 30 55 25 65" fill="none" stroke="#dc2626" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 40 65 Q 32 65 28 75" fill="none" stroke="#dc2626" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Right Legs -->
+  <path d="M 60 45 Q 72 45 78 53" fill="none" stroke="#dc2626" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 60 55 Q 70 55 75 65" fill="none" stroke="#dc2626" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 60 65 Q 68 65 72 75" fill="none" stroke="#dc2626" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Let's adjust Left Claw (Holding AML) -->
+  <path d="M 38 42 C 20 20, 5 35, 15 50 C 25 65, 30 55, 38 42 Z" fill="#ef4444"/>
+  <path d="M 15 50 C 5 60, -5 45, 8 30 C 15 20, 25 35, 38 42" fill="none" stroke="#dc2626" stroke-width="5" stroke-linecap="round"/>
+  
+  <!-- Right Claw (Empty/Open) -->
+  <path d="M 62 42 C 80 20, 95 35, 85 50 C 75 65, 70 55, 62 42 Z" fill="#ef4444"/>
+  <path d="M 85 50 C 95 60, 105 45, 92 30 C 85 20, 75 35, 62 42" fill="none" stroke="#dc2626" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- AML Block inside Left Claw -->
+  <g transform="translate(4, 34) rotate(-20)">
+    <rect x="0" y="0" width="28" height="18" rx="4" fill="#064e3b" stroke="#10b981" stroke-width="1.5" opacity="0.95"/>
+    <text x="3" y="13" font-family="'JetBrains Mono', monospace" font-weight="700" font-size="10" fill="#10b981">AML</text>
+  </g>
+
+  <!-- Lobster Body -->
+  <path d="M 40 30 C 40 15, 60 15, 60 30 C 65 45, 65 55, 60 70 C 60 80, 40 80, 40 70 C 35 55, 35 45, 40 30 Z" fill="#ef4444"/>
+  
+  <!-- Lobster Back/Armor Segments -->
+  <path d="M 40 45 L 60 45" stroke="#b91c1c" stroke-width="2" opacity="0.5"/>
+  <path d="M 38 55 L 62 55" stroke="#b91c1c" stroke-width="2" opacity="0.5"/>
+  <path d="M 39 65 L 61 65" stroke="#b91c1c" stroke-width="2" opacity="0.5"/>
+  <path d="M 42 75 L 58 75" stroke="#b91c1c" stroke-width="2" opacity="0.5"/>
+
+  <!-- Tail Fin -->
+  <path d="M 42 75 C 42 90, 30 95, 30 95 C 40 92, 50 85, 50 85 C 50 85, 60 92, 70 95 C 70 95, 58 90, 58 75 Z" fill="#dc2626"/>
+
+  <!-- Eyes -->
+  <circle cx="45" cy="26" r="2.5" fill="#facc15"/>
+  <circle cx="55" cy="26" r="2.5" fill="#facc15"/>
+  <circle cx="45" cy="26" r="1" fill="#000"/>
+  <circle cx="55" cy="26" r="1" fill="#000"/>
+
+</svg>
