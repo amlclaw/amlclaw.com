@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import PageGuide from "@/components/PageGuide";
 import RulesetList from "@/components/RulesetList";
 import RulesetGenerator from "@/components/RulesetGenerator";
 
@@ -23,6 +24,16 @@ function RulesContent() {
 
   return (
     <div className="layout-centered">
+      <PageGuide
+        pageKey="rules"
+        title="Rule Sets"
+        description="Manage detection rule sets that power address screening and monitoring."
+        tips={[
+          "Built-in rulesets are read-only — clone to customize",
+          "AI Generate from a compliance policy for automated rule creation",
+          "Click any ruleset to view, edit, or delete individual rules",
+        ]}
+      />
       {generatorMode ? (
         <RulesetGenerator
           initialPolicyId={initialPolicyId}

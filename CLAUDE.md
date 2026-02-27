@@ -39,8 +39,9 @@ app/
     ├── monitors/            # CRUD + manual run + history + scheduler status
     └── ai/status/           # AI job status + abort
 
-components/                  # Client components (19 files)
-├── TopNav.tsx               # 5-tab navigation (Documents, Policies, Rules, Screening, Monitoring)
+components/                  # Client components (20 files)
+├── Sidebar.tsx              # Vertical sidebar navigation (replaces TopNav), responsive (collapse/hamburger)
+├── PageGuide.tsx            # Collapsible intro banner per page, persisted in localStorage
 ├── Document*.tsx            # Library, List, Modal, Upload
 ├── Policy*.tsx              # List, Viewer, Generator
 ├── Ruleset*.tsx             # List, Viewer, Generator
@@ -142,6 +143,10 @@ Client: AIStreamPanel → fetch() → reader.read() → parse SSE → render mar
 ## Key Patterns
 
 - **No external state management** — React hooks only (`useState`, `useCallback`, `useRef`)
+- **Sidebar navigation** — Fixed left sidebar (220px), collapses to icons on tablet (56px), hamburger overlay on mobile. Theme toggle and GitHub link in sidebar footer.
+- **Light/dark theme** — `data-theme="light"` on `<html>` overrides CSS variables; default is dark (no attribute). Preference persists in `localStorage("theme")`. Inline `<script>` in `layout.tsx` prevents flash on load.
+- **Page guides** — Collapsible intro banners per page (`PageGuide` component), dismiss state persisted in `localStorage("guide_dismissed_{pageKey}")`
+- **Responsive breakpoints** — Tablet (768–1024px): sidebar collapses to icons, expands on hover. Mobile (<767px): sidebar hidden, mobile topbar with hamburger.
 - **Inline styles** for layout, CSS classes for risk pills/badges/markdown
 - **`safeSend`/`safeClose` wrappers** on SSE controllers to prevent "controller already closed" errors
 - **Suspense boundaries** required on pages using `useSearchParams()`

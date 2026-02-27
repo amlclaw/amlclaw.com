@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import PageGuide from "@/components/PageGuide";
 import MonitorList from "@/components/MonitorList";
 import MonitorEditor from "@/components/MonitorEditor";
 import MonitorRunHistory from "@/components/MonitorRunHistory";
@@ -33,6 +34,16 @@ export default function MonitoringPage() {
   return (
     <div className="layout-sidebar">
       <div className="main">
+        <PageGuide
+          pageKey="monitoring"
+          title="Continuous Monitoring"
+          description="Schedule automated batch screening tasks that run on a recurring basis."
+          tips={[
+            "Create a task with addresses and a schedule",
+            "Run Now for immediate screening",
+            "Click History to view execution logs",
+          ]}
+        />
         <MonitorList
           onEdit={handleEdit}
           onSelectHistory={handleSelectHistory}

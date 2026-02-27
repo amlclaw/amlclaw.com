@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
+import PageGuide from "@/components/PageGuide";
 import PolicyList from "@/components/PolicyList";
 import PolicyViewer from "@/components/PolicyViewer";
 import PolicyGenerator from "@/components/PolicyGenerator";
@@ -39,7 +40,7 @@ function PoliciesContent() {
   }, []);
 
   return (
-    <div className="layout-sidebar" style={{ height: "calc(100vh - 96px)" }}>
+    <div className="layout-sidebar" style={{ height: "100vh" }}>
       <div className="sidebar">
         <PolicyList
           selected={selectedPolicy}
@@ -49,6 +50,16 @@ function PoliciesContent() {
         />
       </div>
       <div className="main">
+        <PageGuide
+          pageKey="policies"
+          title="Compliance Policies"
+          description="AI-generated compliance policies derived from regulatory documents."
+          tips={[
+            "Select a policy from the sidebar to view its content",
+            "Click 'Generate New' to create from selected documents",
+            "Use 'Generate Rules' to convert a policy into detection rules",
+          ]}
+        />
         {generatorMode ? (
           <PolicyGenerator
             documentIds={generatorDocs}

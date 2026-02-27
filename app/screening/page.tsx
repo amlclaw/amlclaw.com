@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import PageGuide from "@/components/PageGuide";
 import ScreeningForm from "@/components/ScreeningForm";
 import ScreeningResult from "@/components/ScreeningResult";
 import HistoryPanel from "@/components/HistoryPanel";
@@ -86,6 +87,16 @@ export default function ScreeningPage() {
   return (
     <div className="layout-sidebar">
       <div className="main">
+        <PageGuide
+          pageKey="screening"
+          title="Address Screening"
+          description="Screen blockchain addresses against your compliance rule sets using TrustIn KYA API."
+          tips={[
+            "Enter an address, select scenario and ruleset, then start screening",
+            "Traces fund flows in real time via TrustIn graph API",
+            "View screening history on the right panel",
+          ]}
+        />
         <ScreeningForm onJobStarted={handleJobStarted} onLoading={setLoading} />
         <div style={{ marginTop: "var(--sp-5)" }}>
           <ScreeningResult job={jobData} jobId={jobId} loading={loading} progress={progress} />

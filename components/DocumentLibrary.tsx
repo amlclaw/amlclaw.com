@@ -106,7 +106,7 @@ export default function DocumentLibrary() {
   };
 
   return (
-    <div style={{ maxWidth: 1000, margin: "0 auto", padding: "var(--sp-5) var(--sp-6)" }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 var(--sp-6) var(--sp-5)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--sp-4)" }}>
         <h1 style={{ fontSize: "var(--text-lg)", fontWeight: 700 }}>Document Library</h1>
         <button className="btn btn-md btn-secondary" onClick={() => setUploadOpen(true)}>
@@ -160,7 +160,7 @@ export default function DocumentLibrary() {
             {selected.size > 0 ? `${selected.size} selected` : `${filtered.length} documents`}
           </span>
         </div>
-        <div style={{ maxHeight: "calc(100vh - 320px)", overflowY: "auto" }}>
+        <div style={{ maxHeight: "calc(100vh - 260px)", overflowY: "auto" }}>
           {Object.entries(groups).map(([cat, items]) => (
             <div key={cat}>
               <div className="label" style={{ padding: "10px var(--sp-4) var(--sp-1)" }}>
@@ -216,16 +216,7 @@ export default function DocumentLibrary() {
 
       {/* Bottom Action Bar */}
       {selected.size > 0 && (
-        <div
-          style={{
-            position: "fixed", bottom: 0, left: 0, right: 0,
-            padding: "var(--sp-3) var(--sp-6)",
-            background: "rgba(9, 9, 11, 0.95)", backdropFilter: "blur(12px)",
-            borderTop: "1px solid var(--border-default)",
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            zIndex: 50,
-          }}
-        >
+        <div className="bottom-action-bar">
           <span style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)" }}>
             {selected.size} document{selected.size > 1 ? "s" : ""} selected
           </span>
