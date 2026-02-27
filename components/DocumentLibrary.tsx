@@ -106,7 +106,7 @@ export default function DocumentLibrary() {
   };
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 var(--sp-6) var(--sp-5)" }}>
+    <div style={{ padding: "0 var(--sp-6) var(--sp-5)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--sp-4)" }}>
         <h1 style={{ fontSize: "var(--text-lg)", fontWeight: 700 }}>Document Library</h1>
         <button className="btn btn-md btn-secondary" onClick={() => setUploadOpen(true)}>

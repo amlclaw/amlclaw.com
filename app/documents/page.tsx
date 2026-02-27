@@ -6,7 +6,7 @@ import DocumentLibrary from "@/components/DocumentLibrary";
 export default function DocumentsPage() {
   return (
     <>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "var(--sp-5) var(--sp-6) 0" }}>
+      <div style={{ padding: "var(--sp-5) var(--sp-6) 0" }}>
         <PageGuide
           pageKey="documents"
           title="Document Library"

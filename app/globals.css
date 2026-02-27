@@ -874,8 +874,6 @@
 
   /* ============ Page Layouts ============ */
   .layout-centered {
-    max-width: 900px;
-    margin: 0 auto;
     padding: var(--sp-5) var(--sp-6);
   }
   .layout-sidebar {
