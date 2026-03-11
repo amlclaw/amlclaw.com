@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { spawnAI, isAIBusy } from "@/lib/ai";
+import { spawnAI } from "@/lib/ai";
 import { loadPrompt, loadRuleSchema, loadLabels } from "@/lib/prompts";
 import { loadPolicy, loadCustomMeta, saveCustomMeta, saveRuleset } from "@/lib/storage";
 import path from "path";
@@ -7,10 +7,6 @@ import path from "path";
 const RULESETS_DIR = path.join(process.cwd(), "data", "rulesets");
 
 export async function POST(req: Request) {
-  if (isAIBusy()) {
-    return NextResponse.json({ error: "AI is currently busy with another task" }, { status: 409 });
-  }
-
   const body = await req.json();
   const { policyId, name, jurisdiction } = body as {
     policyId: string;

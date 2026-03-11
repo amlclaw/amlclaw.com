@@ -1,10 +1,8 @@
 /**
- * Multi-provider AI engine — replaces lib/claude.ts
+ * Multi-provider AI engine
  * Provider-agnostic streaming interface that works with AIStreamPanel.
- * Uses file-based lock for single-job concurrency (same as old claude.ts).
+ * Supports concurrent AI jobs (no global lock).
  */
-import fs from "fs";
-import path from "path";
 import { getActiveAIConfig, isDemoMode, type AIProvider, type AIProviderConfig as SettingsProviderConfig } from "./settings";
 import { streamClaude, testClaude } from "./ai-providers/claude";
 import { streamDeepSeek, testDeepSeek } from "./ai-providers/deepseek";
@@ -20,58 +18,44 @@ export interface StreamCallbacks {
 }
 
 // ---------------------------------------------------------------------------
-// File-based lock (same pattern as old claude.ts)
+// Active jobs tracker (in-memory, supports concurrency)
 // ---------------------------------------------------------------------------
-const LOCK_FILE = path.join(process.cwd(), "data", ".ai-lock.json");
-
-interface LockData {
+interface ActiveJob {
   id: string;
   type: string;
   startedAt: string;
   provider: string;
+  abort: AbortController;
 }
 
-function readLock(): LockData | null {
-  try {
-    if (fs.existsSync(LOCK_FILE)) {
-      return JSON.parse(fs.readFileSync(LOCK_FILE, "utf-8"));
-    }
-  } catch { /* corrupt file */ }
-  return null;
-}
-
-function writeLock(data: LockData): void {
-  const dir = path.dirname(LOCK_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(LOCK_FILE, JSON.stringify(data));
-}
-
-function removeLock(): void {
-  try { fs.unlinkSync(LOCK_FILE); } catch { /* already gone */ }
-}
-
-// Track active abort controller
-let activeAbort: AbortController | null = null;
+const activeJobs = new Map<string, ActiveJob>();
 
 export function isAIBusy(): boolean {
-  return readLock() !== null;
+  return activeJobs.size > 0;
+}
+
+export function getActiveJobs(): { id: string; type: string; startedAt: string }[] {
+  return [...activeJobs.values()].map((j) => ({ id: j.id, type: j.type, startedAt: j.startedAt }));
 }
 
 export function getCurrentJob(): { id: string; type: string; startedAt: string } | null {
-  const lock = readLock();
-  if (!lock) return null;
-  return { id: lock.id, type: lock.type, startedAt: lock.startedAt };
+  const jobs = getActiveJobs();
+  return jobs.length > 0 ? jobs[0] : null;
+}
+
+export function abortJob(jobId: string): boolean {
+  const job = activeJobs.get(jobId);
+  if (!job) return false;
+  job.abort.abort();
+  activeJobs.delete(jobId);
+  return true;
 }
 
 export function abortCurrentJob(): boolean {
-  const lock = readLock();
-  if (!lock) return false;
-  if (activeAbort) {
-    activeAbort.abort();
-    activeAbort = null;
-  }
-  removeLock();
-  return true;
+  if (activeJobs.size === 0) return false;
+  const first = activeJobs.values().next().value;
+  if (!first) return false;
+  return abortJob(first.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -183,34 +167,28 @@ async function streamDemo(
 }
 
 export function spawnAI(opts: SpawnAIOpts): { abort: () => void } {
-  if (isAIBusy()) {
-    opts.onError("AI is busy with another task");
-    return { abort: () => {} };
-  }
+  const abort = new AbortController();
 
   // Demo mode — stream pre-built content
   if (isDemoMode()) {
-    writeLock({
+    activeJobs.set(opts.jobId, {
       id: opts.jobId,
       type: opts.jobType,
       startedAt: new Date().toISOString(),
       provider: "demo",
+      abort,
     });
-
-    const abort = new AbortController();
-    activeAbort = abort;
 
     streamDemo(opts.jobType, {
       onData: opts.onData,
-      onComplete: (output) => { removeLock(); activeAbort = null; opts.onComplete(output); },
-      onError: (error) => { removeLock(); activeAbort = null; opts.onError(error); },
+      onComplete: (output) => { activeJobs.delete(opts.jobId); opts.onComplete(output); },
+      onError: (error) => { activeJobs.delete(opts.jobId); opts.onError(error); },
     }, abort.signal).catch((e) => {
-      removeLock();
-      activeAbort = null;
+      activeJobs.delete(opts.jobId);
       opts.onError(e instanceof Error ? e.message : String(e));
     });
 
-    return { abort: () => { abort.abort(); activeAbort = null; removeLock(); } };
+    return { abort: () => { abort.abort(); activeJobs.delete(opts.jobId); } };
   }
 
   const { provider, config } = getActiveAIConfig();
@@ -220,26 +198,22 @@ export function spawnAI(opts: SpawnAIOpts): { abort: () => void } {
     return { abort: () => {} };
   }
 
-  writeLock({
+  activeJobs.set(opts.jobId, {
     id: opts.jobId,
     type: opts.jobType,
     startedAt: new Date().toISOString(),
     provider,
+    abort,
   });
-
-  const abort = new AbortController();
-  activeAbort = abort;
 
   const callbacks: StreamCallbacks = {
     onData: opts.onData,
     onComplete: (output) => {
-      removeLock();
-      activeAbort = null;
+      activeJobs.delete(opts.jobId);
       opts.onComplete(output);
     },
     onError: (error) => {
-      removeLock();
-      activeAbort = null;
+      activeJobs.delete(opts.jobId);
       opts.onError(error);
     },
   };
@@ -247,16 +221,14 @@ export function spawnAI(opts: SpawnAIOpts): { abort: () => void } {
   // Dispatch to provider
   const streamFn = getStreamFunction(provider);
   streamFn(config, opts.prompt, callbacks).catch((e) => {
-    removeLock();
-    activeAbort = null;
+    activeJobs.delete(opts.jobId);
     opts.onError(e instanceof Error ? e.message : String(e));
   });
 
   return {
     abort: () => {
-      if (abort) abort.abort();
-      activeAbort = null;
-      removeLock();
+      abort.abort();
+      activeJobs.delete(opts.jobId);
     },
   };
 }

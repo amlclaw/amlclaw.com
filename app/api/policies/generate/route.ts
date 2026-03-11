@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { spawnAI, isAIBusy } from "@/lib/ai";
+import { spawnAI } from "@/lib/ai";
 import { loadPrompt } from "@/lib/prompts";
 import { updatePolicy } from "@/lib/storage";
 import { getIndexStatus, searchChunks } from "@/lib/vectorstore";
@@ -258,10 +258,6 @@ async function runRAGGeneration(
 }
 
 export async function POST(req: Request) {
-  if (isAIBusy()) {
-    return NextResponse.json({ error: "AI is currently busy with another task" }, { status: 409 });
-  }
-
   const body = await req.json();
   const { policyId, documentIds, jurisdiction } = body as {
     policyId: string;
