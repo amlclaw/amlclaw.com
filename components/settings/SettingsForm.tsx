@@ -360,19 +360,42 @@ function BlockchainSection({
   rawKeys: Record<string, string>;
   setRawKeys: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }) {
+  const [testState, setTestState] = useState<{
+    testing: boolean;
+    result?: { ok: boolean; message?: string; error?: string; steps?: { step: string; status: string; detail?: string; duration_ms?: number }[] };
+  }>({ testing: false });
+
+  const handleTest = async () => {
+    setTestState({ testing: true });
+    try {
+      const res = await fetch("/api/settings/test-trustin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: rawKeys["trustin"] !== undefined ? rawKeys["trustin"] : "",
+          baseUrl: settings.blockchain.trustinBaseUrl,
+        }),
+      });
+      const data = await res.json();
+      setTestState({ testing: false, result: data });
+    } catch {
+      setTestState({ testing: false, result: { ok: false, error: "Request failed" } });
+    }
+  };
+
   return (
     <>
       <h3 className="settings-section-title">TrustIn KYA API</h3>
       <div className="settings-field">
-        <label>API Key</label>
+        <label>API Key <span style={{ fontWeight: 400, color: "var(--text-tertiary)" }}>(optional — works without key in desensitized mode)</span></label>
         <input
           type="password"
           className="input input-sm"
           value={rawKeys["trustin"] !== undefined ? rawKeys["trustin"] : settings.blockchain.trustinApiKey}
           onChange={(e) => setRawKeys((k) => ({ ...k, trustin: e.target.value }))}
-          placeholder="Enter TrustIn API key"
+          placeholder="Enter TrustIn API key (optional)"
         />
-        <span className="settings-hint">Free key available at trustin.info</span>
+        <span className="settings-hint">Optional. Without key: desensitized data. With key: full data. Free key at trustin.info</span>
       </div>
       <div className="settings-field">
         <label>API Base URL</label>
@@ -383,6 +406,62 @@ function BlockchainSection({
           onChange={(e) => update("blockchain.trustinBaseUrl", e.target.value)}
           placeholder="https://api.trustin.info/api/v2/investigate"
         />
+      </div>
+
+      {/* Test Connection */}
+      <div style={{ marginTop: "var(--sp-3)" }}>
+        <button
+          className="btn btn-md btn-secondary"
+          onClick={handleTest}
+          disabled={testState.testing}
+        >
+          {testState.testing ? (
+            <>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
+                <path d="M21 12a9 9 0 11-6.219-8.56" />
+              </svg>
+              Testing (may take 30-60s)...
+            </>
+          ) : (
+            <>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+              Test Connection
+            </>
+          )}
+        </button>
+
+        {testState.result && (
+          <div style={{
+            marginTop: "var(--sp-2)",
+            padding: "var(--sp-3)",
+            borderRadius: "var(--radius)",
+            background: testState.result.ok ? "var(--success-dim)" : "var(--danger-dim)",
+            border: `1px solid ${testState.result.ok ? "rgba(52,168,83,0.25)" : "rgba(234,67,53,0.25)"}`,
+            fontSize: "var(--text-xs)",
+          }}>
+            <div style={{ fontWeight: 600, color: testState.result.ok ? "var(--success)" : "var(--danger)", marginBottom: "var(--sp-1)" }}>
+              {testState.result.ok ? "✓ " + testState.result.message : "✗ " + testState.result.error}
+            </div>
+            {testState.result.steps && testState.result.steps.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, color: "var(--text-secondary)" }}>
+                {testState.result.steps.map((s, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
+                    <span style={{ color: s.status === "ok" ? "var(--success)" : s.status === "timeout" ? "var(--warning)" : "var(--danger)" }}>
+                      {s.status === "ok" ? "●" : s.status === "timeout" ? "●" : "●"}
+                    </span>
+                    <span style={{ fontFamily: "var(--mono)" }}>{s.step}</span>
+                    <span style={{ color: "var(--text-tertiary)" }}>{s.detail}</span>
+                    {s.duration_ms !== undefined && (
+                      <span style={{ color: "var(--text-tertiary)", marginLeft: "auto" }}>{(s.duration_ms / 1000).toFixed(1)}s</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </>
   );
