@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSettings, updateSettings } from "@/lib/settings";
 import { logAudit } from "@/lib/audit-log";
 
-const ALLOWED_SECTIONS = new Set(["ai", "blockchain", "screening", "monitoring", "storage", "notifications", "security", "demo", "app"]);
+const ALLOWED_SECTIONS = new Set(["ai", "blockchain", "screening", "monitoring", "storage", "notifications", "security", "demo", "app", "embedding"]);
 
 export async function GET() {
   const settings = getSettings();
