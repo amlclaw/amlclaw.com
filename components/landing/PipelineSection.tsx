@@ -12,9 +12,9 @@ const steps = [
         <line x1="8" y1="11" x2="14" y2="11" />
       </svg>
     ),
-    title: "法规研究员",
-    desc: "阅读 40+ 国际法规，建立合规知识库",
-    detail: "AI 法规研究员自动阅读并理解新加坡 MAS、香港 SFC、迪拜 VARA 等 40+ 国际法规文件，提取关键监管要求，建立结构化的合规知识库。支持上传自定义法规文档。",
+    title: "Regulatory Researcher",
+    desc: "Reads 40+ international regulations and builds your compliance knowledge base",
+    detail: "The AI Regulatory Researcher automatically reads and interprets regulatory documents from MAS, SFC, VARA, and 40+ other frameworks. It extracts key requirements and builds a structured compliance knowledge base. Upload your own regulation documents too.",
   },
   {
     icon: (
@@ -26,9 +26,9 @@ const steps = [
         <polyline points="10 9 9 9 8 9" />
       </svg>
     ),
-    title: "政策分析师",
-    desc: "AI 解读法规，生成结构化合规政策",
-    detail: "AI 政策分析师逐条解读监管要求，自动生成结构化合规政策文档。涵盖 KYC/CDD、交易监控、可疑交易报告等核心领域，支持人工审核修改。",
+    title: "Policy Analyst",
+    desc: "Interprets regulations and generates structured compliance policies",
+    detail: "The AI Policy Analyst breaks down regulatory requirements clause by clause and generates structured compliance policy documents covering KYC/CDD, transaction monitoring, suspicious activity reporting, and more. Fully editable by humans.",
   },
   {
     icon: (
@@ -37,9 +37,9 @@ const steps = [
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
       </svg>
     ),
-    title: "规则工程师",
-    desc: "将政策转译为可执行的 JSON 检测规则",
-    detail: "AI 规则工程师将政策条款自动转译为机器可执行的 JSON 规则集。支持可视化编辑器微调阈值、条件和参数，每条规则可溯源至原始法规条款。",
+    title: "Rule Engineer",
+    desc: "Converts policies into executable JSON detection rules",
+    detail: "The AI Rule Engineer automatically translates policy clauses into machine-executable JSON rule sets. Fine-tune thresholds, conditions, and parameters with a visual editor. Every rule traces back to its source regulation.",
   },
   {
     icon: (
@@ -50,9 +50,9 @@ const steps = [
         <line x1="8" y1="11" x2="14" y2="11" />
       </svg>
     ),
-    title: "筛查专家",
-    desc: "链上溯源，5 大场景一键筛查出报告",
-    detail: "AI 筛查专家基于 TrustIn KYA API 进行多跳链上溯源，自动提取风险路径和实体标签。结合规则集进行场景化风险评估，生成完整证据链报告，覆盖开户、交易、定期审查等 5 大场景。",
+    title: "Screening Expert",
+    desc: "On-chain tracing and risk assessment across 5 screening scenarios",
+    detail: "The AI Screening Expert performs multi-hop on-chain tracing, extracts risk paths and entity labels, and runs scenario-based risk assessments. Generates complete evidence-chain reports for onboarding, transactions, periodic reviews, and more.",
   },
   {
     icon: (
@@ -61,9 +61,9 @@ const steps = [
         <polyline points="9 12 11 14 15 10" />
       </svg>
     ),
-    title: "监控卫士",
-    desc: "7×24 不间断，自动复查自动告警",
-    detail: "AI 监控卫士通过 Cron 定时任务自动执行批量筛查，支持每小时到每日多种频率。风险等级变化自动触发 Webhook 告警通知，全程审计日志记录，7×24 不间断守护。",
+    title: "Monitoring Guardian",
+    desc: "24/7 automated re-screening and real-time alerts",
+    detail: "The AI Monitoring Guardian runs scheduled batch screenings via cron jobs — hourly to daily. Risk level changes automatically trigger webhook alerts. Full audit trail, 24/7 protection, zero manual effort.",
   },
 ];
 
@@ -99,10 +99,10 @@ export default function PipelineSection() {
     <section className="landing-section" id="pipeline">
       <div className="landing-scroll-reveal" style={{ textAlign: "center" }}>
         <h2 className="landing-section-title" style={{ margin: "0 auto 16px" }}>
-          五个 AI 角色，组成你的合规团队
+          Five AI Agents. One Compliance Team.
         </h2>
         <p className="landing-section-desc" style={{ margin: "0 auto 0" }}>
-          每个角色各司其职，全程自动化，每一步可审计
+          Each agent handles a distinct role. Fully automated, every step auditable.
         </p>
       </div>
 

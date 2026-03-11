@@ -40,7 +40,6 @@ export default function JurisdictionSection() {
   return (
     <section className="landing-section landing-section-divider" id="jurisdictions" ref={ref}>
       <div className="landing-scroll-reveal" style={{ textAlign: "center" }}>
-        <div className="landing-section-label">Regulatory Coverage</div>
         <h2 className="landing-section-title" style={{ margin: "0 auto 16px" }}>
           Multi-Jurisdiction Compliance
         </h2>

@@ -31,12 +31,18 @@
   grid-template-columns: 1fr 1fr;
   gap: var(--sp-4);
 }
+.dashboard-main-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr;
+  gap: var(--sp-4);
+}
+@media (max-width: 1024px) {
+  .dashboard-main-grid { grid-template-columns: 1fr 1fr; }
+  .dashboard-main-grid > :last-child { grid-column: span 2; }
+}
 @media (max-width: 768px) {
   .dashboard-columns { grid-template-columns: 1fr; }
+  .dashboard-main-grid { grid-template-columns: 1fr; }
+  .dashboard-main-grid > :last-child { grid-column: span 1; }
   .dashboard-stats-grid { grid-template-columns: repeat(2, 1fr); }
-}
-.dashboard-status-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: var(--sp-2);
 }

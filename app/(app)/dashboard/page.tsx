@@ -94,19 +94,26 @@ export default function DashboardPage() {
   }
 
   const { stats, risk_distribution, recent_screenings, api_status } = data;
-
   const riskTotal = Object.values(risk_distribution).reduce((a, b) => a + b, 0);
 
   return (
     <div style={{ padding: "var(--sp-5) var(--sp-6)" }}>
-      <div style={{ marginBottom: "var(--sp-6)" }}>
-        <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 700, marginBottom: "var(--sp-1)" }}>Dashboard</h1>
-        <p style={{ color: "var(--text-tertiary)", fontSize: "var(--text-sm)" }}>
-          Overview of your AML compliance operations
-        </p>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--sp-5)" }}>
+        <div>
+          <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 700, marginBottom: "var(--sp-1)" }}>Dashboard</h1>
+          <p style={{ color: "var(--text-tertiary)", fontSize: "var(--text-sm)" }}>
+            Overview of your AML compliance operations
+          </p>
+        </div>
+        {metrics && (
+          <span style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", fontFamily: "var(--mono)" }}>
+            Uptime {formatUptime(metrics.system.uptime_seconds)}
+          </span>
+        )}
       </div>
 
-      {/* API Status Alerts */}
+      {/* Setup Alert */}
       {!api_status.ai_configured && (
         <div className="dashboard-alert" style={{ marginBottom: "var(--sp-4)" }}>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
@@ -114,11 +121,8 @@ export default function DashboardPage() {
             <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
           <span>
-            AI provider API key not configured. Screening works without TrustIn key (desensitized mode), but policy/rule generation requires an AI provider.
-            {" "}
-            <Link href="/settings" style={{ color: "var(--primary-400)", textDecoration: "underline" }}>
-              Go to Settings
-            </Link>
+            AI provider not configured. Policy and rule generation require an AI key.{" "}
+            <Link href="/settings" style={{ color: "var(--primary-400)", textDecoration: "underline" }}>Configure →</Link>
           </span>
         </div>
       )}
@@ -130,19 +134,20 @@ export default function DashboardPage() {
         <StatCard label="Policies" value={stats.policies_count} icon="doc" href="/policies" />
         <StatCard label="Rule Sets" value={stats.rulesets_count} icon="rules" href="/rules" />
         <StatCard label="Active Monitors" value={stats.monitors_active} icon="monitor" href="/monitoring" />
-        <StatCard label="Monitored Addresses" value={stats.monitored_addresses} icon="address" />
+        <StatCard label="Monitored Addrs" value={stats.monitored_addresses} icon="address" />
       </div>
 
-      {/* Two-column layout */}
-      <div className="dashboard-columns">
+      {/* Three-column layout: Risk + Recent + Status */}
+      <div className="dashboard-main-grid">
         {/* Risk Distribution */}
         <div className="card" style={{ padding: "var(--sp-4)" }}>
           <div style={{ fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "var(--sp-4)" }}>
-            Risk Distribution (7 days)
+            Risk Distribution
+            <span style={{ fontWeight: 400, color: "var(--text-tertiary)", marginLeft: "var(--sp-2)", fontSize: "var(--text-xs)" }}>7 days</span>
           </div>
           {riskTotal === 0 ? (
             <div style={{ textAlign: "center", padding: "var(--sp-6)", color: "var(--text-tertiary)", fontSize: "var(--text-sm)" }}>
-              No screenings this week
+              No screenings yet
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
@@ -153,18 +158,14 @@ export default function DashboardPage() {
                   <div key={level}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: "var(--text-xs)" }}>
                       <span style={{ color: `var(--risk-${level.toLowerCase()})`, fontWeight: 600 }}>{level}</span>
-                      <span style={{ color: "var(--text-tertiary)" }}>{count}</span>
+                      <span style={{ color: "var(--text-tertiary)" }}>{count} ({Math.round(pct)}%)</span>
                     </div>
                     <div style={{ height: 6, borderRadius: 3, background: "var(--surface-3)", overflow: "hidden" }}>
-                      <div
-                        style={{
-                          height: "100%",
-                          width: `${pct}%`,
-                          borderRadius: 3,
-                          background: `var(--risk-${level.toLowerCase()})`,
-                          transition: "width 0.6s ease",
-                        }}
-                      />
+                      <div style={{
+                        height: "100%", width: `${pct}%`, borderRadius: 3,
+                        background: `var(--risk-${level.toLowerCase()})`,
+                        transition: "width 0.6s ease",
+                      }} />
                     </div>
                   </div>
                 );
@@ -182,7 +183,7 @@ export default function DashboardPage() {
           {recent_screenings.length === 0 ? (
             <div style={{ textAlign: "center", padding: "var(--sp-6)", color: "var(--text-tertiary)", fontSize: "var(--text-sm)" }}>
               No screenings yet.{" "}
-              <Link href="/screening" style={{ color: "var(--primary-400)" }}>Start one</Link>
+              <Link href="/screening" style={{ color: "var(--primary-400)" }}>Start one →</Link>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column" }}>
@@ -194,19 +195,17 @@ export default function DashboardPage() {
                     href={`/screening?job=${s.job_id}`}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between",
-                      padding: "var(--sp-2) var(--sp-2)",
-                      borderBottom: i < recent_screenings.length - 1 ? "1px solid var(--border-subtle)" : "none",
+                      padding: "var(--sp-2)",
+                      borderBottom: i < Math.min(recent_screenings.length, 8) - 1 ? "1px solid var(--border-subtle)" : "none",
                       textDecoration: "none", color: "inherit",
                       transition: "background var(--transition)",
+                      borderRadius: "var(--radius-sm)",
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-3)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = ""; }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", flex: 1, minWidth: 0 }}>
-                      <span
-                        className={`risk-pill ${riskLevel}`}
-                        style={{ fontSize: "0.6rem", padding: "1px 6px", flexShrink: 0 }}
-                      >
+                      <span className={`risk-pill ${riskLevel}`} style={{ fontSize: "0.6rem", padding: "1px 6px", flexShrink: 0 }}>
                         {(s.risk_level as string) || "Low"}
                       </span>
                       <span style={{ fontFamily: "var(--mono)", fontSize: "var(--text-xs)", color: "var(--text-secondary)" }} className="truncate">
@@ -225,112 +224,80 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
-      </div>
 
-      {/* System Health */}
-      {metrics && (
-        <div className="card" style={{ padding: "var(--sp-4)", marginTop: "var(--sp-4)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--sp-3)" }}>
-            <span style={{ fontSize: "var(--text-sm)", fontWeight: 600 }}>System Health</span>
-            <span style={{ fontSize: "0.65rem", color: "var(--text-tertiary)" }}>
-              Uptime: {formatUptime(metrics.system.uptime_seconds)}
-            </span>
-          </div>
-
-          <div className="dashboard-status-grid">
-            <StatusItem
-              label="AI Engine"
-              value={metrics.connections.ai_configured ? `${metrics.connections.ai_provider} — Connected` : "Not configured"}
-              ok={metrics.connections.ai_configured}
+        {/* System Status (merged) */}
+        <div className="card" style={{ padding: "var(--sp-4)" }}>
+          <div style={{ fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "var(--sp-4)" }}>System Status</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
+            <StatusRow
+              label="AI Provider"
+              value={api_status.ai_configured ? api_status.ai_provider : "Not configured"}
+              ok={api_status.ai_configured}
+              hint={api_status.ai_configured && metrics ? `${metrics.ai.total_calls} calls (${metrics.ai.failed} failed)` : undefined}
             />
-            <StatusItem
-              label="TrustIn API"
-              value={metrics.connections.trustin_configured ? "Connected" : "Not configured"}
-              ok={metrics.connections.trustin_configured}
+            <StatusRow
+              label="Address Data"
+              value={api_status.trustin_configured ? "TrustIn connected" : "Desensitized mode"}
+              ok={api_status.trustin_configured}
+              hint={!api_status.trustin_configured ? "Add TrustIn key for full data" : undefined}
             />
-            <StatusItem
-              label="Screenings (Total / Week / Today)"
-              value={`${metrics.screening.total} / ${metrics.screening.this_week} / ${metrics.screening.today}`}
-              ok={true}
+            <StatusRow
+              label="Scheduler"
+              value={api_status.scheduler_active ? `${api_status.scheduler_jobs} active jobs` : "No jobs"}
+              ok={api_status.scheduler_active}
             />
-            <StatusItem
-              label="Avg Screening Latency"
-              value={metrics.screening.avg_latency_ms > 0 ? `${(metrics.screening.avg_latency_ms / 1000).toFixed(1)}s` : "N/A"}
-              ok={metrics.screening.avg_latency_ms > 0 ? metrics.screening.avg_latency_ms < 60000 : true}
+            <StatusRow
+              label="Avg Latency"
+              value={metrics && metrics.screening.avg_latency_ms > 0 ? `${(metrics.screening.avg_latency_ms / 1000).toFixed(1)}s` : "N/A"}
+              ok={!metrics || metrics.screening.avg_latency_ms < 60000}
             />
-            <StatusItem
-              label="Active Monitors"
-              value={`${metrics.monitors.active} active / ${metrics.monitors.paused} paused`}
-              ok={true}
-            />
-            <StatusItem
+            <StatusRow
               label="Last Screening"
-              value={metrics.system.last_screening_at ? formatTime(metrics.system.last_screening_at) : "Never"}
-              ok={!!metrics.system.last_screening_at}
+              value={metrics?.system.last_screening_at ? formatTime(metrics.system.last_screening_at) : "Never"}
+              ok={!!metrics?.system.last_screening_at}
+            />
+            <StatusRow
+              label="Today / Week"
+              value={metrics ? `${metrics.screening.today} / ${metrics.screening.this_week}` : "0 / 0"}
+              ok={true}
             />
           </div>
-        </div>
-      )}
-
-      {/* System Status */}
-      <div className="card" style={{ padding: "var(--sp-4)", marginTop: "var(--sp-4)" }}>
-        <div style={{ fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "var(--sp-3)" }}>System Status</div>
-        <div className="dashboard-status-grid">
-          <StatusItem
-            label="AI Provider"
-            value={api_status.ai_provider}
-            ok={api_status.ai_configured}
-          />
-          <StatusItem
-            label="TrustIn API"
-            value={api_status.trustin_configured ? "Connected" : "Not configured"}
-            ok={api_status.trustin_configured}
-          />
-          <StatusItem
-            label="Scheduler"
-            value={api_status.scheduler_active ? `Active (${api_status.scheduler_jobs} jobs)` : "Inactive"}
-            ok={api_status.scheduler_active}
-          />
-          <StatusItem
-            label="Running Monitors"
-            value={String(stats.monitors_running)}
-            ok={true}
-          />
         </div>
       </div>
     </div>
   );
 }
 
+/* ── Stat Card ── */
 function StatCard({ label, value, icon, href }: { label: string; value: number; icon: string; href?: string }) {
   const iconMap: Record<string, React.ReactNode> = {
     search: (
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.5">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4">
         <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
       </svg>
     ),
     calendar: (
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.5">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4">
         <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
       </svg>
     ),
     doc: (
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.5">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4">
         <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" />
       </svg>
     ),
     rules: (
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.5">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4">
         <polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
       </svg>
     ),
     monitor: (
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.5">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4">
         <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
       </svg>
     ),
     address: (
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.5">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4">
         <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
       </svg>
     ),
@@ -358,6 +325,26 @@ function StatCard({ label, value, icon, href }: { label: string; value: number; 
   return content;
 }
 
+/* ── Status Row ── */
+function StatusRow({ label, value, ok, hint }: { label: string; value: string; ok: boolean; hint?: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", minWidth: 0 }}>
+        <div style={{
+          width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+          background: ok ? "var(--success)" : "var(--text-tertiary)",
+        }} />
+        <span style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{label}</span>
+      </div>
+      <div style={{ textAlign: "right", minWidth: 0 }}>
+        <div style={{ fontSize: "var(--text-xs)", color: "var(--text-primary)", textTransform: "capitalize" }}>{value}</div>
+        {hint && <div style={{ fontSize: "0.6rem", color: "var(--text-tertiary)" }}>{hint}</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ── Helpers ── */
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
@@ -365,20 +352,4 @@ function formatUptime(seconds: number): string {
   if (d > 0) return `${d}d ${h}h`;
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
-}
-
-function StatusItem({ label, value, ok }: { label: string; value: string; ok: boolean }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
-      <div
-        style={{
-          width: 8, height: 8, borderRadius: "50%",
-          background: ok ? "var(--success)" : "var(--danger)",
-          flexShrink: 0,
-        }}
-      />
-      <span style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>{label}:</span>
-      <span style={{ fontSize: "var(--text-xs)", color: "var(--text-primary)", textTransform: "capitalize" }}>{value}</span>
-    </div>
-  );
 }

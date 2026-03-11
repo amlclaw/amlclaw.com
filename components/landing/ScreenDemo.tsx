@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 
 const lines = [
-  { time: "09:00", text: "选择 MAS PSN02 法规文件", status: "" },
-  { time: "09:01", text: "AI 生成合规政策", status: "done" },
-  { time: "09:02", text: "38 条检测规则生成完毕", status: "done" },
-  { time: "09:03", text: "提交客户地址，选择「开户」场景", status: "" },
-  { time: "09:05", text: "筛查完成 — 建议：增强尽调", status: "warn" },
-  { time: "09:06", text: "持续监控已配置，每日 08:00 自动运行", status: "done" },
+  { time: "09:00", text: "Upload MAS PSN02 regulation document", status: "" },
+  { time: "09:01", text: "AI generates compliance policy", status: "done" },
+  { time: "09:02", text: "38 detection rules created", status: "done" },
+  { time: "09:03", text: "Submit address → select 'Onboarding' scenario", status: "" },
+  { time: "09:05", text: "Screening complete — Recommendation: Enhanced Due Diligence", status: "warn" },
+  { time: "09:06", text: "Continuous monitoring configured — daily at 08:00", status: "done" },
 ];
 
 export default function ScreenDemo() {
@@ -43,7 +43,7 @@ export default function ScreenDemo() {
     <section className="landing-section" id="screen-demo" ref={sectionRef}>
       <div className="landing-scroll-reveal" style={{ textAlign: "center" }}>
         <h2 className="landing-section-title" style={{ margin: "0 auto 16px" }}>
-          看看你的 AI 团队如何工作
+          Watch Your AI Team Work
         </h2>
       </div>
 
@@ -83,7 +83,7 @@ export default function ScreenDemo() {
       </div>
 
       <p className="landing-screendemo-compare">
-        传统方式需要 <strong>4 周</strong>，AMLClaw 只要 <strong>6 分钟</strong>。
+        Traditional approach: <strong>4 weeks</strong>. AMLClaw: <strong>6 minutes</strong>.
       </p>
     </section>
   );

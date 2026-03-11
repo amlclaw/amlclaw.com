@@ -247,83 +247,131 @@ function AIProviderSection({
   testConnection: (p: AIProvider) => void;
 }) {
   const providers: AIProvider[] = ["claude", "deepseek", "gemini"];
+  const [expanded, setExpanded] = useState<AIProvider | null>(settings.ai.activeProvider);
+
+  const handleToggleActive = (p: AIProvider) => {
+    // If clicking the already-active provider, do nothing (must have one active)
+    if (settings.ai.activeProvider === p) return;
+    update("ai.activeProvider", p);
+  };
 
   return (
     <>
-      <h3 className="settings-section-title">Active Provider</h3>
-      <div className="settings-provider-cards">
-        {providers.map((p) => (
-          <button
-            key={p}
-            className={`settings-provider-card${settings.ai.activeProvider === p ? " active" : ""}`}
-            onClick={() => update("ai.activeProvider", p)}
-          >
-            <span className="settings-provider-name">{PROVIDER_LABELS[p]}</span>
-            {settings.ai.activeProvider === p && (
-              <span className="settings-provider-badge">Active</span>
-            )}
-          </button>
-        ))}
-      </div>
+      <h3 className="settings-section-title">AI Provider</h3>
+      <p style={{ fontSize: "var(--text-sm)", color: "var(--text-tertiary)", margin: "0 0 var(--sp-4) 0" }}>
+        Select and configure your AI provider. Only one provider can be active at a time.
+      </p>
 
-      {providers.map((p) => (
-        <div key={p} className="settings-provider-config">
-          <h4 className="settings-subsection-title">{PROVIDER_LABELS[p]}</h4>
-          <div className="settings-field">
-            <label>API Key</label>
-            <div style={{ display: "flex", gap: "var(--sp-2)" }}>
-              <input
-                type="password"
-                className="input input-sm"
-                style={{ flex: 1 }}
-                value={rawKeys[`ai_${p}`] !== undefined ? rawKeys[`ai_${p}`] : settings.ai.providers[p].apiKey}
-                onChange={(e) => setRawKeys((k) => ({ ...k, [`ai_${p}`]: e.target.value }))}
-                placeholder={`Enter ${PROVIDER_LABELS[p]} API key`}
-              />
-              <button
-                className="btn btn-sm"
-                style={{ whiteSpace: "nowrap" }}
-                onClick={() => testConnection(p)}
-                disabled={testStatus[p]?.testing}
-              >
-                {testStatus[p]?.testing ? "Testing..." : "Test"}
-              </button>
-            </div>
-            {testStatus[p]?.result && (
-              <span
-                className="settings-test-result"
-                style={{ color: testStatus[p].ok ? "var(--success)" : "var(--danger)" }}
-              >
-                {testStatus[p].result}
-              </span>
-            )}
-          </div>
-          <div className="settings-field">
-            <label>Model</label>
-            <select
-              className="input input-sm"
-              value={settings.ai.providers[p].model}
-              onChange={(e) => update(`ai.providers.${p}.model`, e.target.value)}
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
+        {providers.map((p) => {
+          const isActive = settings.ai.activeProvider === p;
+          const isExpanded = expanded === p;
+          const hasKey = !!(rawKeys[`ai_${p}`] || settings.ai.providers[p].apiKey);
+
+          return (
+            <div
+              key={p}
+              className={`settings-provider-config${isActive ? " settings-provider-active" : ""}`}
+              style={{ marginBottom: 0 }}
             >
-              {PROVIDER_MODELS[p].map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          </div>
-          {(p === "deepseek") && (
-            <div className="settings-field">
-              <label>Base URL <span style={{ color: "var(--text-tertiary)" }}>(optional)</span></label>
-              <input
-                type="text"
-                className="input input-sm"
-                value={settings.ai.providers[p].baseUrl || ""}
-                onChange={(e) => update(`ai.providers.${p}.baseUrl`, e.target.value)}
-                placeholder="https://api.deepseek.com"
-              />
+              {/* Header — always visible, clickable to expand */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  cursor: "pointer",
+                  userSelect: "none",
+                }}
+                onClick={() => setExpanded(isExpanded ? null : p)}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)" }}>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transition: "transform 0.15s", transform: isExpanded ? "rotate(90deg)" : "rotate(0)" }}>
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                  <span style={{ fontWeight: 600, fontSize: "var(--text-sm)", color: "var(--text-primary)" }}>{PROVIDER_LABELS[p]}</span>
+                  {hasKey && (
+                    <span style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", padding: "1px 6px", background: "var(--surface-3)", borderRadius: 4 }}>
+                      configured
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)" }} onClick={(e) => e.stopPropagation()}>
+                  {isActive && (
+                    <span className="settings-provider-badge">Active</span>
+                  )}
+                  <button
+                    className={`settings-toggle${isActive ? " active" : ""}`}
+                    role="switch"
+                    aria-checked={isActive}
+                    onClick={() => handleToggleActive(p)}
+                    title={isActive ? "Currently active" : `Switch to ${PROVIDER_LABELS[p]}`}
+                  />
+                </div>
+              </div>
+
+              {/* Expandable config */}
+              {isExpanded && (
+                <div style={{ marginTop: "var(--sp-4)", paddingTop: "var(--sp-4)", borderTop: "1px solid var(--border-subtle)" }}>
+                  <div className="settings-field">
+                    <label>API Key</label>
+                    <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+                      <input
+                        type="password"
+                        className="input input-sm"
+                        style={{ flex: 1 }}
+                        value={rawKeys[`ai_${p}`] !== undefined ? rawKeys[`ai_${p}`] : settings.ai.providers[p].apiKey}
+                        onChange={(e) => setRawKeys((k) => ({ ...k, [`ai_${p}`]: e.target.value }))}
+                        placeholder={`Enter ${PROVIDER_LABELS[p]} API key`}
+                      />
+                      <button
+                        className="btn btn-sm"
+                        style={{ whiteSpace: "nowrap" }}
+                        onClick={() => testConnection(p)}
+                        disabled={testStatus[p]?.testing}
+                      >
+                        {testStatus[p]?.testing ? "Testing..." : "Test"}
+                      </button>
+                    </div>
+                    {testStatus[p]?.result && (
+                      <span
+                        className="settings-test-result"
+                        style={{ color: testStatus[p].ok ? "var(--success)" : "var(--danger)" }}
+                      >
+                        {testStatus[p].result}
+                      </span>
+                    )}
+                  </div>
+                  <div className="settings-field">
+                    <label>Model</label>
+                    <select
+                      className="input input-sm"
+                      value={settings.ai.providers[p].model}
+                      onChange={(e) => update(`ai.providers.${p}.model`, e.target.value)}
+                    >
+                      {PROVIDER_MODELS[p].map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {(p === "deepseek") && (
+                    <div className="settings-field">
+                      <label>Base URL <span style={{ color: "var(--text-tertiary)" }}>(optional)</span></label>
+                      <input
+                        type="text"
+                        className="input input-sm"
+                        value={settings.ai.providers[p].baseUrl || ""}
+                        onChange={(e) => update(`ai.providers.${p}.baseUrl`, e.target.value)}
+                        placeholder="https://api.deepseek.com"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      ))}
+          );
+        })}
+      </div>
     </>
   );
 }

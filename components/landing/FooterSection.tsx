@@ -9,17 +9,17 @@ const productLinks = [
 ];
 
 const resourceLinks = [
-  { label: "GitHub Repository", href: "https://github.com/amlclaw/amlclaw-web" },
+  { label: "GitHub Repository", href: "https://github.com/amlclaw/amlclaw.com" },
   { label: "FATF Guidelines", href: "#" },
   { label: "TrustIn API", href: "https://trustin.info" },
-  { label: "Technical Documentation", href: "/tech-docs" },
+  { label: "Documentation", href: "/tech-docs" },
 ];
 
 const communityLinks = [
-  { label: "GitHub", href: "https://github.com/amlclaw/amlclaw-web" },
-  { label: "贡献指南", href: "https://github.com/amlclaw/amlclaw-web/blob/main/CONTRIBUTING.md" },
-  { label: "Issue 反馈", href: "https://github.com/amlclaw/amlclaw-web/issues" },
-  { label: "Changelog", href: "https://github.com/amlclaw/amlclaw-web/blob/main/CHANGELOG.md" },
+  { label: "GitHub", href: "https://github.com/amlclaw/amlclaw.com" },
+  { label: "Contributing Guide", href: "https://github.com/amlclaw/amlclaw.com/blob/main/CONTRIBUTING.md" },
+  { label: "Report Issues", href: "https://github.com/amlclaw/amlclaw.com/issues" },
+  { label: "Changelog", href: "https://github.com/amlclaw/amlclaw.com/blob/main/CHANGELOG.md" },
 ];
 
 const legalLinks = [
@@ -35,10 +35,10 @@ export default function FooterSection() {
         <div>
           <div className="landing-footer-brand">
             <Image src="/logo.svg" alt="AMLClaw" width={24} height={24} />
-            AML<span style={{ color: "var(--landing-gold)" }}>Claw</span>
+            AML<span style={{ color: "var(--landing-accent)" }}>Claw</span>
           </div>
           <div className="landing-footer-tagline">
-            你的 AI 合规团队。开源免费，私有部署，从法规解读到 7×24 链上监控，全程自动化、可审计。
+            Your AI compliance team. Open source, self-hosted, fully automated — from regulatory interpretation to 24/7 on-chain monitoring.
           </div>
         </div>
 
@@ -61,7 +61,7 @@ export default function FooterSection() {
         </div>
 
         <div>
-          <div className="landing-footer-heading">开源社区</div>
+          <div className="landing-footer-heading">Community</div>
           {communityLinks.map((l) => (
             <a key={l.label} href={l.href} className="landing-footer-link" target="_blank" rel="noopener">
               {l.label}

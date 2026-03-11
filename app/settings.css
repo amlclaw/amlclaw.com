@@ -149,6 +149,47 @@
   border-top: 1px solid var(--border-subtle);
 }
 
+/* Active provider highlight */
+.settings-provider-config.settings-provider-active {
+  border-color: var(--primary-500);
+  background: var(--primary-dim);
+}
+
+/* Toggle switch */
+.settings-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  border: none;
+  background: var(--surface-3);
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.settings-toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  transition: transform 0.2s, background 0.2s;
+}
+
+.settings-toggle.active {
+  background: var(--primary-500);
+}
+
+.settings-toggle.active::after {
+  transform: translateX(16px);
+  background: #fff;
+}
+
 @media (max-width: 640px) {
   .settings-provider-cards {
     grid-template-columns: 1fr;

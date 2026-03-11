@@ -2,6 +2,7 @@ import LandingNav from "@/components/landing/LandingNav";
 import HeroSection from "@/components/landing/HeroSection";
 import TrustBar from "@/components/landing/TrustBar";
 import PipelineSection from "@/components/landing/PipelineSection";
+import QuickStartSection from "@/components/landing/QuickStartSection";
 import ScreenDemo from "@/components/landing/ScreenDemo";
 import JurisdictionSection from "@/components/landing/JurisdictionSection";
 import ComparisonSection from "@/components/landing/ComparisonSection";
@@ -16,6 +17,7 @@ export default function LandingPage() {
         <HeroSection />
         <TrustBar />
         <PipelineSection />
+        <QuickStartSection />
         <ScreenDemo />
         <JurisdictionSection />
         <ComparisonSection />

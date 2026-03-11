@@ -9,21 +9,21 @@ const iconTraditional = (
 );
 
 const iconAmlclaw = (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c9a96e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8ab4f8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="20 6 9 17 4 12" />
   </svg>
 );
 
 const rows = [
-  { aspect: "成本", traditional: "年薪百万级合规团队", amlclaw: "免费，MIT License" },
-  { aspect: "部署", traditional: "采购、对接、培训，数月", amlclaw: "docker-compose up，5 分钟" },
-  { aspect: "读懂法规", traditional: "律师 + 合规专家，1-2 周", amlclaw: "AI 法规研究员，分钟级" },
-  { aspect: "编写规则", traditional: "合规专家手写，数天", amlclaw: "AI 规则工程师，自动转译" },
-  { aspect: "筛查地址", traditional: "手动操作，半天一个", amlclaw: "AI 筛查专家，<5 分钟" },
-  { aspect: "持续监控", traditional: "人工抽查，难以为继", amlclaw: "AI 监控卫士，7×24 自动" },
-  { aspect: "数据安全", traditional: "数据上传到第三方平台", amlclaw: "私有部署，数据不出服务器" },
-  { aspect: "可审计性", traditional: "散落在邮件和文档中", amlclaw: "全链路审计日志，不可篡改" },
-  { aspect: "透明度", traditional: "黑箱评分，不知道为什么", amlclaw: "开源代码，规则完全可见" },
+  { aspect: "Cost", traditional: "6-figure compliance team", amlclaw: "Free, MIT License" },
+  { aspect: "Deployment", traditional: "Procurement, integration, training — months", amlclaw: "npm run dev — 5 minutes" },
+  { aspect: "Regulation Analysis", traditional: "Lawyers + compliance experts, 1-2 weeks", amlclaw: "AI Regulatory Researcher, minutes" },
+  { aspect: "Rule Creation", traditional: "Manual drafting by experts, days", amlclaw: "AI Rule Engineer, auto-generated" },
+  { aspect: "Address Screening", traditional: "Manual process, half a day per address", amlclaw: "AI Screening Expert, under 5 min" },
+  { aspect: "Continuous Monitoring", traditional: "Spot checks, unsustainable", amlclaw: "AI Monitoring Guardian, 24/7 automated" },
+  { aspect: "Data Security", traditional: "Data uploaded to third-party platforms", amlclaw: "Self-hosted, data never leaves your server" },
+  { aspect: "Audit Trail", traditional: "Scattered across emails and docs", amlclaw: "Full audit log, tamper-proof" },
+  { aspect: "Transparency", traditional: "Black-box scoring, no explanation", amlclaw: "Open source, every rule fully visible" },
 ];
 
 export default function ComparisonSection() {
@@ -33,7 +33,7 @@ export default function ComparisonSection() {
     <section className="landing-section" id="comparison" ref={ref}>
       <div className="landing-scroll-reveal" style={{ textAlign: "center" }}>
         <h2 className="landing-section-title" style={{ margin: "0 auto 16px" }}>
-          雇一个团队 vs 部署 AMLClaw
+          Hire a Team vs. Deploy AMLClaw
         </h2>
       </div>
 
@@ -41,9 +41,9 @@ export default function ComparisonSection() {
         <table>
           <thead>
             <tr>
-              <th>维度</th>
-              <th className="landing-comparison-th-trad">传统方式</th>
-              <th className="landing-comparison-th-aml">AMLClaw（开源）</th>
+              <th>Dimension</th>
+              <th className="landing-comparison-th-trad">Traditional</th>
+              <th className="landing-comparison-th-aml">AMLClaw (Open Source)</th>
             </tr>
           </thead>
           <tbody>
@@ -65,7 +65,7 @@ export default function ComparisonSection() {
       </div>
 
       <p className="landing-comparison-summary">
-        合规的终局，不是雇更多的人，而是部署更好的系统。
+        The future of compliance isn&apos;t hiring more people — it&apos;s deploying a better system.
       </p>
     </section>
   );
