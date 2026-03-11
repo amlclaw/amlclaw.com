@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { spawnClaude, isAIBusy } from "@/lib/claude";
+import { spawnAI, isAIBusy } from "@/lib/ai";
 import { loadPrompt, loadRuleSchema, loadLabels } from "@/lib/prompts";
 import { loadPolicy, loadCustomMeta, saveCustomMeta, saveRuleset } from "@/lib/storage";
 import path from "path";
@@ -40,91 +40,87 @@ export async function POST(req: Request) {
   const rulesetName = name || `${policy.name} Rules`;
   const rulesetJurisdiction = jurisdiction || policy.jurisdiction;
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    start(controller) {
-      let closed = false;
+  // Save meta with "generating" status
+  const meta = loadCustomMeta();
+  meta.push({
+    id: rulesetId,
+    name: rulesetName,
+    jurisdiction: rulesetJurisdiction,
+    icon: rulesetJurisdiction === "Singapore" ? "sg" :
+      rulesetJurisdiction === "Hong Kong" ? "hk" :
+        rulesetJurisdiction === "Dubai" ? "ae" : "rules",
+    source_policies: [policyId],
+    generated_by: "ai",
+    status: "generating",
+  });
+  saveCustomMeta(meta);
 
-      function safeSend(data: string) {
-        if (closed) return;
-        try { controller.enqueue(encoder.encode(data)); } catch { closed = true; }
-      }
+  // Fire and forget
+  spawnAI({
+    jobId: `rules_gen_${rulesetId}`,
+    jobType: "generate-rules",
+    prompt,
+    onData: () => {},
+    onComplete: (finalOutput) => {
+      try {
+        let rules: unknown[] | null = null;
 
-      function safeClose() {
-        if (closed) return;
-        closed = true;
-        try { controller.close(); } catch { /* already closed */ }
-      }
+        // Strategy 1: Direct parse
+        try {
+          const parsed = JSON.parse(finalOutput.trim());
+          if (Array.isArray(parsed)) rules = parsed;
+        } catch { /* not pure JSON */ }
 
-      spawnClaude({
-        jobId: `rules_gen_${rulesetId}`,
-        jobType: "generate-rules",
-        prompt,
-        onData: (chunk) => {
-          safeSend(`data: ${JSON.stringify({ text: chunk })}\n\n`);
-        },
-        onComplete: (finalOutput) => {
-          try {
-            // Try multiple strategies to extract JSON array
-            let rules: unknown[] | null = null;
-
-            // Strategy 1: Direct parse
-            try {
-              const parsed = JSON.parse(finalOutput.trim());
-              if (Array.isArray(parsed)) rules = parsed;
-            } catch { /* not pure JSON */ }
-
-            // Strategy 2: Find JSON array in output (handles markdown fencing)
-            if (!rules) {
-              // Remove markdown code fences
-              const cleaned = finalOutput.replace(/```json\s*/g, "").replace(/```\s*/g, "");
-              const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
-              if (jsonMatch) {
-                try { rules = JSON.parse(jsonMatch[0]); } catch { /* bad JSON */ }
-              }
-            }
-
-            if (!rules || !Array.isArray(rules) || rules.length === 0) {
-              throw new Error("No valid JSON rules array found in AI output");
-            }
-
-            // Save the ruleset
-            const filepath = path.join(RULESETS_DIR, `${rulesetId}.json`);
-            saveRuleset(filepath, rules);
-
-            // Update custom meta
-            const meta = loadCustomMeta();
-            meta.push({
-              id: rulesetId,
-              name: rulesetName,
-              jurisdiction: rulesetJurisdiction,
-              icon: rulesetJurisdiction === "Singapore" ? "sg" :
-                rulesetJurisdiction === "Hong Kong" ? "hk" :
-                  rulesetJurisdiction === "Dubai" ? "ae" : "rules",
-              source_policies: [policyId],
-              generated_by: "ai",
-            });
-            saveCustomMeta(meta);
-
-            safeSend(`event: done\ndata: ${JSON.stringify({ id: rulesetId, rules_count: rules.length })}\n\n`);
-          } catch (e) {
-            safeSend(`event: error\ndata: ${JSON.stringify({ error: e instanceof Error ? e.message : "Failed to parse rules" })}\n\n`);
+        // Strategy 2: Extract JSON from markdown fences
+        if (!rules) {
+          const cleaned = finalOutput.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+          const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            try { rules = JSON.parse(jsonMatch[0]); } catch { /* bad JSON */ }
           }
-          safeClose();
-        },
-        onError: (error) => {
-          safeSend(`event: error\ndata: ${JSON.stringify({ error })}\n\n`);
-          safeClose();
-        },
-      });
+        }
+
+        if (!rules || !Array.isArray(rules) || rules.length === 0) {
+          throw new Error("No valid JSON rules array found in AI output");
+        }
+
+        // Save ruleset file
+        const filepath = path.join(RULESETS_DIR, `${rulesetId}.json`);
+        saveRuleset(filepath, rules);
+
+        // Update meta status to ready
+        const currentMeta = loadCustomMeta();
+        const entry = currentMeta.find((m) => m.id === rulesetId);
+        if (entry) {
+          entry.status = "ready";
+          entry.rules_count = rules.length;
+          saveCustomMeta(currentMeta);
+        }
+
+        console.log(`[generate] Ruleset ${rulesetId} completed: ${rules.length} rules`);
+      } catch (e) {
+        const currentMeta = loadCustomMeta();
+        const entry = currentMeta.find((m) => m.id === rulesetId);
+        if (entry) {
+          entry.status = "error";
+          saveCustomMeta(currentMeta);
+        }
+        console.error(`[generate] Ruleset ${rulesetId} parse failed:`, e instanceof Error ? e.message : e);
+      }
+    },
+    onError: (error) => {
+      const currentMeta = loadCustomMeta();
+      const entry = currentMeta.find((m) => m.id === rulesetId);
+      if (entry) {
+        entry.status = "error";
+        saveCustomMeta(currentMeta);
+      }
+      console.error(`[generate] Ruleset ${rulesetId} failed:`, error);
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+  return NextResponse.json(
+    { message: "Generation started", rulesetId, status: "generating" },
+    { status: 202 }
+  );
 }

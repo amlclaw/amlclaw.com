@@ -1,0 +1,34 @@
+/* ============ Rules Module Styles ============ */
+
+@layer components {
+  /* ============ Rule Card ============ */
+  .rule-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    transition: border-color var(--transition);
+  }
+  .rule-card:hover {
+    border-color: var(--border-default);
+  }
+  .rule-card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-4);
+    flex-wrap: wrap;
+  }
+  .rule-card-body {
+    padding: 0 var(--sp-4) var(--sp-3);
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .rule-card-footer {
+    padding: var(--sp-2) var(--sp-4);
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    gap: var(--sp-2);
+    justify-content: flex-end;
+  }
+}

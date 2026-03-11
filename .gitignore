@@ -24,6 +24,13 @@
 .DS_Store
 *.pem
 
+# internal / non-open-source docs
+product-intro.md
+sales-playbook.md
+
+# editor & agent local config
+.claude/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
@@ -39,6 +46,9 @@ yarn-error.log*
 /data/policies/
 /data/rulesets/
 /data/uploads/
+/data/audit/
+/data/settings.json
+/data/.ai-lock.json
 
 # vercel
 .vercel
@@ -46,3 +56,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+data/vectors/

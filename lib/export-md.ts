@@ -1,6 +1,7 @@
 /**
  * Markdown report export generator — Professional audit format
  */
+import { getSettings } from "./settings";
 
 export function generateExportMd(job: Record<string, unknown>): string {
   const r = (job.result as Record<string, unknown>) || {};
@@ -23,10 +24,18 @@ export function generateExportMd(job: Record<string, unknown>): string {
   const lines: string[] = [];
 
   // ── Report Header ──
+  const appSettings = getSettings();
+  const engineName = appSettings.app.name || "AMLClaw";
+  if (appSettings.app.reportHeader) {
+    lines.push(appSettings.app.reportHeader);
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+  }
   lines.push("# AML Address Screening Report");
   lines.push("");
   lines.push(`**Generated**: ${job.completed_at || "N/A"}`);
-  lines.push(`**Engine**: AMLClaw Web`);
+  lines.push(`**Engine**: ${engineName} Web`);
   lines.push(`**Scenario**: ${scenario}`);
   if (categoriesApplied.length > 0) lines.push(`**Categories Applied**: ${categoriesApplied.join(", ")}`);
   lines.push(`**Overall Risk**: ${overall}`);

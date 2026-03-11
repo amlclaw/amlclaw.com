@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAIBusy, getCurrentJob, abortCurrentJob } from "@/lib/claude";
+import { isAIBusy, getCurrentJob, abortCurrentJob } from "@/lib/ai";
 
 export async function GET() {
   return NextResponse.json({

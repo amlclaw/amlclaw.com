@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAllRulesets, findRuleset, loadRuleset, saveRuleset, loadCustomMeta, saveCustomMeta } from "@/lib/storage";
+import { logAudit } from "@/lib/audit-log";
 import path from "path";
 import crypto from "crypto";
 
@@ -32,5 +33,6 @@ export async function POST(req: Request) {
   meta.push({ id: rid, name, jurisdiction, icon: "rules" });
   saveCustomMeta(meta);
 
+  logAudit("ruleset.created", { id: rid, name, jurisdiction, clone_from: cloneFrom || undefined });
   return NextResponse.json({ id: rid, name, rules_count: rules.length });
 }

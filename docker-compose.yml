@@ -1,0 +1,13 @@
+services:
+  amlclaw-web:
+    build: .
+    container_name: amlclaw-web
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      # Optional: set via environment instead of Settings UI
+      # - TRUSTIN_API_KEY=your_trustin_api_key
+    restart: unless-stopped

@@ -1,0 +1,78 @@
+[
+  {
+    "rule_id": "DEMO-DEP-SEVERE-001",
+    "category": "Deposit",
+    "direction": "inflow",
+    "min_hops": 1,
+    "max_hops": 1,
+    "name": "Direct Sanctions Exposure (Hop 1)",
+    "description": "Freeze deposit if direct inflow from Sanctions, Terrorism Financing, or Illicit Markets. Direct contact with sanctioned entities requires immediate action per MAS PSN02.",
+    "conditions": [
+      {
+        "parameter": "path.node.tags.primary_category",
+        "operator": "IN",
+        "value": ["Sanctions", "Terrorism Financing", "Illicit Markets"]
+      }
+    ],
+    "risk_level": "Severe",
+    "action": "Freeze",
+    "reference": "MAS PSN02 Section 13 — Zero tolerance for sanctioned fund sources"
+  },
+  {
+    "rule_id": "DEMO-DEP-HIGH-001",
+    "category": "Deposit",
+    "direction": "inflow",
+    "min_hops": 2,
+    "max_hops": 3,
+    "name": "Near-Distance Darknet/Ransomware (Hop 2-3)",
+    "description": "Flag deposit if near-distance inflow from Darknet Markets or Ransomware within 2-3 hops.",
+    "conditions": [
+      {
+        "parameter": "path.node.tags.primary_category",
+        "operator": "IN",
+        "value": ["Darknet Markets", "Ransomware", "Stolen Funds"]
+      }
+    ],
+    "risk_level": "High",
+    "action": "Review",
+    "reference": "MAS PSN02 Section 13.4 — Enhanced monitoring for indirect exposure"
+  },
+  {
+    "rule_id": "DEMO-WD-SEVERE-001",
+    "category": "Withdrawal",
+    "direction": "outflow",
+    "min_hops": 1,
+    "max_hops": 1,
+    "name": "Withdrawal to Sanctioned Entity",
+    "description": "Block withdrawal if destination address is directly tagged as Sanctions or Terrorism Financing.",
+    "conditions": [
+      {
+        "parameter": "path.node.tags.primary_category",
+        "operator": "IN",
+        "value": ["Sanctions", "Terrorism Financing"]
+      }
+    ],
+    "risk_level": "Severe",
+    "action": "Block",
+    "reference": "MAS PSN02 Section 13.1 — Prohibition on transactions with designated entities"
+  },
+  {
+    "rule_id": "DEMO-CDD-MED-001",
+    "category": "CDD",
+    "direction": "all",
+    "min_hops": 1,
+    "max_hops": 3,
+    "name": "Mixing Service Exposure",
+    "description": "Flag for enhanced due diligence if address has exposure to mixing/tumbling services within 3 hops.",
+    "conditions": [
+      {
+        "parameter": "path.node.tags.primary_category",
+        "operator": "IN",
+        "value": ["Mixing Service", "Privacy Wallet"]
+      }
+    ],
+    "risk_level": "Medium",
+    "action": "EDD",
+    "reference": "MAS PSN02 Section 6.2 — Enhanced CDD for obfuscation indicators"
+  }
+]

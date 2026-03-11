@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: "AMLClaw — Web AML Compliance System",
-  description: "AI-driven AML compliance system for crypto address screening",
+  title: "AMLClaw — AI-Driven Crypto AML Compliance",
+  description: "From regulatory documents to 24/7 monitoring — AI-powered compliance in minutes, not months.",
   icons: { icon: "/logo.svg" },
 };
 
@@ -27,10 +26,7 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.variable} ${jetbrains.variable}`}>
-        <Sidebar />
-        <div className="app-content">
-          {children}
-        </div>
+        {children}
       </body>
     </html>
   );

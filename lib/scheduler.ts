@@ -15,6 +15,9 @@ import {
 } from "./storage";
 import { kyaProDetect } from "./trustin-api";
 import { extractRiskPaths, type Rule } from "./extract-risk-paths";
+import { getTrustInApiKey } from "./settings";
+import { logAudit } from "./audit-log";
+import { sendWebhook, shouldAlert } from "./webhook";
 import type { MonitorTask, MonitorRun, MonitorRunResult, MonitorRunSummary } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -100,9 +103,9 @@ export async function executeMonitorTask(
   const task = loadMonitor(taskId);
   if (!task) return null;
 
-  const apiKey = process.env.TRUSTIN_API_KEY;
+  const apiKey = getTrustInApiKey();
   if (!apiKey) {
-    console.error("[Scheduler] TRUSTIN_API_KEY not configured");
+    console.error("[Scheduler] TrustIn API key not configured — go to Settings");
     return null;
   }
 
@@ -115,6 +118,7 @@ export async function executeMonitorTask(
 
   runningTasks.add(taskId);
   updateMonitor(taskId, { running: true });
+  logAudit("monitor.run_started", { task_id: taskId, trigger, address_count: task.addresses.length });
 
   const runId = `run_${Date.now()}_${crypto.randomUUID().slice(0, 6)}`;
   const run: MonitorRun = {
@@ -200,14 +204,26 @@ export async function executeMonitorTask(
       };
       saveHistoryEntry(jobId, jobData);
 
+      const addrRiskLevel = summary.highest_severity as string || "Low";
       results.push({
         chain: addr.chain,
         address: addr.address,
         status: "completed",
         job_id: jobId,
-        risk_level: summary.highest_severity as string || "Low",
+        risk_level: addrRiskLevel,
         risk_entities_count: riskEntities.length,
       });
+
+      // Webhook alert for high risk
+      if (shouldAlert(addrRiskLevel)) {
+        sendWebhook("monitor.high_risk", {
+          task_id: taskId,
+          chain: addr.chain,
+          address: addr.address,
+          risk_level: addrRiskLevel,
+          job_id: jobId,
+        });
+      }
     } catch (e) {
       results.push({
         chain: addr.chain,
@@ -244,6 +260,13 @@ export async function executeMonitorTask(
     summary: runSummary,
   };
   saveMonitorRun(taskId, completedRun);
+  logAudit("monitor.run_completed", {
+    task_id: taskId,
+    run_id: runId,
+    status: completedRun.status,
+    flagged: runSummary.flagged,
+    highest_risk: highestRisk,
+  });
 
   // Update task
   runningTasks.delete(taskId);

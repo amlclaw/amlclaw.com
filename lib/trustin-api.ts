@@ -1,8 +1,17 @@
 /**
  * TrustIn KYA API v2 wrapper (TypeScript port of trustin_api.py)
  */
+import fs from "fs";
+import path from "path";
+import { getTrustInBaseUrl, isDemoMode } from "./settings";
 
-const BASE_URL = "https://api.trustin.info/api/v2/investigate";
+function getBaseUrl(): string {
+  try {
+    return getTrustInBaseUrl();
+  } catch {
+    return "https://api.trustin.info/api/v2/investigate";
+  }
+}
 
 const CHAIN_MAPPING: Record<string, string> = {
   Tron: "Tron",
@@ -33,7 +42,7 @@ async function makeRequest(
   data: Record<string, unknown>,
   apiKey: string
 ): Promise<Record<string, unknown>> {
-  const url = `${BASE_URL}/${endpoint}?apikey=${apiKey}`;
+  const url = `${getBaseUrl()}/${endpoint}?apikey=${apiKey}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "text/plain", "User-Agent": "amlclaw-web/1.0.0" },
@@ -125,6 +134,37 @@ export async function kyaProDetect(
   apiKey: string,
   opts: DetectOptions = {}
 ): Promise<KYAResult> {
+  // Demo mode — return mock screening result
+  if (isDemoMode()) {
+    await new Promise((r) => setTimeout(r, 1500)); // Simulate API delay
+    try {
+      const demoPath = path.join(process.cwd(), "data", "demo", "screening-result.json");
+      const raw = JSON.parse(fs.readFileSync(demoPath, "utf-8"));
+      // Override address in response to match the requested one
+      if (raw.data) raw.data.address = address;
+      if (raw.data) raw.data.chain_name = chainName;
+      const rawGraph = raw.data?.graph ?? raw.data ?? {};
+      const { riskScore, riskLevel, recommendation } = processTagsPriority(rawGraph);
+      return {
+        riskScore,
+        riskLevel,
+        recommendation: recommendation + " (demo)",
+        details: raw,
+        rawResponse: raw,
+        error: null,
+      };
+    } catch {
+      return {
+        riskScore: 80,
+        riskLevel: "HIGH",
+        recommendation: "Demo mode — mock risk detected (Darknet Markets, Sanctions)",
+        details: { demo: true, graph: [] },
+        rawResponse: null,
+        error: null,
+      };
+    }
+  }
+
   if (!CHAIN_MAPPING[chainName]) {
     throw new Error(`Unsupported chain: ${chainName}`);
   }

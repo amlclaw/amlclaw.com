@@ -1,0 +1,26 @@
+{
+  "id": "demo_monitor_001",
+  "name": "Demo Exchange Hot Wallet Monitor",
+  "description": "Monitors a sample exchange hot wallet for sanctions and darknet exposure (demo data)",
+  "addresses": [
+    {
+      "chain": "Ethereum",
+      "address": "0x1234567890abcdef1234567890abcdef12345678",
+      "label": "Hot Wallet 1"
+    },
+    {
+      "chain": "Tron",
+      "address": "TN2YqTv2jGCEip6kP5CAsUifLBr7Ns1234",
+      "label": "USDT Receiving"
+    }
+  ],
+  "schedule": "every_4h",
+  "scenario": "monitoring",
+  "rulesetId": "singapore_mas",
+  "enabled": true,
+  "createdAt": "2025-01-15T08:00:00.000Z",
+  "lastRunAt": "2025-03-07T12:00:00.000Z",
+  "lastRunStatus": "completed",
+  "totalRuns": 42,
+  "alertCount": 3
+}

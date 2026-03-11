@@ -1,0 +1,106 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "task_id": 99999,
+    "chain_name": "Ethereum",
+    "address": "0x1234567890abcdef1234567890abcdef12345678",
+    "status": "finished",
+    "graph": [
+      {
+        "direction": "inflow",
+        "hop": 1,
+        "path": [
+          {
+            "address": "0xaaaa111122223333444455556666777788889999",
+            "amount": 15.5,
+            "token": "USDT",
+            "tags": [
+              {
+                "primary_category": "Darknet Markets",
+                "secondary_category": "Hydra Market",
+                "priority": 2,
+                "source": "TrustIn Intelligence"
+              }
+            ]
+          }
+        ],
+        "tags": [
+          {
+            "primary_category": "Darknet Markets",
+            "secondary_category": "Hydra Market",
+            "priority": 2,
+            "source": "TrustIn Intelligence"
+          }
+        ]
+      },
+      {
+        "direction": "inflow",
+        "hop": 2,
+        "path": [
+          {
+            "address": "0xaaaa111122223333444455556666777788889999",
+            "amount": 15.5,
+            "token": "USDT",
+            "tags": [
+              {
+                "primary_category": "Darknet Markets",
+                "secondary_category": "Hydra Market",
+                "priority": 2,
+                "source": "TrustIn Intelligence"
+              }
+            ]
+          },
+          {
+            "address": "0xbbbb222233334444555566667777888899990000",
+            "amount": 50.0,
+            "token": "USDT",
+            "tags": [
+              {
+                "primary_category": "Sanctions",
+                "secondary_category": "OFAC SDN",
+                "priority": 1,
+                "source": "TrustIn Intelligence"
+              }
+            ]
+          }
+        ],
+        "tags": [
+          {
+            "primary_category": "Sanctions",
+            "secondary_category": "OFAC SDN",
+            "priority": 1,
+            "source": "TrustIn Intelligence"
+          }
+        ]
+      },
+      {
+        "direction": "outflow",
+        "hop": 1,
+        "path": [
+          {
+            "address": "0xcccc333344445555666677778888999900001111",
+            "amount": 8.2,
+            "token": "USDT",
+            "tags": [
+              {
+                "primary_category": "Exchange",
+                "secondary_category": "Binance",
+                "priority": 4,
+                "source": "TrustIn Intelligence"
+              }
+            ]
+          }
+        ],
+        "tags": [
+          {
+            "primary_category": "Exchange",
+            "secondary_category": "Binance",
+            "priority": 4,
+            "source": "TrustIn Intelligence"
+          }
+        ]
+      }
+    ]
+  }
+}

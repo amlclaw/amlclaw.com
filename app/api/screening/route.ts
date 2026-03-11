@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { findRuleset, loadRuleset, saveHistoryEntry } from "@/lib/storage";
 import { kyaProDetect } from "@/lib/trustin-api";
 import { extractRiskPaths, type Rule } from "@/lib/extract-risk-paths";
+import { getSettings, getTrustInApiKey } from "@/lib/settings";
+import { logAudit } from "@/lib/audit-log";
+import { sendWebhook, shouldAlert } from "@/lib/webhook";
 import crypto from "crypto";
 
 // In-memory job storage
@@ -11,23 +14,24 @@ const screeningJobs: Record<string, Record<string, unknown>> = {};
 export { screeningJobs };
 
 export async function POST(req: Request) {
+  const settings = getSettings();
   const body = await req.json();
   const chain = body.chain || "Tron";
   const address = (body.address || "").trim();
-  const scenario = body.scenario || "all";
-  const rulesetId = body.ruleset_id || "singapore_mas";
-  const inflowHops = parseInt(body.inflow_hops || "3");
-  const outflowHops = parseInt(body.outflow_hops || "3");
-  const maxNodes = parseInt(body.max_nodes || "100");
+  const scenario = body.scenario || settings.screening.defaultScenario;
+  const rulesetId = body.ruleset_id || settings.screening.defaultRuleset;
+  const inflowHops = parseInt(body.inflow_hops || String(settings.screening.defaultInflowHops));
+  const outflowHops = parseInt(body.outflow_hops || String(settings.screening.defaultOutflowHops));
+  const maxNodes = parseInt(body.max_nodes || String(settings.screening.maxNodes));
 
   if (!address) {
     return NextResponse.json({ detail: "Address is required" }, { status: 400 });
   }
 
-  const apiKey = process.env.TRUSTIN_API_KEY;
+  const apiKey = getTrustInApiKey();
   if (!apiKey) {
     return NextResponse.json(
-      { detail: "TRUSTIN_API_KEY not configured. Set it in .env.local file." },
+      { detail: "TrustIn API key not configured. Go to Settings to add one." },
       { status: 500 }
     );
   }
@@ -50,6 +54,8 @@ export async function POST(req: Request) {
       ruleset: (meta.name as string) || rulesetId,
     },
   };
+
+  logAudit("screening.started", { job_id: jobId, chain, address, scenario, ruleset: rulesetId });
 
   // Run screening in background (non-blocking)
   runScreening(jobId, chain, address, scenario, rules, inflowHops, outflowHops, maxNodes, apiKey);
@@ -125,11 +131,19 @@ async function runScreening(
     };
     screeningJobs[jobId] = jobData;
     saveHistoryEntry(jobId, jobData);
+
+    const riskLevel = (summary.highest_severity as string) || "Low";
+    logAudit("screening.completed", { job_id: jobId, chain, address, risk_level: riskLevel });
+    if (shouldAlert(riskLevel)) {
+      sendWebhook("screening.high_risk", { chain, address, risk_level: riskLevel, job_id: jobId });
+    }
   } catch (e) {
+    const errMsg = e instanceof Error ? e.message : String(e);
     screeningJobs[jobId] = {
       status: "error",
-      error: e instanceof Error ? e.message : String(e),
+      error: errMsg,
       request: screeningJobs[jobId].request,
     };
+    logAudit("screening.error", { job_id: jobId, chain, address, error: errMsg });
   }
 }

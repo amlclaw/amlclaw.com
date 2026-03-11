@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadAllPolicies, createPolicy } from "@/lib/storage";
+import { logAudit } from "@/lib/audit-log";
 
 export async function GET() {
   const policies = loadAllPolicies();
@@ -18,6 +19,7 @@ export async function POST(req: Request) {
       jurisdiction: jurisdiction || "Custom",
       source_documents: source_documents || [],
     });
+    logAudit("policy.created", { id: policy.id, name, jurisdiction });
     return NextResponse.json(policy, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 500 });
