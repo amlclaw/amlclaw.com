@@ -42,7 +42,10 @@ async function makeRequest(
   data: Record<string, unknown>,
   apiKey: string
 ): Promise<Record<string, unknown>> {
-  const url = `${getBaseUrl()}/${endpoint}?apikey=${apiKey}`;
+  // API key is optional — without it, TrustIn returns desensitized (masked) data
+  const url = apiKey
+    ? `${getBaseUrl()}/${endpoint}?apikey=${apiKey}`
+    : `${getBaseUrl()}/${endpoint}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "text/plain", "User-Agent": "amlclaw-web/1.0.0" },

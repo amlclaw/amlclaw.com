@@ -24,12 +24,11 @@ export default function SetupBanner() {
       .then((s) => {
         const activeProvider = s.ai?.activeProvider || "claude";
         const aiKey = s.ai?.providers?.[activeProvider]?.apiKey || "";
-        const trustinKey = s.blockchain?.trustinApiKey || "";
         // Keys are masked (****xxxx) when set, empty when not
         const aiMissing = !aiKey || aiKey === "";
-        const blockchainMissing = !trustinKey || trustinKey === "";
-        if (aiMissing || blockchainMissing) {
-          setNeeds({ ai: aiMissing, blockchain: blockchainMissing });
+        // TrustIn key is optional — screening works without it (desensitized mode)
+        if (aiMissing) {
+          setNeeds({ ai: aiMissing, blockchain: false });
         }
       })
       .catch(() => {});

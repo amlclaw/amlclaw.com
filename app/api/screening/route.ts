@@ -28,13 +28,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ detail: "Address is required" }, { status: 400 });
   }
 
+  // API key is optional — without it, TrustIn returns desensitized (masked) address data
   const apiKey = getTrustInApiKey();
-  if (!apiKey) {
-    return NextResponse.json(
-      { detail: "TrustIn API key not configured. Go to Settings to add one." },
-      { status: 500 }
-    );
-  }
 
   const { meta, filepath } = findRuleset(rulesetId);
   if (!meta || !filepath) {

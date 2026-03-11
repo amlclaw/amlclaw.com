@@ -30,12 +30,6 @@ export async function POST(req: Request) {
   const maxNodes = parseInt(body.max_nodes || String(settings.screening.maxNodes));
 
   const apiKey = getTrustInApiKey();
-  if (!apiKey) {
-    return NextResponse.json(
-      { detail: "TrustIn API key not configured. Go to Settings to add one." },
-      { status: 500 }
-    );
-  }
 
   const { meta, filepath } = findRuleset(rulesetId);
   if (!meta || !filepath) {

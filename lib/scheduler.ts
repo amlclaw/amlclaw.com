@@ -104,10 +104,6 @@ export async function executeMonitorTask(
   if (!task) return null;
 
   const apiKey = getTrustInApiKey();
-  if (!apiKey) {
-    console.error("[Scheduler] TrustIn API key not configured — go to Settings");
-    return null;
-  }
 
   const { meta, filepath } = findRuleset(task.ruleset_id);
   if (!meta || !filepath) {
