@@ -31,6 +31,9 @@ sales-playbook.md
 # editor & agent local config
 .claude/
 
+# lock file — project uses npm (package-lock.json)
+yarn.lock
+
 # debug
 npm-debug.log*
 yarn-debug.log*

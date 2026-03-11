@@ -13,7 +13,7 @@ Thank you for your interest in contributing to AMLClaw Web! This guide will help
 ### Development Setup
 
 ```bash
-git clone https://github.com/amlclaw/amlclaw-web.git
+git clone https://github.com/amlclaw/amlclaw.com.git
 cd amlclaw-web
 npm install
 npm run dev
@@ -74,7 +74,7 @@ npm test             # Integration tests
 ### 开发环境搭建
 
 ```bash
-git clone https://github.com/amlclaw/amlclaw-web.git
+git clone https://github.com/amlclaw/amlclaw.com.git
 cd amlclaw-web
 npm install
 npm run dev

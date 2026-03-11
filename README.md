@@ -1,7 +1,7 @@
 <!-- Badges -->
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
-[![Build](https://img.shields.io/github/actions/workflow/status/amlclaw/amlclaw-web/ci.yml?branch=main)](https://github.com/amlclaw/amlclaw-web/actions)
+[![Build](https://img.shields.io/github/actions/workflow/status/amlclaw/amlclaw.com/ci.yml?branch=main)](https://github.com/amlclaw/amlclaw.com/actions)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg)](https://www.typescriptlang.org)
@@ -78,30 +78,12 @@ Every step can run fully automated or with human-in-the-loop. Every action is au
 
 ## Screenshots
 
-> 📸 *Screenshots coming soon. See [`public/screenshots/README.md`](public/screenshots/README.md) for contribution specs.*
+> 📸 *Screenshots coming soon — run `npm run dev` to see the full UI, or check the [docs](docs/) for feature details.*
 
-<!-- Uncomment as screenshots are added:
-
-### Dashboard
+<!-- Add screenshots here as PNG files in public/screenshots/:
 ![Dashboard](public/screenshots/dashboard.png)
-*Real-time overview: total screenings, risk distribution, active monitors, system health.*
-
-### Screening Result
 ![Screening](public/screenshots/screening.png)
-*On-chain evidence graph with risk paths, matched rules, and one-click PDF/Markdown export.*
-
-### Visual Rule Editor
 ![Rules](public/screenshots/rules.png)
-*AI-generated detection rules with drag-and-drop threshold editing — no code required.*
-
-### AI Policy Generation
-![Policies](public/screenshots/policies.png)
-*Streaming AI output turning regulatory documents into structured compliance policies.*
-
-### Monitoring Tasks
-![Monitoring](public/screenshots/monitoring.png)
-*Cron-scheduled tasks with execution history, webhook alerts on high-risk findings.*
-
 -->
 
 ---
@@ -109,8 +91,8 @@ Every step can run fully automated or with human-in-the-loop. Every action is au
 ## Quick Start
 
 ```bash
-git clone https://github.com/amlclaw/amlclaw-web.git
-cd amlclaw-web
+git clone https://github.com/amlclaw/amlclaw.com.git
+cd amlclaw.com
 npm install
 npm run dev
 ```
@@ -165,78 +147,33 @@ Switch providers anytime from Settings. All AI features work with any provider.
 
 ## Built-in Rulesets & Scenarios
 
-### Rulesets
-
-| Ruleset | Jurisdiction | Regulations |
-|---------|-------------|-------------|
-| Singapore MAS DPT | Singapore | MAS Notice PSN02, DPT licensing |
-| Hong Kong SFC VASP | Hong Kong | SFC VASP licensing requirements |
-| Dubai VARA | Dubai / UAE | VARA Rulebook enforcement |
-
-### Screening Scenarios
-
-| Scenario | Rule Categories | Direction | Use Case |
-|----------|----------------|-----------|----------|
-| `deposit` | Deposit | all | Fund source analysis |
-| `withdrawal` | Withdrawal | outflow | Destination risk check |
-| `cdd` | CDD | all | Transaction threshold triggers |
-| `monitoring` | Ongoing Monitoring | all | Structuring/smurfing alerts |
-| `all` | ALL | all | Full comprehensive scan |
+3 jurisdictions (Singapore MAS, Hong Kong SFC, Dubai VARA) × 5 screening scenarios (deposit, withdrawal, CDD, monitoring, full scan). See [docs/user-guide/rules.md](docs/user-guide/rules.md) and [docs/user-guide/screening.md](docs/user-guide/screening.md) for details.
 
 ---
 
 ## Configuration
 
-All settings are managed through the **Settings** page (`/settings`):
+All settings are managed through the in-app **Settings** page (`/settings`) — no `.env` file editing required. See [docs/user-guide/settings.md](docs/user-guide/settings.md) for details.
 
-- **AI Provider** — Select active provider, configure API keys and models
-- **Blockchain** — TrustIn API key and base URL
-- **Screening Defaults** — Inflow/outflow hops, max nodes, default scenario and ruleset
-- **Monitoring** — Max addresses per task, default schedule
-- **Notifications** — Webhook URL for high-risk alerts (Slack, Teams, PagerDuty)
-- **Security** — API token (Bearer auth for all endpoints)
-- **Application** — Branding (app name, report header), default theme
-
-Settings are stored at `data/settings.json`. For legacy compatibility, `TRUSTIN_API_KEY` in `.env.local` is also supported as fallback.
+For Docker/headless deployments, copy `.env.example` to `.env.local` and set environment variables.
 
 ---
 
 ## Project Structure
 
 ```
-app/
-  (app)/           # Product pages (dashboard, documents, policies, rules, screening,
-                   #   monitoring, audit, docs, settings)
-  api/             # API routes
-  page.tsx         # Landing page
-  globals.css      # Core design system (~1400 lines)
-components/        # React components
-  landing/         # Landing page sections (11 files)
-lib/
-  ai.ts            # Multi-provider AI engine (streaming)
-  ai-providers/    # Claude, DeepSeek, Gemini adapters
-  settings.ts      # User settings (data/settings.json)
-  storage.ts       # File-based CRUD
-  auth.ts          # Bearer token API authentication
-  i18n.ts          # en/zh translation dictionary
-  trustin-api.ts   # TrustIn KYA v2 wrapper
-  scheduler.ts     # Cron-based monitoring scheduler
-  extract-risk-paths.ts  # Scenario-based rule matching engine
-  audit-log.ts     # Append-only JSONL audit log
-  webhook.ts       # HTTP POST webhook notifications
-  export-md.ts     # Markdown report export
-  export-pdf.ts    # PDF report export (zero dependencies)
-data/
-  defaults/        # Built-in rulesets (Singapore MAS, Hong Kong SFC, Dubai VARA)
-  schema/          # JSON schemas
-references/        # Regulatory source documents (40+ files)
-prompts/           # AI prompt templates
-public/
-  screenshots/     # App screenshots (see screenshots/README.md for specs)
-tests/
-  unit/            # Vitest unit tests
-  integration.test.mjs  # Integration tests
+app/(app)/        # Product pages (dashboard, documents, policies, rules, screening, ...)
+app/api/          # API routes
+components/       # React components by domain (documents/, policies/, rules/, ...)
+lib/              # Core logic (ai.ts, storage.ts, settings.ts, scheduler.ts, ...)
+data/             # Runtime data + built-in rulesets (file-based, no database)
+references/       # 40+ regulatory source documents
+prompts/          # AI prompt templates
+docs/             # Full documentation
+tests/            # Unit (vitest) + integration tests
 ```
+
+See [docs/development/architecture.md](docs/development/architecture.md) for the full architecture guide.
 
 ---
 
@@ -321,6 +258,18 @@ Full documentation is available in the [`docs/`](docs/) directory:
 - **API:** [Overview](docs/api/overview.md) · [Endpoints](docs/api/endpoints.md)
 - **Deployment:** [Docker](docs/deployment/docker.md) · [Manual](docs/deployment/manual.md) · [Configuration](docs/deployment/configuration.md)
 - **Development:** [Architecture](docs/development/architecture.md) · [Writing Rules](docs/development/writing-rules.md)
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting. AMLClaw is self-hosted by design — your data never leaves your server.
+
+---
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=amlclaw/amlclaw.com&type=Date)](https://star-history.com/#amlclaw/amlclaw.com&Date)
+
+---
 
 ## Contributing
 
