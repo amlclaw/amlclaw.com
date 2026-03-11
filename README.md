@@ -78,13 +78,25 @@ Every step can run fully automated or with human-in-the-loop. Every action is au
 
 ## Screenshots
 
-> 📸 *Screenshots coming soon — run `npm run dev` to see the full UI, or check the [docs](docs/) for feature details.*
-
-<!-- Add screenshots here as PNG files in public/screenshots/:
+### Dashboard
 ![Dashboard](public/screenshots/dashboard.png)
-![Screening](public/screenshots/screening.png)
-![Rules](public/screenshots/rules.png)
--->
+
+### Address Screening
+![Screening Input & Report](public/screenshots/screening-1.png)
+![Rule Triggers & Evidence Chains](public/screenshots/screening-2.png)
+
+### On-Chain Graph
+![Transaction Flow Graph](public/screenshots/screening-graph.png)
+
+### AI-Generated Rules
+![Rule Sets](public/screenshots/rules-1.png)
+![Rule Details](public/screenshots/rules-2.png)
+
+### Compliance Policies
+![AI Policy Generation](public/screenshots/policies.png)
+
+### Document Library
+![40+ Regulatory Documents](public/screenshots/documents.png)
 
 ---
 
