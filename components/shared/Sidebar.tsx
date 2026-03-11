@@ -120,17 +120,6 @@ export default function Sidebar() {
       ),
     },
     {
-      href: "/docs",
-      label: t("nav.docs"),
-      active: pathname.startsWith("/docs"),
-      icon: (
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" />
-          <path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" />
-        </svg>
-      ),
-    },
-    {
       href: "/settings",
       label: t("nav.settings"),
       active: pathname.startsWith("/settings"),

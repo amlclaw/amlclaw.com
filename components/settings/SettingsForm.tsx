@@ -174,7 +174,7 @@ export default function SettingsForm() {
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: "ai", label: "AI Provider", icon: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" },
-    { id: "blockchain", label: "Blockchain", icon: "M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" },
+    { id: "blockchain", label: "Address Data", icon: "M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" },
     { id: "screening", label: "Screening", icon: "M11 11m-8 0a8 8 0 1016 0 8 8 0 10-16 0M21 21l-4.35-4.35" },
     { id: "monitoring", label: "Monitoring", icon: "M12 12m-10 0a10 10 0 1020 0 10 10 0 10-20 0M12 6v6l4 2" },
     { id: "notifications", label: "Notifications", icon: "M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" },
@@ -385,7 +385,7 @@ function BlockchainSection({
 
   return (
     <>
-      <h3 className="settings-section-title">TrustIn KYA API</h3>
+      <h3 className="settings-section-title">Address Data Source (TrustIn KYA API)</h3>
       <div className="settings-field">
         <label>API Key <span style={{ fontWeight: 400, color: "var(--text-tertiary)" }}>(optional — works without key in desensitized mode)</span></label>
         <input
