@@ -36,7 +36,7 @@ export default function DocumentModal({ open, title, content, loading, onClose }
             </div>
           ) : content ? (
             <div
-              className="md-content"
+              className="md-content markdown-body"
               dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
             />
           ) : (

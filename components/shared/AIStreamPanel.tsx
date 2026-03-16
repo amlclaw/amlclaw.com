@@ -161,7 +161,7 @@ export default function AIStreamPanel({ endpoint, body, active, onComplete, onEr
       >
         {output ? (
           <div
-            className="md-content"
+            className="md-content markdown-body"
             dangerouslySetInnerHTML={{ __html: renderMarkdown(output) }}
           />
         ) : status === "streaming" ? (

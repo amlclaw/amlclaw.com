@@ -228,7 +228,7 @@ export default function PolicyViewer({ policyId, onGenerateRules, onRefresh }: P
             />
           ) : policy.content ? (
             <div
-              className="md-content"
+              className="md-content markdown-body"
               dangerouslySetInnerHTML={{ __html: renderMarkdown(policy.content) }}
             />
           ) : (

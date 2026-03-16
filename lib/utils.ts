@@ -29,30 +29,68 @@ export function iconText(icon: string): string {
 export function renderMarkdown(md: string): string {
   if (!md) return "";
   let html = escHtml(md);
+
+  // Code blocks (before inline processing)
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, "<pre><code>$2</code></pre>");
   html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+  // Headings (h4 before h3 before h2 before h1)
+  html = html.replace(/^#### (.+)$/gm, "<h4>$1</h4>");
   html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
   html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
   html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+
+  // Horizontal rules
+  html = html.replace(/^---$/gm, "<hr>");
+
+  // Bold, italic
   html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-  html = html.replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>");
+
+  // Blockquotes
+  html = html.replace(/^&gt; (.+)$/gm, "<blockquote><p>$1</p></blockquote>");
+  html = html.replace(/<\/blockquote>\s*<blockquote>/g, "");
+
+  // Numbered lists
+  html = html.replace(/^(\d+)\. (.+)$/gm, "<oli>$2</oli>");
+  html = html.replace(/(<oli>[\s\S]*?<\/oli>)/g, "<ol>$1</ol>");
+  html = html.replace(/<\/ol>\s*<ol>/g, "");
+  html = html.replace(/<oli>/g, "<li>");
+  html = html.replace(/<\/oli>/g, "</li>");
+
+  // Unordered lists
   html = html.replace(/^- (.+)$/gm, "<li>$1</li>");
-  html = html.replace(/(<li>[\s\S]*?<\/li>)/g, "<ul>$1</ul>");
+  html = html.replace(/(<li>[\s\S]*?<\/li>)(?![^<]*<\/ol>)/g, "<ul>$1</ul>");
   html = html.replace(/<\/ul>\s*<ul>/g, "");
+
+  // Tables — first row as thead
   html = html.replace(/^\|(.+)\|$/gm, (_match, content: string) => {
     const cells = content.split("|").map((c) => c.trim());
-    if (cells.every((c) => /^[-:]+$/.test(c))) return "";
+    if (cells.every((c) => /^[-:]+$/.test(c))) return "<!-- sep -->";
     return "<tr>" + cells.map((c) => `<td>${c}</td>`).join("") + "</tr>";
   });
+  html = html.replace(/<!-- sep -->/g, "");
   html = html.replace(/(<tr>[\s\S]*?<\/tr>)/g, "<table>$1</table>");
   html = html.replace(/<\/table>\s*<table>/g, "");
+  // Promote first row to thead
+  html = html.replace(/<table><tr>([\s\S]*?)<\/tr>/, (_, firstRow: string) => {
+    const headerCells = firstRow.replace(/<td>/g, "<th>").replace(/<\/td>/g, "</th>");
+    return `<table><thead><tr>${headerCells}</tr></thead><tbody>`;
+  });
+  html = html.replace(/<\/table>/g, "</tbody></table>");
+
+  // Paragraphs
   html = html.replace(/\n\n/g, "</p><p>");
   html = html.replace(/\n/g, "<br>");
   html = "<p>" + html + "</p>";
+
+  // Clean up: remove empty paragraphs and fix block elements inside paragraphs
   html = html.replace(/<p>\s*<\/p>/g, "");
-  html = html.replace(/<p><(h[1-3]|pre|ul|table|blockquote)/g, "<$1");
-  html = html.replace(/<\/(h[1-3]|pre|ul|table|blockquote)><\/p>/g, "</$1>");
+  html = html.replace(/<p><(h[1-4]|pre|ul|ol|table|blockquote|hr)/g, "<$1");
+  html = html.replace(/<\/(h[1-4]|pre|ul|ol|table|blockquote)><\/p>/g, "</$1>");
+  html = html.replace(/<hr><\/p>/g, "<hr>");
+  html = html.replace(/<p><hr>/g, "<hr>");
+
   return html;
 }
 

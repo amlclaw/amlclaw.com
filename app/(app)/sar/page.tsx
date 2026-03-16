@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { renderMarkdown } from "@/lib/utils";
 
 interface SAR {
   id: string;
@@ -296,20 +297,3 @@ export default function SARPage() {
   );
 }
 
-// Simple markdown renderer (reuse pattern from other pages)
-function renderMarkdown(md: string): string {
-  return md
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/^### (.+)$/gm, '<h3 style="font-size:var(--text-base);font-weight:600;margin:var(--sp-4) 0 var(--sp-2)">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 style="font-size:var(--text-lg);font-weight:700;margin:var(--sp-5) 0 var(--sp-2)">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 style="font-size:var(--text-xl);font-weight:700;margin:var(--sp-5) 0 var(--sp-3)">$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/`(.+?)`/g, '<code style="background:var(--surface-3);padding:1px 4px;border-radius:3px;font-family:var(--mono);font-size:var(--text-xs)">$1</code>')
-    .replace(/^- (.+)$/gm, '<li style="margin-left:var(--sp-4);font-size:var(--text-sm)">$1</li>')
-    .replace(/^(\d+)\. (.+)$/gm, '<li style="margin-left:var(--sp-4);font-size:var(--text-sm)">$2</li>')
-    .replace(/\n{2,}/g, '<br/><br/>')
-    .replace(/\n/g, "<br/>");
-}

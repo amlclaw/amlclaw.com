@@ -215,7 +215,7 @@ export default function SARGenerator({ jobId, job, onClose }: Props) {
             </div>
           )}
           {output && !editing && (
-            <div className="md-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(output) }} />
+            <div className="md-content markdown-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(output) }} />
           )}
           {output && status === "streaming" && <span className="ai-cursor" />}
           {editing && (
