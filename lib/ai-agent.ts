@@ -6,14 +6,44 @@
  * CLI mode is used when no oauthToken is configured. SDK mode when token is present.
  */
 import { spawn, execSync, type ChildProcess } from "child_process";
+import fs from "fs";
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
 import { getAIConfig, isDemoMode } from "./settings";
 
-// Resolve claude CLI path once at import time
-let claudePath = "";
-try {
-  claudePath = execSync("which claude", { encoding: "utf-8" }).trim();
-} catch { /* not found — will error at runtime */ }
+// Resolve claude CLI absolute path once at import time
+function findClaude(): string {
+  // 1. Try `which claude` with full shell
+  try {
+    const result = execSync("which claude", { encoding: "utf-8", shell: "/bin/zsh" }).trim();
+    if (result && fs.existsSync(result)) return result;
+  } catch { /* */ }
+
+  // 2. Check common nvm/node paths
+  const candidates = [
+    `${process.env.HOME}/.nvm/versions/node/${process.version}/bin/claude`,
+    "/usr/local/bin/claude",
+    "/opt/homebrew/bin/claude",
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+
+  // 3. Check PATH manually
+  const paths = (process.env.PATH || "").split(":");
+  for (const dir of paths) {
+    const p = `${dir}/claude`;
+    if (fs.existsSync(p)) return p;
+  }
+
+  return ""; // will error at runtime
+}
+
+const claudePath = findClaude();
+if (claudePath) {
+  console.log(`[ai-agent] Claude CLI found at: ${claudePath}`);
+} else {
+  console.warn("[ai-agent] Claude CLI not found — CLI mode will not work");
+}
 
 // ---------------------------------------------------------------------------
 // Demo content (ported from old lib/ai.ts)
