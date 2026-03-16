@@ -10,13 +10,16 @@ interface Props {
 }
 
 export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel }: Props) {
-  const [name, setName] = useState("");
   const [jurisdiction, setJurisdiction] = useState("Singapore");
+  const [customInstructions, setCustomInstructions] = useState("");
   const [policyId, setPolicyId] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "generating" | "ready" | "error">("idle");
   const [elapsed, setElapsed] = useState(0);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Auto-generate name from jurisdiction
+  const autoName = `${jurisdiction} AML Policy`;
 
   // Poll for completion
   useEffect(() => {
@@ -51,18 +54,13 @@ export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel
   }, [status, policyId, onPolicyCreated]);
 
   const handleStart = useCallback(async () => {
-    if (!name.trim()) {
-      showToast("Enter a policy name", "error");
-      return;
-    }
-
     try {
-      // 1. Create policy record
+      // 1. Create policy record with auto-generated name
       const createRes = await fetch("/api/policies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: name.trim(),
+          name: autoName,
           jurisdiction,
           source_documents: documentIds,
         }),
@@ -78,6 +76,7 @@ export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel
           policyId: policy.id,
           documentIds,
           jurisdiction,
+          customInstructions: customInstructions.trim() || undefined,
         }),
       });
 
@@ -95,14 +94,14 @@ export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Failed", "error");
     }
-  }, [name, jurisdiction, documentIds]);
+  }, [autoName, jurisdiction, documentIds, customInstructions]);
 
   if (status === "generating") {
     return (
       <div className="panel">
         <div className="panel-header">
           <h3 style={{ fontSize: "var(--text-sm)", fontWeight: 600 }}>
-            Generating: {name}
+            Generating: {autoName}
           </h3>
           <button className="btn btn-sm btn-secondary" onClick={onCancel}>
             Close
@@ -158,7 +157,7 @@ export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel
         >
           <div style={{ fontSize: 40 }}>⚠️</div>
           <div style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", textAlign: "center" }}>
-            Policy generation failed. Please check your AI provider settings and try again.
+            Policy generation failed. Make sure Claude Code is connected and try again.
           </div>
           <button className="btn btn-primary" onClick={() => setStatus("idle")}>
             Try Again
@@ -176,15 +175,6 @@ export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel
       </div>
       <div style={{ padding: "var(--sp-5)", flex: 1 }}>
         <div style={{ marginBottom: "var(--sp-4)" }}>
-          <label className="label">Policy Name</label>
-          <input
-            className="input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Singapore MAS DPT Compliance Policy"
-          />
-        </div>
-        <div style={{ marginBottom: "var(--sp-4)" }}>
           <label className="label">Jurisdiction</label>
           <select className="input" value={jurisdiction} onChange={(e) => setJurisdiction(e.target.value)}>
             <option>Singapore</option>
@@ -194,7 +184,7 @@ export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel
             <option>Custom</option>
           </select>
         </div>
-        <div style={{ marginBottom: "var(--sp-5)" }}>
+        <div style={{ marginBottom: "var(--sp-4)" }}>
           <label className="label">Source Documents</label>
           <div
             style={{
@@ -205,13 +195,26 @@ export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel
             {documentIds.length} document{documentIds.length !== 1 ? "s" : ""} selected
           </div>
         </div>
+        <div style={{ marginBottom: "var(--sp-5)" }}>
+          <label className="label">Custom Instructions <span style={{ fontWeight: 400, color: "var(--text-tertiary)" }}>(optional)</span></label>
+          <textarea
+            className="input"
+            value={customInstructions}
+            onChange={(e) => setCustomInstructions(e.target.value)}
+            placeholder="e.g. Focus on DeFi-specific risks, include travel rule requirements, use formal tone..."
+            rows={3}
+            style={{ resize: "vertical", fontFamily: "inherit" }}
+          />
+          <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginTop: "var(--sp-1)" }}>
+            Guide the AI to tailor the policy to your specific needs.
+          </div>
+        </div>
         <button
-          className={`btn btn-lg ${name.trim() ? "btn-primary" : "btn-secondary"}`}
+          className="btn btn-lg btn-primary"
           onClick={handleStart}
-          disabled={!name.trim()}
           style={{ width: "100%" }}
         >
-          Start AI Generation
+          Generate &ldquo;{autoName}&rdquo;
         </button>
       </div>
     </div>

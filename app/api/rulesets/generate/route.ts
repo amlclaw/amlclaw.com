@@ -8,10 +8,11 @@ const RULESETS_DIR = path.join(process.cwd(), "data", "rulesets");
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { policyId, name, jurisdiction } = body as {
+  const { policyId, name, jurisdiction, customInstructions } = body as {
     policyId: string;
     name?: string;
     jurisdiction?: string;
+    customInstructions?: string;
   };
 
   if (!policyId) {
@@ -26,11 +27,16 @@ export async function POST(req: Request) {
   const schema = loadRuleSchema();
   const labels = loadLabels();
 
-  const prompt = loadPrompt("generate-rules", {
+  let prompt = loadPrompt("generate-rules", {
     POLICIES: policy.content,
     SCHEMA: schema,
     LABELS: labels,
   });
+
+  // Append custom instructions if provided
+  if (customInstructions) {
+    prompt += `\n\n## Additional Requirements from User\n\n${customInstructions}`;
+  }
 
   const rulesetId = `custom_ai_${Date.now()}`;
   const rulesetName = name || `${policy.name} Rules`;

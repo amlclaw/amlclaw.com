@@ -34,10 +34,11 @@ function loadDocContent(docId: string): string | null {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { policyId, documentIds, jurisdiction } = body as {
+  const { policyId, documentIds, jurisdiction, customInstructions } = body as {
     policyId: string;
     documentIds: string[];
     jurisdiction: string;
+    customInstructions?: string;
   };
 
   if (!policyId || !documentIds?.length) {
@@ -71,10 +72,15 @@ export async function POST(req: Request) {
 
   // Build prompt — single call, no batching (1M context)
   const docText = docs.map((d) => `## ${d.name}\n\n${d.content}`).join("\n\n---\n\n");
-  const prompt = loadPrompt("generate-policy", {
+  let prompt = loadPrompt("generate-policy", {
     JURISDICTION: jurisdiction || "General",
     DOCUMENTS: docText,
   });
+
+  // Append custom instructions if provided
+  if (customInstructions) {
+    prompt += `\n\n## Additional Requirements from User\n\n${customInstructions}`;
+  }
 
   // Fire and forget
   queryAgent({
