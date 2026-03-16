@@ -2,23 +2,24 @@ import { NextResponse } from "next/server";
 import { getSettings, updateSettings } from "@/lib/settings";
 import { logAudit } from "@/lib/audit-log";
 
-const ALLOWED_SECTIONS = new Set(["ai", "blockchain", "screening", "monitoring", "storage", "notifications", "security", "demo", "app", "embedding"]);
+const ALLOWED_SECTIONS = new Set(["ai", "blockchain", "screening", "monitoring", "storage", "notifications", "security", "demo", "app", "sar"]);
+
+function maskKey(k: string): string {
+  return k ? `${"*".repeat(Math.max(0, k.length - 4))}${k.slice(-4)}` : "";
+}
 
 export async function GET() {
   const settings = getSettings();
-  // Mask API keys for display (return last 4 chars only)
   const masked = structuredClone(settings);
-  for (const key of Object.keys(masked.ai.providers) as Array<keyof typeof masked.ai.providers>) {
-    const k = masked.ai.providers[key].apiKey;
-    masked.ai.providers[key].apiKey = k ? `${"*".repeat(Math.max(0, k.length - 4))}${k.slice(-4)}` : "";
+  // Mask OAuth token
+  if (masked.ai.oauthToken) {
+    masked.ai.oauthToken = maskKey(masked.ai.oauthToken);
   }
   if (masked.blockchain.trustinApiKey) {
-    const k = masked.blockchain.trustinApiKey;
-    masked.blockchain.trustinApiKey = `${"*".repeat(Math.max(0, k.length - 4))}${k.slice(-4)}`;
+    masked.blockchain.trustinApiKey = maskKey(masked.blockchain.trustinApiKey);
   }
   if (masked.security?.apiToken) {
-    const k = masked.security.apiToken;
-    masked.security.apiToken = `${"*".repeat(Math.max(0, k.length - 4))}${k.slice(-4)}`;
+    masked.security.apiToken = maskKey(masked.security.apiToken);
   }
   return NextResponse.json(masked);
 }
@@ -27,15 +28,9 @@ export async function PUT(req: Request) {
   const body = await req.json();
 
   // Strip masked keys — don't overwrite real keys with mask strings
-  if (body.ai?.providers) {
+  if (typeof body.ai?.oauthToken === "string" && body.ai.oauthToken.startsWith("*")) {
     const current = getSettings();
-    for (const key of Object.keys(body.ai.providers)) {
-      const val = body.ai.providers[key]?.apiKey;
-      if (typeof val === "string" && val.startsWith("*")) {
-        // Keep existing key
-        body.ai.providers[key].apiKey = current.ai.providers[key as keyof typeof current.ai.providers]?.apiKey || "";
-      }
-    }
+    body.ai.oauthToken = current.ai.oauthToken;
   }
   if (typeof body.blockchain?.trustinApiKey === "string" && body.blockchain.trustinApiKey.startsWith("*")) {
     const current = getSettings();

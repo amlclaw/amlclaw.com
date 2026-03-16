@@ -12,8 +12,10 @@ beforeEach(() => {
   mockFs.existsSync.mockReturnValue(false);
   mockFs.readFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
   mockFs.writeFileSync.mockImplementation(() => {});
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mockFs.mkdirSync.mockImplementation(() => "" as any);
   delete process.env.TRUSTIN_API_KEY;
+  delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
 });
 
 import {
@@ -21,7 +23,7 @@ import {
   updateSettings,
   getTrustInApiKey,
   getTrustInBaseUrl,
-  getActiveAIConfig,
+  getAIConfig,
   DEFAULT_SETTINGS,
 } from "@/lib/settings";
 
@@ -29,7 +31,8 @@ describe("settings", () => {
   describe("getSettings", () => {
     it("returns defaults when no file exists", () => {
       const s = getSettings();
-      expect(s.ai.activeProvider).toBe("claude");
+      expect(s.ai.model).toBe("claude-sonnet-4-6");
+      expect(s.ai.maxTurns).toBe(10);
       expect(s.screening.defaultInflowHops).toBe(3);
       expect(s.security.apiToken).toBe("");
     });
@@ -37,11 +40,11 @@ describe("settings", () => {
     it("merges saved settings with defaults", () => {
       mockFs.existsSync.mockReturnValue(true);
       mockFs.readFileSync.mockReturnValue(JSON.stringify({
-        ai: { activeProvider: "deepseek" },
+        ai: { model: "claude-opus-4-6" },
         // screening section missing — should get defaults
       }));
       const s = getSettings();
-      expect(s.ai.activeProvider).toBe("deepseek");
+      expect(s.ai.model).toBe("claude-opus-4-6");
       expect(s.screening.defaultInflowHops).toBe(3); // from defaults
     });
 
@@ -56,7 +59,7 @@ describe("settings", () => {
       mockFs.readFileSync.mockReturnValue("not valid json{{{");
       const s = getSettings();
       expect(s).toBeTruthy();
-      expect(s.ai.activeProvider).toBe("claude");
+      expect(s.ai.model).toBe("claude-sonnet-4-6");
     });
   });
 
@@ -65,7 +68,7 @@ describe("settings", () => {
       mockFs.existsSync.mockReturnValue(false);
       const result = updateSettings({ security: { apiToken: "new-token" } });
       expect(result.security.apiToken).toBe("new-token");
-      expect(result.ai.activeProvider).toBe("claude"); // preserved default
+      expect(result.ai.model).toBe("claude-sonnet-4-6"); // preserved default
       expect(mockFs.writeFileSync).toHaveBeenCalled();
     });
   });
@@ -95,11 +98,18 @@ describe("settings", () => {
     });
   });
 
-  describe("getActiveAIConfig", () => {
-    it("returns active provider and config", () => {
-      const { provider, config } = getActiveAIConfig();
-      expect(provider).toBe("claude");
+  describe("getAIConfig", () => {
+    it("returns default model and settings", () => {
+      const config = getAIConfig();
       expect(config.model).toBe("claude-sonnet-4-6");
+      expect(config.maxTurns).toBe(10);
+      expect(config.maxBudgetUsd).toBe(1.00);
+    });
+
+    it("falls back to env var for oauth token", () => {
+      process.env.CLAUDE_CODE_OAUTH_TOKEN = "test-token";
+      const config = getAIConfig();
+      expect(config.oauthToken).toBe("test-token");
     });
   });
 });

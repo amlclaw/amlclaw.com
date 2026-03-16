@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { isAIBusy, getActiveJobs, abortCurrentJob, abortJob } from "@/lib/ai";
+import { isAIBusy, getActiveJobs, abortCurrentJob, abortJob } from "@/lib/ai-agent";
 
 export async function GET() {
   return NextResponse.json({
     busy: isAIBusy(),
     jobs: getActiveJobs(),
-    job: getActiveJobs()[0] || null, // backward compat
+    job: getActiveJobs()[0] || null,
   });
 }
 
-// POST /api/ai/status — abort a job (or first active job)
 export async function POST(req: Request) {
   let jobId: string | undefined;
   try {

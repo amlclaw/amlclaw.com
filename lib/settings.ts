@@ -7,19 +7,13 @@ import path from "path";
 
 const SETTINGS_PATH = path.join(process.cwd(), "data", "settings.json");
 
-export type AIProvider = "claude" | "deepseek" | "gemini";
-
-export interface AIProviderConfig {
-  apiKey: string;
-  model: string;
-  baseUrl?: string;
-}
-
 export interface Settings {
-  // AI Provider
+  // AI Engine (Claude Code SDK)
   ai: {
-    activeProvider: AIProvider;
-    providers: Record<AIProvider, AIProviderConfig>;
+    oauthToken: string;
+    model: string;
+    maxTurns: number;
+    maxBudgetUsd: number;
   };
 
   // Blockchain Data Source
@@ -62,15 +56,18 @@ export interface Settings {
     apiToken: string; // empty = open access (no auth required)
   };
 
-  // Embedding / Vector Search
-  embedding: {
-    apiKey: string;
-    model: string;
-  };
-
   // Demo Mode
   demo: {
     enabled: boolean;
+  };
+
+  // SAR Configuration
+  sar: {
+    institution_name: string;
+    license_number: string;
+    compliance_officer: string;
+    default_jurisdiction: string;
+    auto_reference_prefix: string;
   };
 
   // Application
@@ -83,24 +80,10 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   ai: {
-    activeProvider: "claude",
-    providers: {
-      claude: {
-        apiKey: "",
-        model: "claude-sonnet-4-6",
-        baseUrl: "",
-      },
-      deepseek: {
-        apiKey: "",
-        model: "deepseek-chat",
-        baseUrl: "https://api.deepseek.com",
-      },
-      gemini: {
-        apiKey: "",
-        model: "gemini-2.0-flash",
-        baseUrl: "",
-      },
-    },
+    oauthToken: "",
+    model: "claude-sonnet-4-6",
+    maxTurns: 10,
+    maxBudgetUsd: 1.00,
   },
   blockchain: {
     trustinApiKey: "",
@@ -130,12 +113,15 @@ export const DEFAULT_SETTINGS: Settings = {
   security: {
     apiToken: "",
   },
-  embedding: {
-    apiKey: "",
-    model: "text-embedding-3-small",
-  },
   demo: {
     enabled: false,
+  },
+  sar: {
+    institution_name: "",
+    license_number: "",
+    compliance_officer: "",
+    default_jurisdiction: "generic",
+    auto_reference_prefix: "SAR",
   },
   app: {
     name: "AMLClaw",
@@ -226,11 +212,42 @@ export function isDemoMode(): boolean {
 }
 
 /**
- * Get the active AI provider configuration.
+ * Get the Claude Code SDK configuration.
  */
-export function getActiveAIConfig(): { provider: AIProvider; config: AIProviderConfig } {
+export function getAIConfig(): { oauthToken: string; model: string; maxTurns: number; maxBudgetUsd: number } {
   const settings = getSettings();
-  const provider = settings.ai.activeProvider;
-  const config = settings.ai.providers[provider];
-  return { provider, config };
+  return {
+    oauthToken: settings.ai.oauthToken || process.env.CLAUDE_CODE_OAUTH_TOKEN || "",
+    model: settings.ai.model || "claude-sonnet-4-6",
+    maxTurns: settings.ai.maxTurns || 10,
+    maxBudgetUsd: settings.ai.maxBudgetUsd || 1.00,
+  };
 }
+
+/**
+ * One-time migration: old multi-provider format → Claude Code SDK format.
+ */
+function migrateSettingsIfNeeded(): void {
+  try {
+    if (!fs.existsSync(SETTINGS_PATH)) return;
+    const raw = fs.readFileSync(SETTINGS_PATH, "utf-8");
+    const saved = JSON.parse(raw);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (saved.ai && ((saved.ai as any).activeProvider || (saved.ai as any).providers)) {
+      saved.ai = {
+        oauthToken: process.env.CLAUDE_CODE_OAUTH_TOKEN || "",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        model: (saved.ai as any).providers?.claude?.model || "claude-sonnet-4-6",
+        maxTurns: 10,
+        maxBudgetUsd: 1.00,
+      };
+      // Remove old embedding section
+      delete saved.embedding;
+      fs.writeFileSync(SETTINGS_PATH, JSON.stringify(saved, null, 2));
+      console.log("[settings] Migrated AI settings to Claude Code SDK format");
+    }
+  } catch { /* best-effort */ }
+}
+
+// Run migration on first import
+migrateSettingsIfNeeded();

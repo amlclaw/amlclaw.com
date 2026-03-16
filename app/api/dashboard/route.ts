@@ -35,7 +35,7 @@ export async function GET() {
   );
 
   // API status
-  const hasAiKey = !!settings.ai.providers[settings.ai.activeProvider]?.apiKey;
+  const hasAiKey = !!settings.ai.oauthToken;
   const hasTrustinKey = !!settings.blockchain.trustinApiKey || !!process.env.TRUSTIN_API_KEY;
 
   return NextResponse.json({
@@ -52,7 +52,7 @@ export async function GET() {
     recent_screenings: history.slice(0, 10),
     api_status: {
       ai_configured: hasAiKey,
-      ai_provider: settings.ai.activeProvider,
+      ai_provider: "claude-code-sdk",
       trustin_configured: hasTrustinKey,
       scheduler_active: scheduler.initialized,
       scheduler_jobs: scheduler.active_jobs,
