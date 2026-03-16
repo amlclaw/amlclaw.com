@@ -32,6 +32,9 @@ export type AuditAction =
   | "monitor.deleted"
   | "monitor.run_started"
   | "monitor.run_completed"
+  | "sar.generated"
+  | "sar.updated"
+  | "sar.exported"
   | "settings.updated"
   | "webhook.sent"
   | "webhook.failed";

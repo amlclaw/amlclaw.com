@@ -2,6 +2,8 @@
  * Markdown report export generator — Professional audit format
  */
 import { getSettings } from "./settings";
+import { computeRiskDimensions } from "./risk-score";
+import type { RiskEntity, Tag } from "./extract-risk-paths";
 
 export function generateExportMd(job: Record<string, unknown>): string {
   const r = (job.result as Record<string, unknown>) || {};
@@ -11,10 +13,15 @@ export function generateExportMd(job: Record<string, unknown>): string {
   const entities = (r.risk_entities as Record<string, unknown>[]) || [];
 
   const overall = (summary.highest_severity as string) || computeRisk(entities);
-  const riskScore = computeRiskScore(overall);
   const scenario = (r.scenario as string) || (req.scenario as string) || "all";
   const selfTags = (target.tags as Record<string, unknown>[]) || [];
   const selfRules = (target.self_matched_rules as string[]) || [];
+  const riskResult = computeRiskDimensions(
+    entities as unknown as RiskEntity[],
+    selfTags as unknown as Tag[],
+    selfRules
+  );
+  const riskScore = riskResult.total;
   const triggeredRules = (summary.rules_triggered as string[]) || [];
   const rulesLoaded = (summary.rules_loaded as number) || (summary.total_rules as number) || 0;
   const totalRules = (summary.total_rules as number) || rulesLoaded;
@@ -38,7 +45,7 @@ export function generateExportMd(job: Record<string, unknown>): string {
   lines.push(`**Engine**: ${engineName} Web`);
   lines.push(`**Scenario**: ${scenario}`);
   if (categoriesApplied.length > 0) lines.push(`**Categories Applied**: ${categoriesApplied.join(", ")}`);
-  lines.push(`**Overall Risk**: ${overall}`);
+  lines.push(`**Overall Risk**: ${riskResult.level}`);
   lines.push("");
 
   // ── Subject Identification ──
@@ -84,6 +91,26 @@ export function generateExportMd(job: Record<string, unknown>): string {
   lines.push(`| Paths Analyzed | ${entities.length} |`);
   const recommendation = entities.length === 0 ? "Pass" : (overall === "Severe" || overall === "High") ? "Reject" : "Review";
   lines.push(`| Recommendation | **${recommendation}** |`);
+  lines.push("");
+
+  // Risk Score Breakdown
+  const d = riskResult.dimensions;
+  const weights = [
+    { name: "Sanctions Exposure", score: d.sanctions, weight: 0.25 },
+    { name: "Darknet/Illicit", score: d.illicit, weight: 0.20 },
+    { name: "Mixer/Privacy", score: d.mixer, weight: 0.15 },
+    { name: "Proximity", score: d.proximity, weight: 0.15 },
+    { name: "Breadth", score: d.breadth, weight: 0.15 },
+    { name: "Self Risk", score: d.selfRisk, weight: 0.10 },
+  ];
+  lines.push("### Risk Score Breakdown");
+  lines.push("");
+  lines.push("| Dimension | Score | Weight | Weighted |");
+  lines.push("|-----------|-------|--------|----------|");
+  for (const w of weights) {
+    lines.push(`| ${w.name} | ${w.score} | ${(w.weight * 100).toFixed(0)}% | ${(w.score * w.weight).toFixed(1)} |`);
+  }
+  lines.push(`| **Total** | | | **${riskResult.total.toFixed(1)}** |`);
   lines.push("");
 
   // ── Custom Policy Enforcement ──
