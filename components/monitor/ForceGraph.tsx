@@ -71,25 +71,27 @@ export default function ForceGraph({ nodes, edges }: Props) {
 
         const positioned: PositionedNode[] = [];
 
-        // Entities: inner ring (40% of min dimension)
-        const innerRadius = Math.min(w, h) * 0.22;
+        // Use elliptical layout — rx based on width, ry based on height
+        // This fills the wide rectangle properly
+        const innerRx = w * 0.18;
+        const innerRy = h * 0.28;
         entities.forEach((n, i) => {
           const angle = (i / entities.length) * Math.PI * 2 - Math.PI / 2;
           positioned.push({
             ...n,
-            x: cx + Math.cos(angle) * innerRadius,
-            y: cy + Math.sin(angle) * innerRadius,
+            x: cx + Math.cos(angle) * innerRx,
+            y: cy + Math.sin(angle) * innerRy,
           });
         });
 
-        // External nodes: outer ring (75% of min dimension)
-        const outerRadius = Math.min(w, h) * 0.42;
+        const outerRx = w * 0.38;
+        const outerRy = h * 0.42;
         externals.forEach((n, i) => {
           const angle = (i / externals.length) * Math.PI * 2 - Math.PI / 2;
           positioned.push({
             ...n,
-            x: cx + Math.cos(angle) * outerRadius,
-            y: cy + Math.sin(angle) * outerRadius,
+            x: cx + Math.cos(angle) * outerRx,
+            y: cy + Math.sin(angle) * outerRy,
           });
         });
 
