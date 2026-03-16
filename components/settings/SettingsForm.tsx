@@ -281,33 +281,36 @@ function ClaudeCodeSection({
         </select>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--sp-4)" }}>
-        <div className="settings-field">
-          <label>Max Turns <span style={{ color: "var(--text-tertiary)" }}>(Copilot)</span></label>
-          <input
-            type="number"
-            className="input input-sm"
-            value={settings.ai.maxTurns}
-            onChange={(e) => update("ai.maxTurns", parseInt(e.target.value) || 10)}
-            min={1}
-            max={50}
-          />
-          <span className="settings-hint">Maximum agent iterations for Copilot</span>
+      {/* Max Turns and Max Budget only shown when OAuth token is set (SDK mode) */}
+      {settings.ai.oauthToken && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--sp-4)" }}>
+          <div className="settings-field">
+            <label>Max Turns <span style={{ color: "var(--text-tertiary)" }}>(Copilot)</span></label>
+            <input
+              type="number"
+              className="input input-sm"
+              value={settings.ai.maxTurns}
+              onChange={(e) => update("ai.maxTurns", parseInt(e.target.value) || 10)}
+              min={1}
+              max={50}
+            />
+            <span className="settings-hint">Maximum agent iterations for Copilot</span>
+          </div>
+          <div className="settings-field">
+            <label>Max Budget (USD)</label>
+            <input
+              type="number"
+              className="input input-sm"
+              value={settings.ai.maxBudgetUsd}
+              onChange={(e) => update("ai.maxBudgetUsd", parseFloat(e.target.value) || 1.0)}
+              min={0.01}
+              max={100}
+              step={0.1}
+            />
+            <span className="settings-hint">Per-task cost cap</span>
+          </div>
         </div>
-        <div className="settings-field">
-          <label>Max Budget (USD)</label>
-          <input
-            type="number"
-            className="input input-sm"
-            value={settings.ai.maxBudgetUsd}
-            onChange={(e) => update("ai.maxBudgetUsd", parseFloat(e.target.value) || 1.0)}
-            min={0.01}
-            max={100}
-            step={0.1}
-          />
-          <span className="settings-hint">Per-task cost cap</span>
-        </div>
-      </div>
+      )}
     </>
   );
 }
