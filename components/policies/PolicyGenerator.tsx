@@ -10,7 +10,6 @@ interface Props {
 }
 
 export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel }: Props) {
-  const [jurisdiction, setJurisdiction] = useState("Singapore");
   const [customInstructions, setCustomInstructions] = useState("");
   const [policyId, setPolicyId] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "generating" | "ready" | "error">("idle");
@@ -18,8 +17,7 @@ export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Auto-generate name from jurisdiction
-  const autoName = `${jurisdiction} AML Policy`;
+  const autoName = `AML Policy — ${new Date().toLocaleDateString()}`;
 
   // Poll for completion
   useEffect(() => {
@@ -61,7 +59,7 @@ export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: autoName,
-          jurisdiction,
+          jurisdiction: "Auto",
           source_documents: documentIds,
         }),
       });
@@ -75,7 +73,7 @@ export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel
         body: JSON.stringify({
           policyId: policy.id,
           documentIds,
-          jurisdiction,
+          jurisdiction: "Auto-detect from documents",
           customInstructions: customInstructions.trim() || undefined,
         }),
       });
@@ -94,7 +92,7 @@ export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Failed", "error");
     }
-  }, [autoName, jurisdiction, documentIds, customInstructions]);
+  }, [autoName, documentIds, customInstructions]);
 
   if (status === "generating") {
     return (
@@ -125,7 +123,7 @@ export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel
               AI is generating your compliance policy...
             </div>
             <div style={{ fontSize: "var(--text-sm)", color: "var(--text-tertiary)" }}>
-              {jurisdiction} &middot; {documentIds.length} source docs &middot; {elapsed}s elapsed
+              {documentIds.length} source docs &middot; {elapsed}s elapsed
             </div>
             <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginTop: "var(--sp-3)" }}>
               This may take a few minutes. You can close this panel and check back later — the policy will appear in the sidebar when ready.
@@ -174,16 +172,6 @@ export default function PolicyGenerator({ documentIds, onPolicyCreated, onCancel
         <button className="btn-icon" onClick={onCancel}>&times;</button>
       </div>
       <div style={{ padding: "var(--sp-5)", flex: 1 }}>
-        <div style={{ marginBottom: "var(--sp-4)" }}>
-          <label className="label">Jurisdiction</label>
-          <select className="input" value={jurisdiction} onChange={(e) => setJurisdiction(e.target.value)}>
-            <option>Singapore</option>
-            <option>Hong Kong</option>
-            <option>Dubai</option>
-            <option>International</option>
-            <option>Custom</option>
-          </select>
-        </div>
         <div style={{ marginBottom: "var(--sp-4)" }}>
           <label className="label">Source Documents</label>
           <div
