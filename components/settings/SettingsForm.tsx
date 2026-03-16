@@ -229,12 +229,13 @@ function ClaudeCodeSection({
     <>
       <h3 className="settings-section-title">AI Engine (Claude Code)</h3>
       <p style={{ fontSize: "var(--text-sm)", color: "var(--text-tertiary)", margin: "0 0 var(--sp-4) 0" }}>
-        This application uses the Claude Agent SDK powered by your Claude Pro/Max subscription.
-        Run <code style={{ background: "var(--surface-3)", padding: "1px 4px", borderRadius: 3, fontFamily: "var(--mono)", fontSize: "var(--text-xs)" }}>claude setup-token</code> in your terminal to generate an OAuth token.
+        Powered by your local Claude Code installation. If you have Claude Code CLI installed and logged in
+        (<code style={{ background: "var(--surface-3)", padding: "1px 4px", borderRadius: 3, fontFamily: "var(--mono)", fontSize: "var(--text-xs)" }}>claude login</code>),
+        it works out of the box — no configuration needed.
       </p>
 
       <div className="settings-field">
-        <label>OAuth Token</label>
+        <label>OAuth Token <span style={{ fontWeight: 400, color: "var(--text-tertiary)" }}>(optional — leave empty to use local Claude Code login)</span></label>
         <div style={{ display: "flex", gap: "var(--sp-2)" }}>
           <input
             type="password"
@@ -242,7 +243,7 @@ function ClaudeCodeSection({
             style={{ flex: 1 }}
             value={rawKeys["oauthToken"] !== undefined ? rawKeys["oauthToken"] : settings.ai.oauthToken}
             onChange={(e) => setRawKeys((k) => ({ ...k, oauthToken: e.target.value }))}
-            placeholder="sk-ant-oat01-..."
+            placeholder="Leave empty for auto-detect, or paste sk-ant-oat01-..."
           />
           <button
             className="btn btn-sm"
@@ -262,7 +263,8 @@ function ClaudeCodeSection({
           </span>
         )}
         <span className="settings-hint">
-          Run <code style={{ fontFamily: "var(--mono)", fontSize: "inherit" }}>claude setup-token</code> in terminal, then paste the token here.
+          Empty = uses your local <code style={{ fontFamily: "var(--mono)", fontSize: "inherit" }}>claude</code> CLI session (zero config).
+          Or run <code style={{ fontFamily: "var(--mono)", fontSize: "inherit" }}>claude setup-token</code> for explicit token.
         </span>
       </div>
 

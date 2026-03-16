@@ -1,11 +1,11 @@
 /**
- * Claude Code Agent SDK engine.
- * Replaces the old multi-provider lib/ai.ts.
- * Three wrapper functions over the SDK's query():
- *   - queryAgent()       — single-turn text generation
- *   - queryAgentStream() — streaming text deltas (async generator)
- *   - queryCopilot()     — multi-turn agent loop with MCP tools
+ * Claude Code AI engine — dual mode:
+ *   1. CLI mode (default): spawns `claude -p` subprocess, inherits user's login session — zero config
+ *   2. SDK mode: uses Agent SDK query() with explicit OAuth token — for advanced control
+ *
+ * CLI mode is used when no oauthToken is configured. SDK mode when token is present.
  */
+import { spawn, type ChildProcess } from "child_process";
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
 import { getAIConfig, isDemoMode } from "./settings";
 
@@ -89,6 +89,152 @@ const DEMO_RULESET_OUTPUT = `[
 `;
 
 // ---------------------------------------------------------------------------
+// Mode detection
+// ---------------------------------------------------------------------------
+
+type AIMode = "cli" | "sdk" | "demo";
+
+function getMode(): AIMode {
+  if (isDemoMode()) return "demo";
+  const config = getAIConfig();
+  if (config.oauthToken) return "sdk";
+  return "cli"; // default — uses local claude CLI login
+}
+
+// ---------------------------------------------------------------------------
+// CLI mode — spawn `claude -p` subprocess
+// ---------------------------------------------------------------------------
+
+function spawnClaude(prompt: string, model?: string, systemPrompt?: string): ChildProcess {
+  const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
+  if (model) {
+    args.push("--model", model);
+  }
+  if (systemPrompt) {
+    args.push("--system-prompt", systemPrompt);
+  }
+  return spawn("claude", args, {
+    env: { ...process.env },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+}
+
+async function runCLI(prompt: string, model?: string, systemPrompt?: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const proc = spawnClaude(prompt, model, systemPrompt);
+    let stdout = "";
+    let stderr = "";
+
+    proc.stdout?.on("data", (data: Buffer) => { stdout += data.toString(); });
+    proc.stderr?.on("data", (data: Buffer) => { stderr += data.toString(); });
+
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr || `claude exited with code ${code}`));
+        return;
+      }
+      // Parse stream-json output — extract text from assistant messages
+      const text = extractTextFromStreamJSON(stdout);
+      resolve(text);
+    });
+
+    proc.on("error", (err) => {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        reject(new Error("Claude Code CLI not found. Install it with: npm install -g @anthropic-ai/claude-code"));
+      } else {
+        reject(err);
+      }
+    });
+  });
+}
+
+function extractTextFromStreamJSON(raw: string): string {
+  const parts: string[] = [];
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const msg = JSON.parse(line);
+      // stream-json format: each line is a JSON object with type field
+      if (msg.type === "assistant" && msg.message?.content) {
+        for (const block of msg.message.content) {
+          if (block.type === "text") {
+            parts.push(block.text);
+          }
+        }
+      }
+      // Also handle simple text result
+      if (msg.type === "result" && msg.result) {
+        parts.push(msg.result);
+      }
+    } catch { /* not JSON, skip */ }
+  }
+  return parts.join("") || raw; // fallback to raw if no JSON parsed
+}
+
+async function* streamCLI(prompt: string, model?: string, systemPrompt?: string): AsyncGenerator<{ text: string }, void, unknown> {
+  const proc = spawnClaude(prompt, model, systemPrompt);
+  let buffer = "";
+
+  const iterator = async function* () {
+    for await (const chunk of proc.stdout as AsyncIterable<Buffer>) {
+      buffer += chunk.toString();
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || ""; // keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const msg = JSON.parse(line);
+          if (msg.type === "assistant" && msg.message?.content) {
+            for (const block of msg.message.content) {
+              if (block.type === "text") {
+                yield { text: block.text };
+              }
+            }
+          }
+          if (msg.type === "content_block_delta" && msg.delta?.text) {
+            yield { text: msg.delta.text };
+          }
+        } catch { /* not JSON */ }
+      }
+    }
+    // Process remaining buffer
+    if (buffer.trim()) {
+      try {
+        const msg = JSON.parse(buffer);
+        if (msg.type === "assistant" && msg.message?.content) {
+          for (const block of msg.message.content) {
+            if (block.type === "text") {
+              yield { text: block.text };
+            }
+          }
+        }
+      } catch { /* not JSON */ }
+    }
+  };
+
+  yield* iterator();
+
+  // Wait for process to exit
+  await new Promise<void>((resolve, reject) => {
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`claude exited with code ${code}`));
+      } else {
+        resolve();
+      }
+    });
+    proc.on("error", (err) => {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        reject(new Error("Claude Code CLI not found. Install it with: npm install -g @anthropic-ai/claude-code"));
+      } else {
+        reject(err);
+      }
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Job tracking
 // ---------------------------------------------------------------------------
 
@@ -97,6 +243,7 @@ interface ActiveJob {
   type: string;
   startedAt: string;
   queryInstance: Query | null;
+  process: ChildProcess | null;
 }
 
 const activeJobs = new Map<string, ActiveJob>();
@@ -118,7 +265,8 @@ export function getCurrentJob(): { id: string; type: string; startedAt: string }
 export function abortJob(jobId: string): boolean {
   const job = activeJobs.get(jobId);
   if (!job) return false;
-  try { job.queryInstance?.close(); } catch { /* already done */ }
+  try { job.queryInstance?.close(); } catch { /* */ }
+  try { job.process?.kill(); } catch { /* */ }
   activeJobs.delete(jobId);
   return true;
 }
@@ -130,8 +278,8 @@ export function abortCurrentJob(): boolean {
   return abortJob(first.id);
 }
 
-function registerJob(id: string, type: string, q: Query | null): void {
-  activeJobs.set(id, { id, type, startedAt: new Date().toISOString(), queryInstance: q });
+function registerJob(id: string, type: string, q: Query | null = null, proc: ChildProcess | null = null): void {
+  activeJobs.set(id, { id, type, startedAt: new Date().toISOString(), queryInstance: q, process: proc });
 }
 
 function unregisterJob(id: string): void {
@@ -145,7 +293,7 @@ function unregisterJob(id: string): void {
 function mapSDKError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
   if (msg.includes("authentication_failed") || msg.includes("unauthorized")) {
-    return "OAuth token expired or invalid. Run `claude setup-token` in your terminal to refresh.";
+    return "Authentication failed. Make sure you're logged into Claude Code (run `claude login`).";
   }
   if (msg.includes("rate_limit")) {
     return "Subscription quota exceeded. Try again later.";
@@ -155,6 +303,9 @@ function mapSDKError(e: unknown): string {
   }
   if (msg.includes("max_output_tokens")) {
     return "Response was too long. Try with a shorter input.";
+  }
+  if (msg.includes("ENOENT")) {
+    return "Claude Code CLI not found. Install it with: npm install -g @anthropic-ai/claude-code";
   }
   return msg;
 }
@@ -176,11 +327,10 @@ export interface QueryAgentOpts {
 export async function queryAgent(opts: QueryAgentOpts): Promise<string> {
   // Demo mode
   if (isDemoMode()) {
-    registerJob(opts.jobId, opts.jobType, null);
+    registerJob(opts.jobId, opts.jobType);
     const output = opts.jobType.includes("ruleset") || opts.jobType.includes("rules")
       ? DEMO_RULESET_OUTPUT
       : DEMO_POLICY_OUTPUT;
-    // Simulate brief delay
     await new Promise((r) => setTimeout(r, 500));
     unregisterJob(opts.jobId);
     return output;
@@ -190,11 +340,23 @@ export async function queryAgent(opts: QueryAgentOpts): Promise<string> {
     throw new Error("Too many concurrent AI jobs. Please wait for a running job to finish.");
   }
 
+  const mode = getMode();
   const config = getAIConfig();
-  if (!config.oauthToken) {
-    throw new Error("Claude Code OAuth token not configured. Go to Settings > AI Engine to add one, or run `claude setup-token` in your terminal.");
+
+  // --- CLI mode: spawn `claude -p` ---
+  if (mode === "cli") {
+    registerJob(opts.jobId, opts.jobType);
+    try {
+      const result = await runCLI(opts.prompt, config.model, opts.systemPrompt);
+      return result;
+    } catch (e) {
+      throw new Error(mapSDKError(e));
+    } finally {
+      unregisterJob(opts.jobId);
+    }
   }
 
+  // --- SDK mode: use query() with OAuth token ---
   const env: Record<string, string> = {
     CLAUDE_CODE_OAUTH_TOKEN: config.oauthToken,
   };
@@ -207,15 +369,9 @@ export async function queryAgent(opts: QueryAgentOpts): Promise<string> {
     env,
   };
 
-  if (opts.systemPrompt) {
-    options.systemPrompt = opts.systemPrompt;
-  }
-  if (opts.disallowedTools) {
-    options.disallowedTools = opts.disallowedTools;
-  }
-  if (opts.outputFormat) {
-    options.outputFormat = opts.outputFormat;
-  }
+  if (opts.systemPrompt) options.systemPrompt = opts.systemPrompt;
+  if (opts.disallowedTools) options.disallowedTools = opts.disallowedTools;
+  if (opts.outputFormat) options.outputFormat = opts.outputFormat;
 
   const q = query({ prompt: opts.prompt, options: options as never });
   registerJob(opts.jobId, opts.jobType, q);
@@ -261,7 +417,7 @@ export interface QueryAgentStreamOpts {
 export async function* queryAgentStream(opts: QueryAgentStreamOpts): AsyncGenerator<{ text: string }, void, unknown> {
   // Demo mode
   if (isDemoMode()) {
-    registerJob(opts.jobId, opts.jobType, null);
+    registerJob(opts.jobId, opts.jobType);
     const output = opts.jobType.includes("ruleset") || opts.jobType.includes("rules")
       ? DEMO_RULESET_OUTPUT
       : DEMO_POLICY_OUTPUT;
@@ -278,11 +434,23 @@ export async function* queryAgentStream(opts: QueryAgentStreamOpts): AsyncGenera
     throw new Error("Too many concurrent AI jobs. Please wait for a running job to finish.");
   }
 
+  const mode = getMode();
   const config = getAIConfig();
-  if (!config.oauthToken) {
-    throw new Error("Claude Code OAuth token not configured. Go to Settings > AI Engine to add one.");
+
+  // --- CLI mode ---
+  if (mode === "cli") {
+    registerJob(opts.jobId, opts.jobType);
+    try {
+      yield* streamCLI(opts.prompt, config.model, opts.systemPrompt);
+    } catch (e) {
+      throw new Error(mapSDKError(e));
+    } finally {
+      unregisterJob(opts.jobId);
+    }
+    return;
   }
 
+  // --- SDK mode ---
   const env: Record<string, string> = {
     CLAUDE_CODE_OAUTH_TOKEN: config.oauthToken,
   };
@@ -297,14 +465,9 @@ export async function* queryAgentStream(opts: QueryAgentStreamOpts): AsyncGenera
     env,
   };
 
-  if (opts.systemPrompt) {
-    options.systemPrompt = opts.systemPrompt;
-  }
+  if (opts.systemPrompt) options.systemPrompt = opts.systemPrompt;
 
-  const q = query({
-    prompt: opts.prompt,
-    options: options as never,
-  });
+  const q = query({ prompt: opts.prompt, options: options as never });
   registerJob(opts.jobId, opts.jobType, q);
 
   try {
@@ -347,7 +510,7 @@ export interface QueryCopilotOpts {
 export async function* queryCopilot(opts: QueryCopilotOpts): AsyncGenerator<{ text: string }, void, unknown> {
   // Demo mode
   if (isDemoMode()) {
-    const demoReply = "I'm AMLClaw Copilot running in demo mode. Connect a Claude Code OAuth token in Settings to enable full AI capabilities including regulatory search, screening analysis, and monitoring insights.";
+    const demoReply = "I'm AMLClaw Copilot running in demo mode. Connect Claude Code to enable full AI capabilities including regulatory search, screening analysis, and monitoring insights.";
     const chunks = demoReply.match(/.{1,40}/gs) || [demoReply];
     for (const chunk of chunks) {
       await new Promise((r) => setTimeout(r, 50));
@@ -360,11 +523,26 @@ export async function* queryCopilot(opts: QueryCopilotOpts): AsyncGenerator<{ te
     throw new Error("Too many concurrent AI jobs. Please wait for a running job to finish.");
   }
 
+  const mode = getMode();
   const config = getAIConfig();
-  if (!config.oauthToken) {
-    throw new Error("Claude Code OAuth token not configured. Go to Settings > AI Engine to add one.");
+
+  // --- CLI mode: simple single-turn via CLI (no MCP tool support) ---
+  if (mode === "cli") {
+    const fullPrompt = opts.systemPrompt
+      ? `${opts.systemPrompt}\n\n---\n\nUser question: ${opts.prompt}`
+      : opts.prompt;
+    registerJob(opts.jobId, "copilot");
+    try {
+      yield* streamCLI(fullPrompt, config.model);
+    } catch (e) {
+      throw new Error(mapSDKError(e));
+    } finally {
+      unregisterJob(opts.jobId);
+    }
+    return;
   }
 
+  // --- SDK mode: full agent loop with MCP tools ---
   const env: Record<string, string> = {
     CLAUDE_CODE_OAUTH_TOKEN: config.oauthToken,
   };
@@ -378,15 +556,9 @@ export async function* queryCopilot(opts: QueryCopilotOpts): AsyncGenerator<{ te
     env,
   };
 
-  if (opts.systemPrompt) {
-    options.systemPrompt = opts.systemPrompt;
-  }
-  if (opts.mcpServers) {
-    options.mcpServers = opts.mcpServers;
-  }
-  if (opts.allowedTools) {
-    options.allowedTools = opts.allowedTools;
-  }
+  if (opts.systemPrompt) options.systemPrompt = opts.systemPrompt;
+  if (opts.mcpServers) options.mcpServers = opts.mcpServers;
+  if (opts.allowedTools) options.allowedTools = opts.allowedTools;
 
   const q = query({ prompt: opts.prompt, options: options as never });
   registerJob(opts.jobId, "copilot", q);
@@ -403,7 +575,6 @@ export async function* queryCopilot(opts: QueryCopilotOpts): AsyncGenerator<{ te
         }
       }
       if (message.type === "assistant" && message.message?.content) {
-        // For non-streaming messages, extract text
         for (const block of message.message.content) {
           if ("text" in block && typeof block.text === "string") {
             yield { text: block.text };
@@ -425,45 +596,51 @@ export async function* queryCopilot(opts: QueryCopilotOpts): AsyncGenerator<{ te
 }
 
 // ---------------------------------------------------------------------------
-// Test connection — minimal query to verify OAuth token
+// Test connection — check if claude CLI is available or SDK token is valid
 // ---------------------------------------------------------------------------
 
-export async function testAgentConnection(tokenOverride?: string): Promise<{ ok: boolean; error?: string; model?: string }> {
+export async function testAgentConnection(tokenOverride?: string): Promise<{ ok: boolean; error?: string; model?: string; mode?: string }> {
   const config = getAIConfig();
   const token = tokenOverride || config.oauthToken;
-  if (!token) {
-    return { ok: false, error: "No OAuth token configured" };
+
+  // If token provided, test SDK mode
+  if (token) {
+    try {
+      const env: Record<string, string> = { CLAUDE_CODE_OAUTH_TOKEN: token };
+      const q = query({
+        prompt: "Reply with exactly: OK",
+        options: {
+          model: config.model,
+          maxTurns: 1,
+          maxBudgetUsd: 0.01,
+          permissionMode: "bypassPermissions",
+          disallowedTools: ["Bash", "Edit", "Write", "Read"],
+          env,
+        } as never,
+      });
+      for await (const message of q) {
+        if (message.type === "result") {
+          if (message.is_error) {
+            const errors = (message as { errors?: string[] }).errors;
+            return { ok: false, error: mapSDKError(new Error(errors?.[0] || "Unknown error")) };
+          }
+          return { ok: true, model: config.model, mode: "sdk" };
+        }
+      }
+      return { ok: true, model: config.model, mode: "sdk" };
+    } catch (e) {
+      return { ok: false, error: mapSDKError(e) };
+    }
   }
 
+  // No token — test CLI mode
   try {
-    const env: Record<string, string> = {
-      CLAUDE_CODE_OAUTH_TOKEN: token,
-    };
-
-    const q = query({
-      prompt: "Reply with exactly: OK",
-      options: {
-        model: config.model,
-        maxTurns: 1,
-        maxBudgetUsd: 0.01,
-        permissionMode: "bypassPermissions",
-        disallowedTools: ["Bash", "Edit", "Write", "Read"],
-        env,
-      } as never,
-    });
-
-    for await (const message of q) {
-      if (message.type === "result") {
-        if (message.is_error) {
-          const errors = (message as { errors?: string[] }).errors;
-          return { ok: false, error: mapSDKError(new Error(errors?.[0] || "Unknown error")) };
-        }
-        return { ok: true, model: config.model };
-      }
+    const result = await runCLI("Reply with exactly: OK", config.model);
+    if (result.includes("OK")) {
+      return { ok: true, model: config.model, mode: "cli" };
     }
-
-    return { ok: true, model: config.model };
+    return { ok: true, model: config.model, mode: "cli" };
   } catch (e) {
-    return { ok: false, error: mapSDKError(e) };
+    return { ok: false, error: mapSDKError(e), mode: "cli" };
   }
 }
