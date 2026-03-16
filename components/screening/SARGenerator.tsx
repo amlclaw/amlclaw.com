@@ -209,9 +209,12 @@ export default function SARGenerator({ jobId, job, onClose }: Props) {
             </div>
           )}
           {status === "streaming" && !output && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--text-tertiary)", padding: "var(--sp-4)" }}>
-              <div className="spinner spinner-sm" />
-              Generating SAR...
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "var(--sp-3)", padding: "var(--sp-6)", color: "var(--text-tertiary)" }}>
+              <div className="spinner" />
+              <div style={{ fontSize: "var(--text-sm)", fontWeight: 500 }}>Generating SAR...</div>
+              <div style={{ fontSize: "var(--text-xs)", textAlign: "center", maxWidth: 320, lineHeight: 1.6 }}>
+                You can close this dialog — the report will be available in <strong style={{ color: "var(--text-secondary)" }}>SAR Reports</strong> when ready.
+              </div>
             </div>
           )}
           {output && !editing && (
