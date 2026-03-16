@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { renderMarkdown, showToast } from "@/lib/utils";
+import { showToast } from "@/lib/utils";
 import RuleCard from "@/components/rules/RuleCard";
+import DocumentPaper from "@/components/shared/DocumentPaper";
 import RuleEditor from "@/components/rules/RuleEditor";
 
 interface Policy {
@@ -227,14 +228,7 @@ export default function PolicyViewer({ policyId, onGenerateRules, onRefresh }: P
               style={{ height: "100%", minHeight: 400 }}
             />
           ) : policy.content ? (
-            <div className="document-paper-scroll">
-              <div className="document-paper">
-                <div
-                  className="markdown-body"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(policy.content) }}
-                />
-              </div>
-            </div>
+            <DocumentPaper content={policy.content} />
           ) : (
             <div style={{ textAlign: "center", padding: "var(--sp-10)", color: "var(--text-tertiary)" }}>
               No content yet

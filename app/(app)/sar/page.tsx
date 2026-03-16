@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { renderMarkdown } from "@/lib/utils";
+import DocumentPaper from "@/components/shared/DocumentPaper";
 
 interface SAR {
   id: string;
@@ -286,11 +286,7 @@ export default function SARPage() {
                 </div>
               </div>
             ) : (
-              <div className="document-paper-scroll">
-                <div className="document-paper">
-                  <div className="markdown-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(selectedSar.content) }} />
-                </div>
-              </div>
+              <DocumentPaper content={selectedSar.content} />
             )}
           </>
         )}

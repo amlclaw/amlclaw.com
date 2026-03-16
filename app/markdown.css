@@ -1,27 +1,57 @@
 /* ================================================================
-   Document Paper — A4 paper simulation for compliance documents
-   Wraps .markdown-body in a paper container for formal appearance
+   Document Paper — A4 page simulation with visible page breaks
+   Each .document-page represents one printed page
    ================================================================ */
 
-/* Paper container — simulates a printed document */
+/* Scroll container */
+.document-paper-scroll {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--surface-0, #0d0d0d);
+  padding: 1.5rem 1rem 3rem;
+}
+
+[data-theme="light"] .document-paper-scroll {
+  background: #e8e8e8;
+}
+
+/* Paper wrapper — centers pages */
 .document-paper {
+  max-width: 816px; /* 8.5 inches at 96dpi */
+  margin: 0 auto;
+}
+
+/* Individual page — A4 proportions */
+.document-page {
   background: #ffffff;
   color: #1a1a1a;
-  max-width: 816px; /* ~8.5 inches at 96dpi */
-  margin: 1.5rem auto;
-  padding: 3rem 3.5rem;
+  width: 100%;
+  min-height: 1056px; /* 11 inches at 96dpi — US Letter / close to A4 */
+  padding: 72px 72px 80px; /* ~0.75in margins */
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.08),
     0 4px 12px rgba(0, 0, 0, 0.04),
     0 0 0 1px rgba(0, 0, 0, 0.03);
   border-radius: 2px;
-  min-height: 600px;
+  margin-bottom: 1.5rem;
   position: relative;
+  overflow: hidden;
 }
 
-/* Dark theme adjustments for paper */
-[data-theme="dark"] .document-paper,
-:root:not([data-theme]) .document-paper {
+/* Page number */
+.document-page::after {
+  content: attr(data-page);
+  position: absolute;
+  bottom: 32px;
+  right: 72px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.3);
+}
+
+/* Dark theme */
+[data-theme="dark"] .document-page,
+:root:not([data-theme]) .document-page {
   background: #1c1c1e;
   color: #e5e5e7;
   box-shadow:
@@ -30,16 +60,34 @@
     0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
-/* Scroll container for paper */
-.document-paper-scroll {
-  flex: 1;
-  overflow-y: auto;
-  background: var(--surface-0, #0d0d0d);
-  padding: 0 1rem;
+[data-theme="dark"] .document-page::after,
+:root:not([data-theme]) .document-page::after {
+  color: rgba(255, 255, 255, 0.2);
 }
 
-[data-theme="light"] .document-paper-scroll {
-  background: #f0f0f0;
+/* Fallback: single-page mode (no JS pagination) */
+.document-page-single {
+  background: #ffffff;
+  color: #1a1a1a;
+  max-width: 816px;
+  margin: 0 auto 1.5rem;
+  padding: 72px;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 4px 12px rgba(0, 0, 0, 0.04),
+    0 0 0 1px rgba(0, 0, 0, 0.03);
+  border-radius: 2px;
+  min-height: 600px;
+}
+
+[data-theme="dark"] .document-page-single,
+:root:not([data-theme]) .document-page-single {
+  background: #1c1c1e;
+  color: #e5e5e7;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.3),
+    0 4px 12px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 /* ================================================================
@@ -228,7 +276,6 @@
   border-bottom: none;
 }
 
-/* Alternating row colors */
 .markdown-body tbody tr:nth-child(even) {
   background: rgba(128, 128, 128, 0.025);
 }
@@ -257,17 +304,22 @@
 }
 
 /* ================================================================
-   Print — actual PDF output
+   Print — real A4 pages
    ================================================================ */
 
 @media print {
   .document-paper-scroll {
-    background: white;
+    background: white !important;
     overflow: visible;
     padding: 0;
   }
 
   .document-paper {
+    max-width: none;
+  }
+
+  .document-page,
+  .document-page-single {
     box-shadow: none;
     margin: 0;
     padding: 2cm 2.5cm;
@@ -275,6 +327,16 @@
     border-radius: 0;
     background: white;
     color: #000;
+    min-height: auto;
+    page-break-after: always;
+  }
+
+  .document-page:last-child {
+    page-break-after: auto;
+  }
+
+  .document-page::after {
+    color: rgba(0, 0, 0, 0.4);
   }
 
   .markdown-body {
