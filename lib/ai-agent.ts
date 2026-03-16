@@ -10,39 +10,64 @@ import fs from "fs";
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
 import { getAIConfig, isDemoMode } from "./settings";
 
-// Resolve claude CLI absolute path once at import time
-function findClaude(): string {
-  // 1. Try `which claude` with full shell
-  try {
-    const result = execSync("which claude", { encoding: "utf-8", shell: "/bin/zsh" }).trim();
-    if (result && fs.existsSync(result)) return result;
-  } catch { /* */ }
+// ---------------------------------------------------------------------------
+// Claude CLI path resolution — robust for any environment (nvm, homebrew, etc.)
+// ---------------------------------------------------------------------------
 
-  // 2. Check common nvm/node paths
+function findClaude(): string {
+  // 1. Direct nvm path (most common for Node.js devs)
+  const nvmPath = `${process.env.HOME}/.nvm/versions/node/${process.version}/bin/claude`;
+  if (fs.existsSync(nvmPath)) return nvmPath;
+
+  // 2. Try shell resolution (uses user's login shell with full PATH)
+  const shells = ["/bin/zsh", "/bin/bash", "/bin/sh"];
+  for (const sh of shells) {
+    try {
+      if (!fs.existsSync(sh)) continue;
+      const result = execSync("which claude", { encoding: "utf-8", shell: sh, env: getFullEnv() as NodeJS.ProcessEnv }).trim();
+      if (result && fs.existsSync(result)) return result;
+    } catch { /* */ }
+  }
+
+  // 3. Common install locations
   const candidates = [
-    `${process.env.HOME}/.nvm/versions/node/${process.version}/bin/claude`,
     "/usr/local/bin/claude",
     "/opt/homebrew/bin/claude",
+    `${process.env.HOME}/.local/bin/claude`,
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
 
-  // 3. Check PATH manually
-  const paths = (process.env.PATH || "").split(":");
-  for (const dir of paths) {
-    const p = `${dir}/claude`;
-    if (fs.existsSync(p)) return p;
-  }
+  return "";
+}
 
-  return ""; // will error at runtime
+/**
+ * Build a complete env with PATH that includes node/nvm bin dirs.
+ * Next.js server may strip these from process.env.
+ */
+function getFullEnv(): Record<string, string> {
+  const env = { ...process.env } as Record<string, string>;
+  const extraPaths = [
+    `${process.env.HOME}/.nvm/versions/node/${process.version}/bin`,
+    "/usr/local/bin",
+    "/opt/homebrew/bin",
+    `${process.env.HOME}/.local/bin`,
+  ].filter(Boolean);
+
+  const currentPath = env.PATH || "";
+  const missingPaths = extraPaths.filter((p) => !currentPath.includes(p));
+  if (missingPaths.length > 0) {
+    env.PATH = [...missingPaths, currentPath].join(":");
+  }
+  return env;
 }
 
 const claudePath = findClaude();
 if (claudePath) {
-  console.log(`[ai-agent] Claude CLI found at: ${claudePath}`);
+  console.log(`[ai-agent] Claude CLI: ${claudePath}`);
 } else {
-  console.warn("[ai-agent] Claude CLI not found — CLI mode will not work");
+  console.warn("[ai-agent] Claude CLI not found — install with: npm install -g @anthropic-ai/claude-code");
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +167,7 @@ function getMode(): AIMode {
 // ---------------------------------------------------------------------------
 
 function spawnClaude(prompt: string, model?: string, systemPrompt?: string): ChildProcess {
-  // Use --output-format text for simple text output (no --verbose needed)
+  const exe = claudePath || "claude";
   const args = ["-p", prompt, "--output-format", "text"];
   if (model) {
     args.push("--model", model);
@@ -150,9 +175,10 @@ function spawnClaude(prompt: string, model?: string, systemPrompt?: string): Chi
   if (systemPrompt) {
     args.push("--system-prompt", systemPrompt);
   }
-  const proc = spawn(claudePath || "claude", args, {
-    env: { ...process.env },
+  const proc = spawn(exe, args, {
+    env: getFullEnv() as NodeJS.ProcessEnv,
     stdio: ["ignore", "pipe", "pipe"],
+    shell: true, // use shell to resolve shebang and PATH
   });
   return proc;
 }
@@ -334,6 +360,7 @@ export async function queryAgent(opts: QueryAgentOpts): Promise<string> {
 
   // --- SDK mode: use query() with OAuth token ---
   const env: Record<string, string> = {
+    ...getFullEnv(),
     CLAUDE_CODE_OAUTH_TOKEN: config.oauthToken,
   };
 
@@ -428,6 +455,7 @@ export async function* queryAgentStream(opts: QueryAgentStreamOpts): AsyncGenera
 
   // --- SDK mode ---
   const env: Record<string, string> = {
+    ...getFullEnv(),
     CLAUDE_CODE_OAUTH_TOKEN: config.oauthToken,
   };
 
@@ -520,6 +548,7 @@ export async function* queryCopilot(opts: QueryCopilotOpts): AsyncGenerator<{ te
 
   // --- SDK mode: full agent loop with MCP tools ---
   const env: Record<string, string> = {
+    ...getFullEnv(),
     CLAUDE_CODE_OAUTH_TOKEN: config.oauthToken,
   };
 
@@ -582,7 +611,7 @@ export async function testAgentConnection(tokenOverride?: string): Promise<{ ok:
   // If token provided, test SDK mode
   if (token) {
     try {
-      const env: Record<string, string> = { CLAUDE_CODE_OAUTH_TOKEN: token };
+      const env: Record<string, string> = { ...getFullEnv(), CLAUDE_CODE_OAUTH_TOKEN: token };
       const q = query({
         prompt: "Reply with exactly: OK",
         options: {
