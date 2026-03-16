@@ -1,9 +1,10 @@
-import { queryAgentStream } from "@/lib/ai-agent";
+import { queryAgent } from "@/lib/ai-agent";
 import { loadPrompt } from "@/lib/prompts";
 import { loadHistoryJob } from "@/lib/storage";
 import { createSAR, getNextReference, updateSAR } from "@/lib/sar-storage";
 import { logAudit } from "@/lib/audit-log";
 import { getSettings } from "@/lib/settings";
+import { parseSARJson, renderSARTemplate } from "@/lib/sar-template";
 
 export async function POST(req: Request) {
   const body = await req.json();
@@ -46,75 +47,68 @@ export async function POST(req: Request) {
     institution,
   });
 
-  // Load prompt template
-  const promptName = `sar-${jurisdiction}`;
-  let prompt: string;
-  try {
-    prompt = loadPrompt(promptName, {
-      screening_data: JSON.stringify(job, null, 2),
-      institution_info: JSON.stringify(institution, null, 2),
-      reference_id: reference,
-    });
-  } catch {
-    prompt = loadPrompt("sar-generic", {
-      screening_data: JSON.stringify(job, null, 2),
-      institution_info: JSON.stringify(institution, null, 2),
-      reference_id: reference,
-    });
-  }
+  // Respond immediately — generation happens in background
+  const response = new Response(JSON.stringify({
+    id: sar.id,
+    reference: sar.reference,
+    status: "generating",
+  }), {
+    status: 202,
+    headers: { "Content-Type": "application/json" },
+  });
 
-  // Stream response via SSE — preserve named event format
-  const encoder = new TextEncoder();
-  let closed = false;
-
-  const safeSend = (controller: ReadableStreamDefaultController, event: string, data: Record<string, unknown>) => {
-    if (closed) return;
+  // Background generation
+  (async () => {
     try {
-      controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-    } catch { /* controller already closed */ }
-  };
+      // Use structured prompt — AI outputs JSON
+      const prompt = loadPrompt("sar-structured", {
+        screening_data: JSON.stringify(job, null, 2),
+        institution_info: JSON.stringify(institution, null, 2),
+        jurisdiction,
+        reference_id: reference,
+      });
 
-  const safeClose = (controller: ReadableStreamDefaultController) => {
-    if (closed) return;
-    closed = true;
-    try { controller.close(); } catch { /* already closed */ }
-  };
+      const rawOutput = await queryAgent({
+        jobId: `sar_gen_${sar.id}`,
+        jobType: "generate-sar",
+        prompt,
+        maxTurns: 3,
+        disallowedTools: ["Bash", "Edit", "Write", "Read"],
+      });
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      let fullOutput = "";
-      try {
-        for await (const delta of queryAgentStream({
-          jobId: `sar_gen_${sar.id}`,
-          jobType: "generate-sar",
-          prompt,
-        })) {
-          fullOutput += delta.text;
-          safeSend(controller, "data", { text: delta.text });
-        }
+      // Parse JSON and render with template
+      const structured = parseSARJson(rawOutput);
 
-        updateSAR(sar.id, { content: fullOutput, status: "draft" });
-        logAudit("sar.generated" as Parameters<typeof logAudit>[0], {
-          sar_id: sar.id,
-          reference: sar.reference,
-          screening_job_id,
+      let content: string;
+      if (structured) {
+        content = renderSARTemplate(structured, {
+          reference,
           jurisdiction,
+          institution_name: institution.name,
+          license_number: institution.license,
+          compliance_officer: institution.compliance_officer,
+          generated_at: new Date().toISOString(),
         });
-        safeSend(controller, "done", { id: sar.id, reference: sar.reference });
-      } catch (e) {
-        updateSAR(sar.id, { status: "draft", content: "" });
-        safeSend(controller, "error", { error: e instanceof Error ? e.message : String(e) });
-      } finally {
-        safeClose(controller);
+      } else {
+        // Fallback: use raw AI output if JSON parsing fails
+        console.warn(`[sar] Failed to parse structured JSON for ${sar.id}, using raw output`);
+        content = rawOutput;
       }
-    },
-  });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+      updateSAR(sar.id, { content, status: "draft" });
+      logAudit("sar.generated" as Parameters<typeof logAudit>[0], {
+        sar_id: sar.id,
+        reference: sar.reference,
+        screening_job_id,
+        jurisdiction,
+        structured: !!structured,
+      });
+      console.log(`[sar] ${sar.reference} generated (structured: ${!!structured})`);
+    } catch (e) {
+      console.error(`[sar] ${sar.reference} failed:`, e instanceof Error ? e.message : e);
+      updateSAR(sar.id, { status: "draft", content: "" });
+    }
+  })();
+
+  return response;
 }

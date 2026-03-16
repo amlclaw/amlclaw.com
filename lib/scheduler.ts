@@ -184,6 +184,10 @@ export async function executeMonitorTask(
           address: addr.address,
           scenario: task.scenario,
           ruleset: (meta.name as string) || task.ruleset_id,
+          ruleset_id: task.ruleset_id,
+          inflow_hops: task.inflow_hops,
+          outflow_hops: task.outflow_hops,
+          max_nodes: task.max_nodes,
         },
         result: {
           target: {

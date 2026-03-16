@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSAR, updateSAR } from "@/lib/sar-storage";
+import { getSAR, updateSAR, deleteSAR } from "@/lib/sar-storage";
 import { logAudit } from "@/lib/audit-log";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ sarId: string }> }) {
@@ -31,4 +31,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ sarId:
   });
 
   return NextResponse.json(updated);
+}
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ sarId: string }> }) {
+  const { sarId } = await params;
+  const deleted = deleteSAR(sarId);
+  if (!deleted) {
+    return NextResponse.json({ error: "SAR not found" }, { status: 404 });
+  }
+  logAudit("sar.deleted" as Parameters<typeof logAudit>[0], { sar_id: sarId });
+  return NextResponse.json({ ok: true });
 }

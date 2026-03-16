@@ -18,7 +18,7 @@ const JURISDICTIONS = [
 
 export default function SARGenerator({ jobId, job, onClose }: Props) {
   const [jurisdiction, setJurisdiction] = useState("generic");
-  const [status, setStatus] = useState<"idle" | "streaming" | "done" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "generating" | "done" | "error">("idle");
   const [output, setOutput] = useState("");
   const [sarId, setSarId] = useState<string | null>(null);
   const [sarRef, setSarRef] = useState<string | null>(null);
@@ -27,30 +27,38 @@ export default function SARGenerator({ jobId, job, onClose }: Props) {
   const [saving, setSaving] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
-  const cancelledRef = useRef(false);
-  const startTimeRef = useRef(0);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const r = (job.result as Record<string, unknown>) || {};
   const req = (job.request as Record<string, unknown>) || {};
   const target = (r.target as Record<string, unknown>) || {};
   const summary = (r.summary as Record<string, unknown>) || {};
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
   const generate = useCallback(async () => {
-    cancelledRef.current = false;
     setOutput("");
-    setStatus("streaming");
+    setStatus("generating");
     setSarId(null);
     setSarRef(null);
     setEditing(false);
     setElapsed(0);
-    startTimeRef.current = Date.now();
 
-    const timer = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    // Start timer
+    const startTime = Date.now();
+    timerRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTime) / 1000));
     }, 1000);
 
     try {
+      // Fire-and-forget: API returns 202 immediately
       const res = await fetch("/api/sar/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -61,65 +69,37 @@ export default function SARGenerator({ jobId, job, onClose }: Props) {
         const err = await res.json().catch(() => ({ error: "Request failed" }));
         setStatus("error");
         setOutput(err.error || "Generation failed");
-        clearInterval(timer);
+        if (timerRef.current) clearInterval(timerRef.current);
         return;
       }
 
-      const reader = res.body?.getReader();
-      if (!reader) { setStatus("error"); clearInterval(timer); return; }
-      readerRef.current = reader;
+      const data = await res.json();
+      setSarId(data.id);
+      setSarRef(data.reference);
 
-      const decoder = new TextDecoder();
-      let buffer = "";
+      // Poll for completion
+      pollingRef.current = setInterval(async () => {
+        try {
+          const pollRes = await fetch(`/api/sar/${data.id}`);
+          if (!pollRes.ok) return;
+          const sar = await pollRes.json();
 
-      while (!cancelledRef.current) {
-        const { done, value } = await reader.read();
-        if (done || cancelledRef.current) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (cancelledRef.current) break;
-          if (line.startsWith("event: done")) {
+          if (sar.status === "draft" || sar.status === "final") {
+            // Done!
+            setOutput(sar.content || "");
             setStatus("done");
-            continue;
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            if (timerRef.current) clearInterval(timerRef.current);
           }
-          if (line.startsWith("event: error")) {
-            setStatus("error");
-            continue;
-          }
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.text) setOutput((prev) => prev + data.text);
-              if (data.id) setSarId(data.id);
-              if (data.reference) setSarRef(data.reference);
-              if (data.error) { setStatus("error"); setOutput(data.error); }
-            } catch { /* */ }
-          }
-        }
-      }
+        } catch { /* retry */ }
+      }, 3000);
 
-      if (!cancelledRef.current) {
-        setStatus((prev) => (prev === "error" ? "error" : "done"));
-      }
     } catch {
       setStatus("error");
-      setOutput("Stream failed");
+      setOutput("Generation failed");
+      if (timerRef.current) clearInterval(timerRef.current);
     }
-    clearInterval(timer);
   }, [jobId, jurisdiction]);
-
-  const stop = useCallback(() => {
-    cancelledRef.current = true;
-    if (readerRef.current) {
-      readerRef.current.cancel().catch(() => {});
-      readerRef.current = null;
-    }
-    setStatus("done");
-  }, []);
 
   const startEdit = () => {
     setEditContent(output);
@@ -193,7 +173,7 @@ export default function SARGenerator({ jobId, job, onClose }: Props) {
               key={j.id}
               className={`sar-tab ${jurisdiction === j.id ? "active" : ""}`}
               onClick={() => setJurisdiction(j.id)}
-              disabled={status === "streaming"}
+              disabled={status === "generating"}
             >
               {j.icon} {j.label}
             </button>
@@ -208,8 +188,8 @@ export default function SARGenerator({ jobId, job, onClose }: Props) {
               <div style={{ fontSize: "var(--text-sm)" }}>Select jurisdiction and click Generate</div>
             </div>
           )}
-          {status === "streaming" && !output && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "var(--sp-3)", padding: "var(--sp-6)", color: "var(--text-tertiary)" }}>
+          {status === "generating" && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "var(--sp-3)", padding: "var(--sp-6)", color: "var(--text-tertiary)", height: "100%" }}>
               <div className="spinner" />
               <div style={{ fontSize: "var(--text-sm)", fontWeight: 500 }}>Generating SAR...</div>
               <div style={{ fontSize: "var(--text-xs)", textAlign: "center", maxWidth: 320, lineHeight: 1.6 }}>
@@ -220,7 +200,6 @@ export default function SARGenerator({ jobId, job, onClose }: Props) {
           {output && !editing && (
             <div className="md-content markdown-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(output) }} />
           )}
-          {output && status === "streaming" && <span className="ai-cursor" />}
           {editing && (
             <textarea
               className="sar-editor"
@@ -236,39 +215,34 @@ export default function SARGenerator({ jobId, job, onClose }: Props) {
         {/* Footer */}
         <div className="sar-footer">
           <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)" }}>
-            {status === "streaming" && `Generating... (${elapsed}s)`}
+            {status === "generating" && `Generating... (${elapsed}s)`}
             {status === "done" && `Done (${elapsed}s) · ${(output.length / 1024).toFixed(1)}K`}
             {status === "error" && "Error"}
             {status === "idle" && "Ready"}
           </div>
           <div style={{ display: "flex", gap: "var(--sp-2)" }}>
-            {status === "streaming" && (
-              <button className="btn btn-sm btn-danger" onClick={stop}>Stop</button>
-            )}
             {status === "idle" && (
               <button className="btn btn-sm btn-primary" onClick={generate}>Generate</button>
             )}
-            {status === "done" && (
+            {status === "done" && !editing && (
               <>
-                <button className="btn btn-sm btn-secondary" onClick={generate}>Regenerate</button>
-                {!editing ? (
-                  <button className="btn btn-sm btn-secondary" onClick={startEdit}>Edit</button>
-                ) : (
-                  <>
-                    <button className="btn btn-sm btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
-                    <button className="btn btn-sm btn-primary" onClick={saveEdit} disabled={saving}>
-                      {saving ? "Saving..." : "Save Edit"}
-                    </button>
-                  </>
-                )}
+                <button className="btn btn-sm btn-secondary" onClick={startEdit}>Edit</button>
+                <button className="btn btn-sm btn-secondary" onClick={saveFinal} disabled={saving}>
+                  {saving ? "Saving..." : "Save as Final"}
+                </button>
                 {sarId && (
                   <>
-                    <a href={`/api/sar/${sarId}/export?format=pdf`} download className="btn btn-sm btn-secondary">PDF</a>
-                    <a href={`/api/sar/${sarId}/export?format=md`} download className="btn btn-sm btn-secondary">MD</a>
+                    <a href={`/api/sar/${sarId}/export?format=pdf`} target="_blank" className="btn btn-sm btn-secondary" rel="noreferrer">PDF</a>
+                    <a href={`/api/sar/${sarId}/export?format=md`} target="_blank" className="btn btn-sm btn-secondary" rel="noreferrer">MD</a>
                   </>
                 )}
-                <button className="btn btn-sm btn-primary" onClick={saveFinal} disabled={saving}>
-                  {saving ? "Saving..." : "Save as Final"}
+              </>
+            )}
+            {editing && (
+              <>
+                <button className="btn btn-sm btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
+                <button className="btn btn-sm btn-primary" onClick={saveEdit} disabled={saving}>
+                  {saving ? "Saving..." : "Save Edit"}
                 </button>
               </>
             )}

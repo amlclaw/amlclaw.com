@@ -105,6 +105,19 @@ export default function SARPage() {
     } catch { /* */ }
   };
 
+  const handleDelete = async () => {
+    if (!selectedSar) return;
+    if (!confirm(`Delete ${selectedSar.reference}? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/sar/${selectedSar.id}`, { method: "DELETE" });
+      if (res.ok) {
+        setSelectedId(null);
+        setSelectedSar(null);
+        loadSars();
+      }
+    } catch { /* */ }
+  };
+
   const handleExport = (format: "pdf" | "md") => {
     if (!selectedSar) return;
     window.open(`/api/sar/${selectedSar.id}/export?format=${format}`, "_blank");
@@ -159,19 +172,39 @@ export default function SARPage() {
                     <span style={{ fontWeight: 600, fontSize: "var(--text-sm)", fontFamily: "var(--mono)" }}>
                       {sar.reference}
                     </span>
-                    <span style={{
-                      fontSize: "var(--text-xs)",
-                      padding: "1px 8px",
-                      borderRadius: 10,
-                      background: statusInfo.bg,
-                      color: statusInfo.color,
-                      fontWeight: 500,
-                    }}>
-                      {sar.status === "generating" && (
-                        <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: statusInfo.color, marginRight: 4, animation: "pulse 1.5s infinite" }} />
-                      )}
-                      {statusInfo.label}
-                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
+                      <span style={{
+                        fontSize: "var(--text-xs)",
+                        padding: "1px 8px",
+                        borderRadius: 10,
+                        background: statusInfo.bg,
+                        color: statusInfo.color,
+                        fontWeight: 500,
+                      }}>
+                        {sar.status === "generating" && (
+                          <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: statusInfo.color, marginRight: 4, animation: "pulse 1.5s infinite" }} />
+                        )}
+                        {statusInfo.label}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!confirm(`Delete ${sar.reference}?`)) return;
+                          fetch(`/api/sar/${sar.id}`, { method: "DELETE" }).then((r) => {
+                            if (r.ok) {
+                              if (selectedId === sar.id) { setSelectedId(null); setSelectedSar(null); }
+                              loadSars();
+                            }
+                          });
+                        }}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-tertiary)", fontSize: 14, padding: "0 2px", lineHeight: 1, opacity: 0.5, transition: "opacity 0.1s" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.color = "var(--danger)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.5"; e.currentTarget.style.color = "var(--text-tertiary)"; }}
+                        title="Delete"
+                      >
+                        &#x2715;
+                      </button>
+                    </div>
                   </div>
                   <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", display: "flex", gap: "var(--sp-2)" }}>
                     <span>{JURISDICTION_LABELS[sar.jurisdiction] || sar.jurisdiction}</span>
@@ -265,6 +298,9 @@ export default function SARPage() {
                 </button>
                 <button className="btn btn-sm btn-secondary" onClick={() => handleExport("md")}>
                   MD
+                </button>
+                <button className="btn btn-sm" onClick={handleDelete} style={{ color: "var(--danger)", borderColor: "rgba(248,113,113,0.3)" }}>
+                  Delete
                 </button>
               </div>
             </div>

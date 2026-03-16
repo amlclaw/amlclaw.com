@@ -47,10 +47,14 @@ export async function POST(req: Request) {
       address,
       scenario,
       ruleset: (meta.name as string) || rulesetId,
+      ruleset_id: rulesetId,
+      inflow_hops: inflowHops,
+      outflow_hops: outflowHops,
+      max_nodes: maxNodes,
     },
   };
 
-  logAudit("screening.started", { job_id: jobId, chain, address, scenario, ruleset: rulesetId });
+  logAudit("screening.started", { job_id: jobId, chain, address, scenario, ruleset: rulesetId, inflow_hops: inflowHops, outflow_hops: outflowHops, max_nodes: maxNodes });
 
   // Run screening in background (non-blocking)
   runScreening(jobId, chain, address, scenario, rules, inflowHops, outflowHops, maxNodes, apiKey);
