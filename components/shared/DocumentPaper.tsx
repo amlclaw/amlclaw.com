@@ -1,105 +1,99 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { renderMarkdown } from "@/lib/utils";
 
 interface Props {
   content: string;
 }
 
-// A4 page height in px at 96dpi: 11.69in * 96 = ~1122px
-// Minus padding (72px top + 80px bottom = 152px) = ~970px usable
-const PAGE_CONTENT_HEIGHT = 970;
+// Usable content height per page (page min-height 1056px - padding 72+80=152px)
+const PAGE_HEIGHT = 904;
 
 /**
- * Renders markdown content as paginated A4 pages.
- * Measures rendered HTML height and splits into pages at block boundaries.
+ * Renders markdown as paginated A4 pages.
+ *
+ * Strategy: render all content in a single invisible container,
+ * measure each top-level block's cumulative height,
+ * then split into pages.
  */
 export default function DocumentPaper({ content }: Props) {
   const measureRef = useRef<HTMLDivElement>(null);
-  const [pages, setPages] = useState<string[]>([]);
-  const [ready, setReady] = useState(false);
+  const [pages, setPages] = useState<string[] | null>(null);
 
   const html = renderMarkdown(content);
 
+  const paginate = useCallback(() => {
+    const el = measureRef.current;
+    if (!el) return;
+
+    const blocks = Array.from(el.children) as HTMLElement[];
+    if (blocks.length === 0) {
+      setPages([html]);
+      return;
+    }
+
+    const result: string[] = [];
+    let batch: string[] = [];
+    let usedHeight = 0;
+
+    for (const block of blocks) {
+      // offsetTop is relative to the offsetParent (the measure container)
+      // Use offsetHeight which doesn't require visibility tricks
+      const h = block.offsetHeight;
+
+      if (usedHeight > 0 && usedHeight + h > PAGE_HEIGHT) {
+        // Flush current batch as a page
+        result.push(batch.join(""));
+        batch = [];
+        usedHeight = 0;
+      }
+
+      batch.push(block.outerHTML);
+      usedHeight += h;
+    }
+
+    if (batch.length > 0) {
+      result.push(batch.join(""));
+    }
+
+    setPages(result.length > 0 ? result : [html]);
+  }, [html]);
+
   useEffect(() => {
-    if (!measureRef.current) return;
-
-    // Wait for fonts to load before measuring
-    const measure = () => {
-      const container = measureRef.current;
-      if (!container) return;
-
-      const children = Array.from(container.children) as HTMLElement[];
-      if (children.length === 0) {
-        setPages([html]);
-        setReady(true);
-        return;
-      }
-
-      const pageBreaks: number[] = [0]; // indices where new pages start
-      let currentHeight = 0;
-
-      for (let i = 0; i < children.length; i++) {
-        const el = children[i];
-        const rect = el.getBoundingClientRect();
-        const style = window.getComputedStyle(el);
-        const marginTop = parseFloat(style.marginTop) || 0;
-        const marginBottom = parseFloat(style.marginBottom) || 0;
-        const elHeight = rect.height + marginTop + marginBottom;
-
-        // Would this element overflow the current page?
-        if (currentHeight + elHeight > PAGE_CONTENT_HEIGHT && currentHeight > 0) {
-          pageBreaks.push(i);
-          currentHeight = elHeight;
-        } else {
-          currentHeight += elHeight;
-        }
-      }
-
-      // Build page HTML
-      const pageHtmls: string[] = [];
-      for (let p = 0; p < pageBreaks.length; p++) {
-        const start = pageBreaks[p];
-        const end = p < pageBreaks.length - 1 ? pageBreaks[p + 1] : children.length;
-        let pageContent = "";
-        for (let i = start; i < end; i++) {
-          pageContent += children[i].outerHTML;
-        }
-        pageHtmls.push(pageContent);
-      }
-
-      setPages(pageHtmls.length > 0 ? pageHtmls : [html]);
-      setReady(true);
+    // Double rAF to ensure layout is complete
+    const run = () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(paginate);
+      });
     };
 
-    // Measure after render + fonts
     if (document.fonts?.ready) {
-      document.fonts.ready.then(() => requestAnimationFrame(measure));
+      document.fonts.ready.then(run);
     } else {
-      requestAnimationFrame(measure);
+      run();
     }
-  }, [html]);
+  }, [paginate]);
 
   return (
     <div className="document-paper-scroll">
-      {/* Hidden measuring container */}
+      {/* Measuring container — rendered off-screen but in-flow for offsetHeight to work */}
       <div
         ref={measureRef}
         className="markdown-body"
         style={{
-          position: "absolute",
+          position: "fixed",
+          top: -99999,
+          left: 0,
+          width: 672, // 816 - 72*2 padding
           visibility: "hidden",
-          width: 672, // 816px - 72px*2 padding
-          padding: 0,
-          left: -9999,
+          pointerEvents: "none",
         }}
         dangerouslySetInnerHTML={{ __html: html }}
       />
 
-      {/* Rendered pages */}
       <div className="document-paper">
-        {ready ? (
+        {pages ? (
           pages.map((pageHtml, i) => (
             <div
               key={i}
@@ -113,7 +107,7 @@ export default function DocumentPaper({ content }: Props) {
             </div>
           ))
         ) : (
-          /* Show single page while measuring */
+          /* Initial: single page while measuring */
           <div className="document-page">
             <div
               className="markdown-body"
