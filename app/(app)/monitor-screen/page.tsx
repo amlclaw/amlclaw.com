@@ -1,11 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Suspense } from "react";
-import dynamic from "next/dynamic";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
-
-const ForceGraph = dynamic(() => import("@/components/monitor/ForceGraph"), { ssr: false });
+import ForceGraph from "@/components/monitor/ForceGraph";
 
 // ---- Mock data generators ----
 // In production these would come from /api/monitor-screen endpoints
@@ -135,8 +133,6 @@ function MonitorScreenInner() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [time, setTime] = useState(new Date());
   const [txs, setTxs] = useState<Tx[]>(() => generateInitialTxs(30));
-  const [graphSize, setGraphSize] = useState({ w: 800, h: 500 });
-  const graphContainerRef = useRef<HTMLDivElement>(null);
   const [hourlyData] = useState(generateHourlyData);
   const [graphData] = useState(() => buildGraphData(ENTITIES));
 
@@ -152,18 +148,6 @@ function MonitorScreenInner() {
       setTxs((prev) => [generateTx(), ...prev.slice(0, 49)]);
     }, 3000 + Math.random() * 4000);
     return () => clearInterval(t);
-  }, []);
-
-  // Graph container sizing
-  useEffect(() => {
-    const el = graphContainerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      setGraphSize({ w: Math.floor(width), h: Math.floor(height) });
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
   }, []);
 
   const toggleFullscreen = useCallback(() => {
@@ -213,16 +197,12 @@ function MonitorScreenInner() {
       {/* Body: Graph + Right sidebar */}
       <div className="monitor-body">
         {/* Force Graph */}
-        <div className="monitor-graph monitor-panel" ref={graphContainerRef}>
+        <div className="monitor-graph monitor-panel">
           <div className="monitor-panel-title">Network Flow — Real-time Transaction Graph</div>
-          {graphSize.w > 0 && (
-            <ForceGraph
-              nodes={graphData.nodes}
-              edges={graphData.edges}
-              width={graphSize.w}
-              height={graphSize.h - 24}
-            />
-          )}
+          <ForceGraph
+            nodes={graphData.nodes}
+            edges={graphData.edges}
+          />
         </div>
 
         {/* Right: 3 stacked panels */}
