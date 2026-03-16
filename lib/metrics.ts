@@ -113,7 +113,7 @@ export function collectMetrics(): MetricsData {
   const totalAddresses = monitors.reduce((acc, m) => acc + m.addresses.length, 0);
 
   // --- Connection status ---
-  const hasAiKey = !!settings.ai.oauthToken;
+  const hasAiKey = !!settings.ai.oauthToken || true; // CLI mode = always available
   const hasTrustinKey = !!settings.blockchain.trustinApiKey || !!process.env.TRUSTIN_API_KEY;
 
   return {

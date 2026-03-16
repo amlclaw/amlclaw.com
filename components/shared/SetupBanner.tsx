@@ -2,15 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import Link from "next/link";
 
 export default function SetupBanner() {
   const pathname = usePathname();
-  const [needs, setNeeds] = useState<{ ai: boolean; blockchain: boolean } | null>(null);
+  const [cliMissing, setCliMissing] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    // Don't show on settings page itself
     if (pathname === "/settings") return;
 
     const stored = sessionStorage.getItem("setup_banner_dismissed");
@@ -19,26 +17,22 @@ export default function SetupBanner() {
       return;
     }
 
-    fetch("/api/settings")
+    // Check if Claude Code is available by testing connection
+    fetch("/api/settings/test-connection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
       .then((r) => r.json())
-      .then((s) => {
-        const activeProvider = s.ai?.activeProvider || "claude";
-        const aiKey = s.ai?.providers?.[activeProvider]?.apiKey || "";
-        // Keys are masked (****xxxx) when set, empty when not
-        const aiMissing = !aiKey || aiKey === "";
-        // TrustIn key is optional — screening works without it (desensitized mode)
-        if (aiMissing) {
-          setNeeds({ ai: aiMissing, blockchain: false });
+      .then((data) => {
+        if (!data.ok) {
+          setCliMissing(true);
         }
       })
       .catch(() => {});
   }, [pathname]);
 
-  if (!needs || dismissed || pathname === "/settings") return null;
-
-  const parts: string[] = [];
-  if (needs.ai) parts.push("AI provider API key");
-  if (needs.blockchain) parts.push("TrustIn API key");
+  if (!cliMissing || dismissed || pathname === "/settings") return null;
 
   return (
     <div className="setup-banner">
@@ -49,11 +43,8 @@ export default function SetupBanner() {
           <line x1="12" y1="17" x2="12.01" y2="17" />
         </svg>
         <span>
-          Setup required: configure your {parts.join(" and ")} to get started.
+          Claude Code not detected. Please install Claude Code CLI and run <code style={{ fontFamily: "var(--mono)", fontSize: "inherit", background: "var(--surface-3)", padding: "1px 4px", borderRadius: 3 }}>claude login</code> to get started.
         </span>
-        <Link href="/settings" className="btn btn-sm btn-primary" style={{ marginLeft: "auto" }}>
-          Go to Settings
-        </Link>
         <button
           className="btn-icon"
           onClick={() => {
