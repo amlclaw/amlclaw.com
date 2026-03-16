@@ -106,17 +106,19 @@ function getMode(): AIMode {
 // ---------------------------------------------------------------------------
 
 function spawnClaude(prompt: string, model?: string, systemPrompt?: string): ChildProcess {
-  const args = ["-p", prompt, "--output-format", "stream-json"];
+  // Use --output-format text for simple text output (no --verbose needed)
+  const args = ["-p", prompt, "--output-format", "text"];
   if (model) {
     args.push("--model", model);
   }
   if (systemPrompt) {
     args.push("--system-prompt", systemPrompt);
   }
-  return spawn("claude", args, {
+  const proc = spawn("claude", args, {
     env: { ...process.env },
-    stdio: ["pipe", "pipe", "pipe"],
+    stdio: ["ignore", "pipe", "pipe"],
   });
+  return proc;
 }
 
 async function runCLI(prompt: string, model?: string, systemPrompt?: string): Promise<string> {
@@ -129,8 +131,8 @@ async function runCLI(prompt: string, model?: string, systemPrompt?: string): Pr
     proc.stderr?.on("data", (data: Buffer) => { stderr += data.toString(); });
 
     proc.on("close", () => {
-      // Parse stream-json output — extract text from result or assistant messages
-      const text = extractTextFromStreamJSON(stdout);
+      // With --output-format text, stdout is the plain text result
+      const text = stdout.trim();
       if (text) {
         resolve(text);
       } else {
@@ -148,79 +150,18 @@ async function runCLI(prompt: string, model?: string, systemPrompt?: string): Pr
   });
 }
 
-function extractTextFromStreamJSON(raw: string): string {
-  // The stream-json format has one JSON object per line.
-  // The "result" line contains the final text in .result field.
-  // "assistant" lines contain intermediate content in .message.content[].text
-  let resultText = "";
-  const assistantParts: string[] = [];
-
-  for (const line of raw.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      const msg = JSON.parse(line);
-      if (msg.type === "result" && typeof msg.result === "string") {
-        resultText = msg.result;
-      }
-      if (msg.type === "assistant" && msg.message?.content) {
-        for (const block of msg.message.content) {
-          if (block.type === "text" && block.text) {
-            assistantParts.push(block.text);
-          }
-        }
-      }
-    } catch { /* not JSON, skip */ }
-  }
-
-  // Prefer result field (final output), fallback to assistant parts
-  return resultText || assistantParts.join("");
-}
-
 async function* streamCLI(prompt: string, model?: string, systemPrompt?: string): AsyncGenerator<{ text: string }, void, unknown> {
   const proc = spawnClaude(prompt, model, systemPrompt);
-  let buffer = "";
 
-  const iterator = async function* () {
-    for await (const chunk of proc.stdout as AsyncIterable<Buffer>) {
-      buffer += chunk.toString();
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || ""; // keep incomplete line in buffer
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const msg = JSON.parse(line);
-          if (msg.type === "assistant" && msg.message?.content) {
-            for (const block of msg.message.content) {
-              if (block.type === "text") {
-                yield { text: block.text };
-              }
-            }
-          }
-          if (msg.type === "content_block_delta" && msg.delta?.text) {
-            yield { text: msg.delta.text };
-          }
-        } catch { /* not JSON */ }
-      }
+  // With --output-format text, stdout is plain text — yield chunks as they arrive
+  for await (const chunk of proc.stdout as AsyncIterable<Buffer>) {
+    const text = chunk.toString();
+    if (text) {
+      yield { text };
     }
-    // Process remaining buffer
-    if (buffer.trim()) {
-      try {
-        const msg = JSON.parse(buffer);
-        if (msg.type === "assistant" && msg.message?.content) {
-          for (const block of msg.message.content) {
-            if (block.type === "text") {
-              yield { text: block.text };
-            }
-          }
-        }
-      } catch { /* not JSON */ }
-    }
-  };
+  }
 
-  yield* iterator();
-
-  // Wait for process to exit (don't fail on non-zero exit code — CLI may return 1 even on success)
+  // Wait for process to exit
   await new Promise<void>((resolve, reject) => {
     proc.on("close", () => { resolve(); });
     proc.on("error", (err) => {
