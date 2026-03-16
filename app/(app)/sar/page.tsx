@@ -105,6 +105,19 @@ export default function SARPage() {
     } catch { /* */ }
   };
 
+  const handleDelete = async () => {
+    if (!selectedSar) return;
+    if (!confirm(`Delete ${selectedSar.reference}? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/sar/${selectedSar.id}`, { method: "DELETE" });
+      if (res.ok) {
+        setSelectedId(null);
+        setSelectedSar(null);
+        loadSars();
+      }
+    } catch { /* */ }
+  };
+
   const handleExport = (format: "pdf" | "md") => {
     if (!selectedSar) return;
     window.open(`/api/sar/${selectedSar.id}/export?format=${format}`, "_blank");
@@ -265,6 +278,9 @@ export default function SARPage() {
                 </button>
                 <button className="btn btn-sm btn-secondary" onClick={() => handleExport("md")}>
                   MD
+                </button>
+                <button className="btn btn-sm" onClick={handleDelete} style={{ color: "var(--danger)", borderColor: "rgba(248,113,113,0.3)" }}>
+                  Delete
                 </button>
               </div>
             </div>

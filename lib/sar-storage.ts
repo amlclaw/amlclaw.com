@@ -104,3 +104,15 @@ export function updateSAR(id: string, updates: Partial<SAR>): SAR | null {
 export function listSARs(): SAR[] {
   return loadIndex();
 }
+
+export function deleteSAR(id: string): boolean {
+  const index = loadIndex();
+  const idx = index.findIndex((s) => s.id === id);
+  if (idx === -1) return false;
+  index.splice(idx, 1);
+  saveIndex(index);
+  // Delete file
+  const filePath = path.join(SARS_DIR, `${id}.json`);
+  try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* */ }
+  return true;
+}
