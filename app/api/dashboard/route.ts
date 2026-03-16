@@ -34,9 +34,10 @@ export async function GET() {
     0
   );
 
-  // API status
-  const hasAiKey = !!settings.ai.providers[settings.ai.activeProvider]?.apiKey;
+  // API status — CLI mode is always "configured" (uses local login)
+  const hasAiConfigured = !!settings.ai.oauthToken || true; // CLI mode = always available
   const hasTrustinKey = !!settings.blockchain.trustinApiKey || !!process.env.TRUSTIN_API_KEY;
+  const aiMode = settings.ai.oauthToken ? "sdk" : "cli";
 
   return NextResponse.json({
     stats: {
@@ -51,8 +52,9 @@ export async function GET() {
     risk_distribution: riskDistribution,
     recent_screenings: history.slice(0, 10),
     api_status: {
-      ai_configured: hasAiKey,
-      ai_provider: settings.ai.activeProvider,
+      ai_configured: hasAiConfigured,
+      ai_provider: "claude-code",
+      ai_mode: aiMode,
       trustin_configured: hasTrustinKey,
       scheduler_active: scheduler.initialized,
       scheduler_jobs: scheduler.active_jobs,

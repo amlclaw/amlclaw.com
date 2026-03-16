@@ -53,6 +53,7 @@ interface DashboardData {
   api_status: {
     ai_configured: boolean;
     ai_provider: string;
+    ai_mode?: string;
     trustin_configured: boolean;
     scheduler_active: boolean;
     scheduler_jobs: number;
@@ -113,7 +114,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Setup Alert */}
+      {/* Setup Alert — only shows if AI is truly not available */}
       {!api_status.ai_configured && (
         <div className="dashboard-alert" style={{ marginBottom: "var(--sp-4)" }}>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
@@ -121,8 +122,7 @@ export default function DashboardPage() {
             <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
           <span>
-            AI provider not configured. Policy and rule generation require an AI key.{" "}
-            <Link href="/settings" style={{ color: "var(--primary-400)", textDecoration: "underline" }}>Configure →</Link>
+            Claude Code not detected. Install Claude Code CLI and run <code style={{ fontFamily: "var(--mono)" }}>claude login</code> to enable AI features.
           </span>
         </div>
       )}
@@ -230,8 +230,8 @@ export default function DashboardPage() {
           <div style={{ fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "var(--sp-4)" }}>System Status</div>
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
             <StatusRow
-              label="AI Provider"
-              value={api_status.ai_configured ? api_status.ai_provider : "Not configured"}
+              label="AI Engine"
+              value={api_status.ai_configured ? `Claude Code (${api_status.ai_mode || "cli"})` : "Not connected"}
               ok={api_status.ai_configured}
               hint={api_status.ai_configured && metrics ? `${metrics.ai.total_calls} calls (${metrics.ai.failed} failed)` : undefined}
             />

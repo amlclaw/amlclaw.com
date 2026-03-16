@@ -25,41 +25,6 @@ export default function DocumentLibrary() {
   const [modalContent, setModalContent] = useState<string | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [indexStatus, setIndexStatus] = useState<{indexed: boolean; docCount: number; chunkCount: number; lastBuilt: string | null}>({indexed: false, docCount: 0, chunkCount: 0, lastBuilt: null});
-  const [indexBuilding, setIndexBuilding] = useState(false);
-
-  const loadIndexStatus = useCallback(() => {
-    fetch("/api/vectors/status")
-      .then((r) => r.json())
-      .then(setIndexStatus)
-      .catch(() => {});
-  }, []);
-
-  const handleBuildIndex = useCallback(async () => {
-    setIndexBuilding(true);
-    try {
-      await fetch("/api/vectors/index", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
-      // Poll for completion
-      const poll = setInterval(() => {
-        fetch("/api/vectors/status")
-          .then((r) => r.json())
-          .then((status) => {
-            setIndexStatus(status);
-            if (status.indexed && status.chunkCount > 0) {
-              clearInterval(poll);
-              setIndexBuilding(false);
-              showToast(`Index built: ${status.chunkCount} chunks from ${status.docCount} docs`, "success");
-            }
-          })
-          .catch(() => {});
-      }, 2000);
-      // Safety timeout
-      setTimeout(() => { clearInterval(poll); setIndexBuilding(false); }, 120000);
-    } catch {
-      setIndexBuilding(false);
-      showToast("Failed to build index", "error");
-    }
-  }, []);
 
   const loadDocs = useCallback(() => {
     fetch("/api/documents")
@@ -68,7 +33,7 @@ export default function DocumentLibrary() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => { loadDocs(); loadIndexStatus(); }, [loadDocs, loadIndexStatus]);
+  useEffect(() => { loadDocs(); }, [loadDocs]);
 
   const filtered = docs.filter((d) => {
     if (activeCategory !== "All" && d.category !== activeCategory) return false;
@@ -138,42 +103,14 @@ export default function DocumentLibrary() {
     <div style={{ padding: "0 var(--sp-6) var(--sp-5)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--sp-4)" }}>
         <h1 style={{ fontSize: "var(--text-lg)", fontWeight: 700 }}>Document Library</h1>
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)" }}>
-          <span style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)" }}>
-            {indexStatus.indexed
-              ? `${indexStatus.chunkCount} chunks • ${indexStatus.docCount} docs indexed${indexStatus.lastBuilt ? ` • ${new Date(indexStatus.lastBuilt).toLocaleDateString()}` : ""}`
-              : "Not indexed"}
-          </span>
-          <button
-            className="btn btn-md btn-secondary"
-            onClick={handleBuildIndex}
-            disabled={indexBuilding}
-          >
-            {indexBuilding ? (
-              <>
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
-                  <path d="M21 12a9 9 0 11-6.219-8.56" />
-                </svg>
-                Building...
-              </>
-            ) : (
-              <>
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                </svg>
-                Build Vector Index
-              </>
-            )}
-          </button>
-          <button className="btn btn-md btn-secondary" onClick={() => setUploadOpen(true)}>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            Upload
-          </button>
-        </div>
+        <button className="btn btn-md btn-secondary" onClick={() => setUploadOpen(true)}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          Upload
+        </button>
       </div>
 
       {/* Search + Category Filter */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { showToast } from "@/lib/utils";
 
 interface PolicyMeta {
@@ -19,7 +19,7 @@ interface Props {
 export default function RulesetGenerator({ initialPolicyId, onComplete, onCancel }: Props) {
   const [policies, setPolicies] = useState<PolicyMeta[]>([]);
   const [selectedPolicy, setSelectedPolicy] = useState(initialPolicyId || "");
-  const [name, setName] = useState("");
+  const [customInstructions, setCustomInstructions] = useState("");
   const [status, setStatus] = useState<"idle" | "generating" | "ready" | "error">("idle");
   const [rulesetId, setRulesetId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -32,13 +32,13 @@ export default function RulesetGenerator({ initialPolicyId, onComplete, onCancel
       .then((data: PolicyMeta[]) => {
         const ready = data.filter((p) => p.status === "ready");
         setPolicies(ready);
-        if (initialPolicyId) {
-          const p = ready.find((pol) => pol.id === initialPolicyId);
-          if (p) setName(`${p.name} Rules`);
-        }
       })
       .catch(() => {});
   }, [initialPolicyId]);
+
+  // Auto-generate name from selected policy
+  const selectedPolicyMeta = policies.find((p) => p.id === selectedPolicy);
+  const autoName = selectedPolicyMeta ? `${selectedPolicyMeta.name} Rules` : "";
 
   // Poll for completion
   useEffect(() => {
@@ -73,23 +73,11 @@ export default function RulesetGenerator({ initialPolicyId, onComplete, onCancel
     };
   }, [status, rulesetId, onComplete]);
 
-  const handlePolicyChange = useCallback((policyId: string) => {
-    setSelectedPolicy(policyId);
-    const p = policies.find((pol) => pol.id === policyId);
-    if (p && !name) setName(`${p.name} Rules`);
-  }, [policies, name]);
-
   const handleStart = async () => {
     if (!selectedPolicy) {
       showToast("Select a policy", "error");
       return;
     }
-    if (!name.trim()) {
-      showToast("Enter a ruleset name", "error");
-      return;
-    }
-
-    const selectedPolicyMeta = policies.find((p) => p.id === selectedPolicy);
 
     try {
       const res = await fetch("/api/rulesets/generate", {
@@ -97,8 +85,9 @@ export default function RulesetGenerator({ initialPolicyId, onComplete, onCancel
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           policyId: selectedPolicy,
-          name: name.trim(),
+          name: autoName,
           jurisdiction: selectedPolicyMeta?.jurisdiction || "Custom",
+          customInstructions: customInstructions.trim() || undefined,
         }),
       });
 
@@ -124,7 +113,7 @@ export default function RulesetGenerator({ initialPolicyId, onComplete, onCancel
       <div className="card">
         <div className="panel-header">
           <h3 style={{ fontSize: "var(--text-sm)", fontWeight: 600 }}>
-            Generating: {name}
+            Generating: {autoName}
           </h3>
           <button className="btn btn-sm btn-secondary" onClick={onCancel}>
             Close
@@ -180,7 +169,7 @@ export default function RulesetGenerator({ initialPolicyId, onComplete, onCancel
         >
           <div style={{ fontSize: 40 }}>⚠️</div>
           <div style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", textAlign: "center" }}>
-            Rule generation failed. Please check your AI provider settings and try again.
+            Rule generation failed. Make sure Claude Code is connected and try again.
           </div>
           <button className="btn btn-primary" onClick={() => setStatus("idle")}>
             Try Again
@@ -199,7 +188,7 @@ export default function RulesetGenerator({ initialPolicyId, onComplete, onCancel
       <div style={{ padding: "var(--sp-5)" }}>
         <div style={{ marginBottom: "var(--sp-4)" }}>
           <label className="label">Source Policy</label>
-          <select className="input" value={selectedPolicy} onChange={(e) => handlePolicyChange(e.target.value)}>
+          <select className="input" value={selectedPolicy} onChange={(e) => setSelectedPolicy(e.target.value)}>
             <option value="">Select a policy...</option>
             {policies.map((p) => (
               <option key={p.id} value={p.id}>
@@ -214,21 +203,26 @@ export default function RulesetGenerator({ initialPolicyId, onComplete, onCancel
           )}
         </div>
         <div style={{ marginBottom: "var(--sp-5)" }}>
-          <label className="label">Ruleset Name</label>
-          <input
+          <label className="label">Custom Instructions <span style={{ fontWeight: 400, color: "var(--text-tertiary)" }}>(optional)</span></label>
+          <textarea
             className="input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Singapore MAS DPT Rules"
+            value={customInstructions}
+            onChange={(e) => setCustomInstructions(e.target.value)}
+            placeholder="e.g. Set stricter thresholds for sanctions, add rules for stablecoin monitoring, focus on FATF travel rule..."
+            rows={3}
+            style={{ resize: "vertical", fontFamily: "inherit" }}
           />
+          <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginTop: "var(--sp-1)" }}>
+            Guide the AI to customize rules for your compliance requirements.
+          </div>
         </div>
         <button
-          className={`btn btn-lg ${selectedPolicy && name.trim() ? "btn-primary" : "btn-secondary"}`}
+          className={`btn btn-lg ${selectedPolicy ? "btn-primary" : "btn-secondary"}`}
           onClick={handleStart}
-          disabled={!selectedPolicy || !name.trim()}
+          disabled={!selectedPolicy}
           style={{ width: "100%" }}
         >
-          Start AI Generation
+          {autoName ? `Generate "${autoName}"` : "Generate Rules"}
         </button>
       </div>
     </div>

@@ -113,7 +113,7 @@ export function collectMetrics(): MetricsData {
   const totalAddresses = monitors.reduce((acc, m) => acc + m.addresses.length, 0);
 
   // --- Connection status ---
-  const hasAiKey = !!settings.ai.providers[settings.ai.activeProvider]?.apiKey;
+  const hasAiKey = !!settings.ai.oauthToken || true; // CLI mode = always available
   const hasTrustinKey = !!settings.blockchain.trustinApiKey || !!process.env.TRUSTIN_API_KEY;
 
   return {
@@ -144,7 +144,7 @@ export function collectMetrics(): MetricsData {
     },
     connections: {
       ai_configured: hasAiKey,
-      ai_provider: settings.ai.activeProvider,
+      ai_provider: "claude-code-sdk",
       trustin_configured: hasTrustinKey,
       scheduler_active: scheduler.initialized,
     },

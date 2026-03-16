@@ -1,9 +1,13 @@
 "use client";
 
 import { useState, Suspense, lazy } from "react";
+import SARGenerator from "./SARGenerator";
 import { formatTime, shortenAddr } from "@/lib/utils";
+import { computeRiskDimensions } from "@/lib/risk-score";
+import type { RiskEntity, Tag } from "@/lib/extract-risk-paths";
 
 const FlowGraph = lazy(() => import("./FlowGraph"));
+const RiskRadar = lazy(() => import("./RiskRadar"));
 
 interface ScreeningResultProps {
   job: Record<string, unknown> | null;
@@ -73,6 +77,7 @@ export default function ScreeningResult({ job, jobId, loading, progress }: Scree
 
 function CompletedReport({ job, jobId }: { job: Record<string, unknown>; jobId: string | null }) {
   const [evidenceView, setEvidenceView] = useState<"list" | "graph">("list");
+  const [sarOpen, setSarOpen] = useState(false);
 
   const r = (job.result as Record<string, unknown>) || {};
   const req = (job.request as Record<string, unknown>) || {};
@@ -89,6 +94,13 @@ function CompletedReport({ job, jobId }: { job: Record<string, unknown>; jobId: 
 
   const overallRisk = computeOverallRisk(summary, entities);
   const riskScore = computeRiskScore(overallRisk);
+
+  // Six-dimension risk scoring
+  const riskResult = computeRiskDimensions(
+    entities as unknown as RiskEntity[],
+    selfTags as unknown as Tag[],
+    selfMatchedRules
+  );
 
   const scenario = (r.scenario as string) || (req.scenario as string) || "all";
 
@@ -131,9 +143,9 @@ function CompletedReport({ job, jobId }: { job: Record<string, unknown>; jobId: 
               )}
             </div>
           </div>
-          <div style={{ display: "flex", gap: "var(--sp-2)", alignItems: "flex-start" }}>
+          <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "flex-start" }}>
             {jobId && (
-              <div style={{ display: "flex", gap: "var(--sp-1)" }}>
+              <div style={{ display: "flex", gap: "var(--sp-1)", marginTop: "var(--sp-2)" }}>
                 <a href={`/api/screening/${jobId}/export?format=pdf`} download className="btn btn-sm btn-secondary">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
@@ -145,9 +157,14 @@ function CompletedReport({ job, jobId }: { job: Record<string, unknown>; jobId: 
                 <a href={`/api/screening/${jobId}/export?format=md`} download className="btn btn-sm btn-secondary">
                   MD
                 </a>
+                <button className="btn btn-sm btn-primary" onClick={() => setSarOpen(true)}>
+                  📋 SAR
+                </button>
               </div>
             )}
-            <RiskBadge level={overallRisk} />
+            <Suspense fallback={<RiskBadge level={overallRisk} />}>
+              <RiskRadar dimensions={riskResult.dimensions} total={riskResult.total} level={riskResult.level} />
+            </Suspense>
           </div>
         </div>
 
@@ -230,8 +247,8 @@ function CompletedReport({ job, jobId }: { job: Record<string, unknown>; jobId: 
         <div className="report-section">
           <div className="report-section-header">Key Risk Indicators (KRI)</div>
           <div className="report-kri-grid">
-            <KriCard value={riskScore} label="Risk Score" color={riskScoreColor(riskScore)} unit="/100" />
-            <KriCard value={overallRisk} label="Risk Level" color={riskLevelColor(overallRisk)} />
+            <KriCard value={riskResult.total} label="Risk Score" color={riskScoreColor(riskResult.total)} unit="/100" />
+            <KriCard value={riskResult.level} label="Risk Level" color={riskLevelColor(riskResult.level)} />
             <KriCard value={scenario} label="Scenario" color="var(--text-secondary)" />
             <KriCard value={pathsDirection || "all"} label="Direction" color="var(--text-secondary)" />
             <KriCard value={entities.length} label="Paths Analyzed" color={entities.length > 0 ? "var(--risk-high)" : "var(--success)"} />
@@ -372,6 +389,7 @@ function CompletedReport({ job, jobId }: { job: Record<string, unknown>; jobId: 
           )}
         </div>
       </div>
+      {sarOpen && jobId && <SARGenerator jobId={jobId} job={job} onClose={() => setSarOpen(false)} />}
     </ResultContainer>
   );
 }
