@@ -7,10 +7,6 @@ export interface GraphNode {
   label: string;
   type: "entity" | "exchange" | "defi" | "unknown" | "risk";
   risk?: "low" | "medium" | "high" | "severe";
-  x?: number;
-  y?: number;
-  vx?: number;
-  vy?: number;
 }
 
 export interface GraphEdge {
@@ -27,6 +23,11 @@ interface Props {
   edges: GraphEdge[];
 }
 
+interface PositionedNode extends GraphNode {
+  x: number;
+  y: number;
+}
+
 const NODE_COLORS: Record<string, string> = {
   entity: "#00f0ff",
   exchange: "#818cf8",
@@ -35,25 +36,21 @@ const NODE_COLORS: Record<string, string> = {
   risk: "#f87171",
 };
 
-const RISK_GLOW: Record<string, string> = {
-  severe: "rgba(248,113,113,0.6)",
-  high: "rgba(248,113,113,0.3)",
-  medium: "rgba(251,191,36,0.2)",
-  low: "transparent",
-};
-
+/**
+ * Fixed-layout network graph with flowing particle animations.
+ * Entities in center ring, external nodes in outer ring. No physics — all positions fixed.
+ */
 export default function ForceGraph({ nodes, edges }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const nodesRef = useRef<(GraphNode & { x: number; y: number; vx: number; vy: number })[]>([]);
-  const edgesRef = useRef<GraphEdge[]>(edges);
-  const animRef = useRef<number>(0);
+  const positionsRef = useRef<PositionedNode[]>([]);
   const particlesRef = useRef<{ edge: number; progress: number; speed: number }[]>([]);
+  const animRef = useRef<number>(0);
   const timeRef = useRef(0);
   const sizeRef = useRef({ w: 0, h: 0 });
   const [ready, setReady] = useState(false);
 
-  // Initialize on mount
+  // Layout nodes in fixed positions when container size is known
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -64,99 +61,65 @@ export default function ForceGraph({ nodes, edges }: Props) {
       const h = Math.floor(height);
       if (w > 0 && h > 0) {
         sizeRef.current = { w, h };
-        if (!ready) {
-          // First valid size — initialize nodes
-          const cx = w / 2;
-          const cy = h / 2;
-          nodesRef.current = nodes.map((n) => ({
+
+        const cx = w / 2;
+        const cy = h / 2;
+
+        // Separate entities (center ring) from external nodes (outer ring)
+        const entities = nodes.filter((n) => n.type === "entity");
+        const externals = nodes.filter((n) => n.type !== "entity");
+
+        const positioned: PositionedNode[] = [];
+
+        // Entities: inner ring (40% of min dimension)
+        const innerRadius = Math.min(w, h) * 0.22;
+        entities.forEach((n, i) => {
+          const angle = (i / entities.length) * Math.PI * 2 - Math.PI / 2;
+          positioned.push({
             ...n,
-            x: cx + (Math.random() - 0.5) * w * 0.6,
-            y: cy + (Math.random() - 0.5) * h * 0.6,
-            vx: 0,
-            vy: 0,
-          }));
-          edgesRef.current = edges;
-          particlesRef.current = edges.flatMap((_, i) =>
-            Array.from({ length: 1 + Math.floor(Math.random() * 2) }, () => ({
-              edge: i,
-              progress: Math.random(),
-              speed: 0.002 + Math.random() * 0.003,
-            }))
-          );
-          setReady(true);
-        }
+            x: cx + Math.cos(angle) * innerRadius,
+            y: cy + Math.sin(angle) * innerRadius,
+          });
+        });
+
+        // External nodes: outer ring (75% of min dimension)
+        const outerRadius = Math.min(w, h) * 0.42;
+        externals.forEach((n, i) => {
+          const angle = (i / externals.length) * Math.PI * 2 - Math.PI / 2;
+          positioned.push({
+            ...n,
+            x: cx + Math.cos(angle) * outerRadius,
+            y: cy + Math.sin(angle) * outerRadius,
+          });
+        });
+
+        positionsRef.current = positioned;
+
+        // Create particles for each edge (2-4 per edge for busy look)
+        particlesRef.current = edges.flatMap((_, i) =>
+          Array.from({ length: 2 + Math.floor(Math.random() * 3) }, () => ({
+            edge: i,
+            progress: Math.random(),
+            speed: 0.003 + Math.random() * 0.004,
+          }))
+        );
+
+        if (!ready) setReady(true);
       }
     });
     ro.observe(container);
     return () => ro.disconnect();
   }, [nodes, edges, ready]);
 
-  const tick = useCallback(() => {
-    const { w, h } = sizeRef.current;
-    if (w === 0 || h === 0) return;
-
-    const ns = nodesRef.current;
-    const es = edgesRef.current;
-    const cx = w / 2;
-    const cy = h / 2;
-
-    // Forces
-    for (let i = 0; i < ns.length; i++) {
-      const a = ns[i];
-      a.vx += (cx - a.x) * 0.0003;
-      a.vy += (cy - a.y) * 0.0003;
-      for (let j = i + 1; j < ns.length; j++) {
-        const b = ns[j];
-        const dx = a.x - b.x;
-        const dy = a.y - b.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const force = 800 / (dist * dist);
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-        a.vx += fx; a.vy += fy;
-        b.vx -= fx; b.vy -= fy;
-      }
-    }
-
-    for (const e of es) {
-      const a = ns.find((n) => n.id === e.source);
-      const b = ns.find((n) => n.id === e.target);
-      if (!a || !b) continue;
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const force = (dist - 150) * 0.0005;
-      a.vx += (dx / dist) * force;
-      a.vy += (dy / dist) * force;
-      b.vx -= (dx / dist) * force;
-      b.vy -= (dy / dist) * force;
-    }
-
-    for (const n of ns) {
-      n.vx *= 0.92;
-      n.vy *= 0.92;
-      n.x += n.vx;
-      n.y += n.vy;
-      n.x = Math.max(50, Math.min(w - 50, n.x));
-      n.y = Math.max(50, Math.min(h - 50, n.y));
-    }
-
-    for (const p of particlesRef.current) {
-      p.progress += p.speed;
-      if (p.progress > 1) p.progress -= 1;
-    }
-  }, []);
-
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const { w, h } = sizeRef.current;
     if (w === 0 || h === 0) return;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
 
+    const dpr = window.devicePixelRatio || 1;
     canvas.width = w * dpr;
     canvas.height = h * dpr;
     canvas.style.width = w + "px";
@@ -165,84 +128,175 @@ export default function ForceGraph({ nodes, edges }: Props) {
     ctx.clearRect(0, 0, w, h);
 
     timeRef.current += 0.016;
-    const ns = nodesRef.current;
-    const es = edgesRef.current;
+    const ns = positionsRef.current;
 
-    // Edges
-    for (const e of es) {
+    // Update particles
+    for (const p of particlesRef.current) {
+      p.progress += p.speed;
+      if (p.progress > 1) p.progress -= 1;
+    }
+
+    // Draw edges (static lines)
+    for (const e of edges) {
       const a = ns.find((n) => n.id === e.source);
       const b = ns.find((n) => n.id === e.target);
       if (!a || !b) continue;
+
+      // Curved edges for visual distinction
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      // Curve control point — offset perpendicular to edge
+      const nx = -dy / dist * dist * 0.08;
+      const ny = dx / dist * dist * 0.08;
+      const cpx = mx + nx;
+      const cpy = my + ny;
+
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = e.risk ? "rgba(248,113,113,0.15)" : "rgba(0,240,255,0.08)";
-      ctx.lineWidth = Math.min(3, 0.5 + Math.log10(e.amount + 1) * 0.5);
+      ctx.quadraticCurveTo(cpx, cpy, b.x, b.y);
+      ctx.strokeStyle = e.risk ? "rgba(248,113,113,0.12)" : "rgba(0,240,255,0.06)";
+      ctx.lineWidth = Math.min(2.5, 0.5 + Math.log10(e.amount + 1) * 0.4);
       ctx.stroke();
+
+      // Direction arrow at midpoint
+      const t = 0.55;
+      const arrowX = (1 - t) * (1 - t) * a.x + 2 * (1 - t) * t * cpx + t * t * b.x;
+      const arrowY = (1 - t) * (1 - t) * a.y + 2 * (1 - t) * t * cpy + t * t * b.y;
+      const tangentX = 2 * (1 - t) * (cpx - a.x) + 2 * t * (b.x - cpx);
+      const tangentY = 2 * (1 - t) * (cpy - a.y) + 2 * t * (b.y - cpy);
+      const angle = Math.atan2(tangentY, tangentX);
+      const arrowSize = 4;
+
+      ctx.beginPath();
+      ctx.moveTo(arrowX + Math.cos(angle) * arrowSize, arrowY + Math.sin(angle) * arrowSize);
+      ctx.lineTo(arrowX + Math.cos(angle + 2.5) * arrowSize, arrowY + Math.sin(angle + 2.5) * arrowSize);
+      ctx.lineTo(arrowX + Math.cos(angle - 2.5) * arrowSize, arrowY + Math.sin(angle - 2.5) * arrowSize);
+      ctx.closePath();
+      ctx.fillStyle = e.risk ? "rgba(248,113,113,0.25)" : "rgba(0,240,255,0.15)";
+      ctx.fill();
     }
 
-    // Particles
+    // Draw particles along curved edges
     for (const p of particlesRef.current) {
-      const e = es[p.edge];
+      const e = edges[p.edge];
       if (!e) continue;
       const a = ns.find((n) => n.id === e.source);
       const b = ns.find((n) => n.id === e.target);
       if (!a || !b) continue;
-      const x = a.x + (b.x - a.x) * p.progress;
-      const y = a.y + (b.y - a.y) * p.progress;
-      const alpha = Math.sin(p.progress * Math.PI);
+
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const nx = -dy / dist * dist * 0.08;
+      const ny = dx / dist * dist * 0.08;
+      const cpx = mx + nx;
+      const cpy = my + ny;
+
+      // Quadratic bezier position at t
+      const t = p.progress;
+      const x = (1 - t) * (1 - t) * a.x + 2 * (1 - t) * t * cpx + t * t * b.x;
+      const y = (1 - t) * (1 - t) * a.y + 2 * (1 - t) * t * cpy + t * t * b.y;
+      const alpha = Math.sin(t * Math.PI); // fade in/out
+
+      // Particle core
       ctx.beginPath();
-      ctx.arc(x, y, 2, 0, Math.PI * 2);
-      ctx.fillStyle = e.risk ? `rgba(248,113,113,${alpha * 0.8})` : `rgba(0,240,255,${alpha * 0.6})`;
+      ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = e.risk
+        ? `rgba(248,113,113,${alpha * 0.9})`
+        : `rgba(0,240,255,${alpha * 0.7})`;
       ctx.fill();
+
+      // Particle glow
       ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = e.risk ? `rgba(248,113,113,${alpha * 0.3})` : `rgba(0,240,255,${alpha * 0.2})`;
+      ctx.arc(x, y, 8, 0, Math.PI * 2);
+      ctx.fillStyle = e.risk
+        ? `rgba(248,113,113,${alpha * 0.15})`
+        : `rgba(0,240,255,${alpha * 0.1})`;
+      ctx.fill();
+
+      // Trail (smaller dot behind)
+      const t2 = Math.max(0, t - 0.04);
+      const tx = (1 - t2) * (1 - t2) * a.x + 2 * (1 - t2) * t2 * cpx + t2 * t2 * b.x;
+      const ty = (1 - t2) * (1 - t2) * a.y + 2 * (1 - t2) * t2 * cpy + t2 * t2 * b.y;
+      ctx.beginPath();
+      ctx.arc(tx, ty, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = e.risk
+        ? `rgba(248,113,113,${alpha * 0.4})`
+        : `rgba(0,240,255,${alpha * 0.3})`;
       ctx.fill();
     }
 
-    // Nodes
+    // Draw nodes (fixed position)
     for (const n of ns) {
       const color = NODE_COLORS[n.type] || NODE_COLORS.unknown;
-      const radius = n.type === "entity" ? 10 : 6;
-      const glow = RISK_GLOW[n.risk || "low"];
+      const isEntity = n.type === "entity";
+      const radius = isEntity ? 12 : 7;
 
+      // Risk glow pulse
       if (n.risk === "severe" || n.risk === "high") {
         const pulse = 0.5 + 0.5 * Math.sin(timeRef.current * 3);
+        const glowAlpha = n.risk === "severe" ? 0.4 + pulse * 0.3 : 0.2 + pulse * 0.15;
         ctx.beginPath();
-        ctx.arc(n.x, n.y, radius + 8 + pulse * 4, 0, Math.PI * 2);
-        ctx.fillStyle = glow;
+        ctx.arc(n.x, n.y, radius + 10 + pulse * 5, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(248,113,113,${glowAlpha})`;
         ctx.fill();
       }
 
+      // Entity outer ring
+      if (isEntity) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, radius + 3, 0, Math.PI * 2);
+        ctx.strokeStyle = `${color}44`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // Node body
       ctx.beginPath();
       ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
 
+      // Inner highlight
       ctx.beginPath();
-      ctx.arc(n.x, n.y, radius - 2, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,255,255,0.15)";
+      ctx.arc(n.x, n.y, radius * 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
       ctx.fill();
 
-      ctx.fillStyle = "rgba(255,255,255,0.45)";
-      ctx.font = "9px -apple-system, sans-serif";
+      // Label
+      ctx.fillStyle = isEntity ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.4)";
+      ctx.font = isEntity ? "bold 10px -apple-system, sans-serif" : "9px -apple-system, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(n.label, n.x, n.y + radius + 12);
+      ctx.fillText(n.label, n.x, n.y + radius + 14);
     }
-  }, []);
 
-  // Animation loop
+    // Center label
+    const cx = w / 2;
+    const cy = h / 2;
+    ctx.fillStyle = "rgba(0,240,255,0.08)";
+    ctx.font = "bold 11px -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("MONITORED ENTITIES", cx, cy - 4);
+    ctx.font = "9px -apple-system, sans-serif";
+    ctx.fillStyle = "rgba(0,240,255,0.05)";
+    ctx.fillText("MAS Jurisdiction", cx, cy + 10);
+  }, [edges]);
+
+  // Animation loop — only particles move, nodes are static
   useEffect(() => {
     if (!ready) return;
     const loop = () => {
-      tick();
       draw();
       animRef.current = requestAnimationFrame(loop);
     };
     animRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animRef.current);
-  }, [ready, tick, draw]);
+  }, [ready, draw]);
 
   return (
     <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: "relative" }}>
