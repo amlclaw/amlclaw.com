@@ -106,7 +106,7 @@ function getMode(): AIMode {
 // ---------------------------------------------------------------------------
 
 function spawnClaude(prompt: string, model?: string, systemPrompt?: string): ChildProcess {
-  const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
+  const args = ["-p", prompt, "--output-format", "stream-json"];
   if (model) {
     args.push("--model", model);
   }
@@ -128,14 +128,14 @@ async function runCLI(prompt: string, model?: string, systemPrompt?: string): Pr
     proc.stdout?.on("data", (data: Buffer) => { stdout += data.toString(); });
     proc.stderr?.on("data", (data: Buffer) => { stderr += data.toString(); });
 
-    proc.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(stderr || `claude exited with code ${code}`));
-        return;
-      }
-      // Parse stream-json output — extract text from assistant messages
+    proc.on("close", () => {
+      // Parse stream-json output — extract text from result or assistant messages
       const text = extractTextFromStreamJSON(stdout);
-      resolve(text);
+      if (text) {
+        resolve(text);
+      } else {
+        reject(new Error(stderr || "No output from Claude CLI"));
+      }
     });
 
     proc.on("error", (err) => {
@@ -149,26 +149,31 @@ async function runCLI(prompt: string, model?: string, systemPrompt?: string): Pr
 }
 
 function extractTextFromStreamJSON(raw: string): string {
-  const parts: string[] = [];
+  // The stream-json format has one JSON object per line.
+  // The "result" line contains the final text in .result field.
+  // "assistant" lines contain intermediate content in .message.content[].text
+  let resultText = "";
+  const assistantParts: string[] = [];
+
   for (const line of raw.split("\n")) {
     if (!line.trim()) continue;
     try {
       const msg = JSON.parse(line);
-      // stream-json format: each line is a JSON object with type field
+      if (msg.type === "result" && typeof msg.result === "string") {
+        resultText = msg.result;
+      }
       if (msg.type === "assistant" && msg.message?.content) {
         for (const block of msg.message.content) {
-          if (block.type === "text") {
-            parts.push(block.text);
+          if (block.type === "text" && block.text) {
+            assistantParts.push(block.text);
           }
         }
       }
-      // Also handle simple text result
-      if (msg.type === "result" && msg.result) {
-        parts.push(msg.result);
-      }
     } catch { /* not JSON, skip */ }
   }
-  return parts.join("") || raw; // fallback to raw if no JSON parsed
+
+  // Prefer result field (final output), fallback to assistant parts
+  return resultText || assistantParts.join("");
 }
 
 async function* streamCLI(prompt: string, model?: string, systemPrompt?: string): AsyncGenerator<{ text: string }, void, unknown> {
@@ -215,15 +220,9 @@ async function* streamCLI(prompt: string, model?: string, systemPrompt?: string)
 
   yield* iterator();
 
-  // Wait for process to exit
+  // Wait for process to exit (don't fail on non-zero exit code — CLI may return 1 even on success)
   await new Promise<void>((resolve, reject) => {
-    proc.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(`claude exited with code ${code}`));
-      } else {
-        resolve();
-      }
-    });
+    proc.on("close", () => { resolve(); });
     proc.on("error", (err) => {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
         reject(new Error("Claude Code CLI not found. Install it with: npm install -g @anthropic-ai/claude-code"));
