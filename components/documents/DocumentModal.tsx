@@ -35,10 +35,12 @@ export default function DocumentModal({ open, title, content, loading, onClose }
               Loading document...
             </div>
           ) : content ? (
-            <div
-              className="md-content markdown-body"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
-            />
+            <div className="document-paper" style={{ margin: 0, maxWidth: "none" }}>
+              <div
+                className="markdown-body"
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
+              />
+            </div>
           ) : (
             <div style={{ textAlign: "center", padding: 32, color: "var(--danger)" }}>
               Failed to load document

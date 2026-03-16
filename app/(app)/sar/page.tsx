@@ -270,26 +270,28 @@ export default function SARPage() {
             </div>
 
             {/* Content */}
-            <div style={{ flex: 1, overflow: "auto", padding: "var(--sp-5)" }}>
-              {editing ? (
-                <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "var(--sp-3)" }}>
-                  <textarea
-                    className="input"
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    style={{ flex: 1, fontFamily: "var(--mono)", fontSize: "var(--text-sm)", resize: "none" }}
-                  />
-                  <div style={{ display: "flex", gap: "var(--sp-2)", justifyContent: "flex-end" }}>
-                    <button className="btn btn-sm btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
-                    <button className="btn btn-sm btn-primary" onClick={handleSaveEdit} disabled={saving}>
-                      {saving ? "Saving..." : "Save"}
-                    </button>
-                  </div>
+            {editing ? (
+              <div style={{ flex: 1, overflow: "auto", padding: "var(--sp-5)", display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
+                <textarea
+                  className="input"
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  style={{ flex: 1, fontFamily: "var(--mono)", fontSize: "var(--text-sm)", resize: "none" }}
+                />
+                <div style={{ display: "flex", gap: "var(--sp-2)", justifyContent: "flex-end" }}>
+                  <button className="btn btn-sm btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
+                  <button className="btn btn-sm btn-primary" onClick={handleSaveEdit} disabled={saving}>
+                    {saving ? "Saving..." : "Save"}
+                  </button>
                 </div>
-              ) : (
-                <div className="markdown-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(selectedSar.content) }} />
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="document-paper-scroll">
+                <div className="document-paper">
+                  <div className="markdown-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(selectedSar.content) }} />
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

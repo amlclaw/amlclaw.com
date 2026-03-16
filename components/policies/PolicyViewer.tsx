@@ -227,10 +227,14 @@ export default function PolicyViewer({ policyId, onGenerateRules, onRefresh }: P
               style={{ height: "100%", minHeight: 400 }}
             />
           ) : policy.content ? (
-            <div
-              className="md-content markdown-body"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(policy.content) }}
-            />
+            <div className="document-paper-scroll">
+              <div className="document-paper">
+                <div
+                  className="markdown-body"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(policy.content) }}
+                />
+              </div>
+            </div>
           ) : (
             <div style={{ textAlign: "center", padding: "var(--sp-10)", color: "var(--text-tertiary)" }}>
               No content yet
