@@ -5,9 +5,15 @@
  *
  * CLI mode is used when no oauthToken is configured. SDK mode when token is present.
  */
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, execSync, type ChildProcess } from "child_process";
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
 import { getAIConfig, isDemoMode } from "./settings";
+
+// Resolve claude CLI path once at import time
+let claudePath = "";
+try {
+  claudePath = execSync("which claude", { encoding: "utf-8" }).trim();
+} catch { /* not found — will error at runtime */ }
 
 // ---------------------------------------------------------------------------
 // Demo content (ported from old lib/ai.ts)
@@ -114,7 +120,7 @@ function spawnClaude(prompt: string, model?: string, systemPrompt?: string): Chi
   if (systemPrompt) {
     args.push("--system-prompt", systemPrompt);
   }
-  const proc = spawn("claude", args, {
+  const proc = spawn(claudePath || "claude", args, {
     env: { ...process.env },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -313,7 +319,7 @@ export async function queryAgent(opts: QueryAgentOpts): Promise<string> {
   if (opts.disallowedTools) options.disallowedTools = opts.disallowedTools;
   if (opts.outputFormat) options.outputFormat = opts.outputFormat;
 
-  const q = query({ prompt: opts.prompt, options: options as never });
+  const q = query({ prompt: opts.prompt, options: { ...options, pathToClaudeCodeExecutable: claudePath || undefined } as never });
   registerJob(opts.jobId, opts.jobType, q);
 
   let result = "";
@@ -407,7 +413,7 @@ export async function* queryAgentStream(opts: QueryAgentStreamOpts): AsyncGenera
 
   if (opts.systemPrompt) options.systemPrompt = opts.systemPrompt;
 
-  const q = query({ prompt: opts.prompt, options: options as never });
+  const q = query({ prompt: opts.prompt, options: { ...options, pathToClaudeCodeExecutable: claudePath || undefined } as never });
   registerJob(opts.jobId, opts.jobType, q);
 
   try {
@@ -500,7 +506,7 @@ export async function* queryCopilot(opts: QueryCopilotOpts): AsyncGenerator<{ te
   if (opts.mcpServers) options.mcpServers = opts.mcpServers;
   if (opts.allowedTools) options.allowedTools = opts.allowedTools;
 
-  const q = query({ prompt: opts.prompt, options: options as never });
+  const q = query({ prompt: opts.prompt, options: { ...options, pathToClaudeCodeExecutable: claudePath || undefined } as never });
   registerJob(opts.jobId, "copilot", q);
 
   try {
@@ -555,6 +561,7 @@ export async function testAgentConnection(tokenOverride?: string): Promise<{ ok:
           maxBudgetUsd: 0.01,
           permissionMode: "bypassPermissions",
           disallowedTools: ["Bash", "Edit", "Write", "Read"],
+          pathToClaudeCodeExecutable: claudePath || undefined,
           env,
         } as never,
       });
