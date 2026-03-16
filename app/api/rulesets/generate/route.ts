@@ -68,6 +68,8 @@ export async function POST(req: Request) {
     try {
       let rules: unknown[] | null = null;
 
+      console.log(`[generate] Ruleset ${rulesetId}: AI output length=${finalOutput.length}, first 200 chars: ${finalOutput.slice(0, 200)}`);
+
       // Strategy 1: Direct parse
       try {
         const parsed = JSON.parse(finalOutput.trim());
@@ -83,7 +85,19 @@ export async function POST(req: Request) {
         }
       }
 
+      // Strategy 3: Find first [ and last ] in the output
+      if (!rules) {
+        const firstBracket = finalOutput.indexOf("[");
+        const lastBracket = finalOutput.lastIndexOf("]");
+        if (firstBracket >= 0 && lastBracket > firstBracket) {
+          try {
+            rules = JSON.parse(finalOutput.slice(firstBracket, lastBracket + 1));
+          } catch { /* */ }
+        }
+      }
+
       if (!rules || !Array.isArray(rules) || rules.length === 0) {
+        console.error(`[generate] Ruleset ${rulesetId}: failed to extract JSON. Last 200 chars: ${finalOutput.slice(-200)}`);
         throw new Error("No valid JSON rules array found in AI output");
       }
 
