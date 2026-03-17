@@ -5,6 +5,7 @@ import { extractRiskPaths, type Rule } from "@/lib/extract-risk-paths";
 import { getSettings, getTrustInApiKey } from "@/lib/settings";
 import { logAudit } from "@/lib/audit-log";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
+import { createCase } from "@/lib/case-storage";
 import crypto from "crypto";
 
 // In-memory job storage
@@ -135,6 +136,21 @@ async function runScreening(
     logAudit("screening.completed", { job_id: jobId, chain, address, risk_level: riskLevel });
     if (shouldAlert(riskLevel)) {
       sendWebhook("screening.high_risk", { chain, address, risk_level: riskLevel, job_id: jobId });
+    }
+
+    // Auto-create case for High/Severe risk
+    if (riskLevel === "Severe" || riskLevel === "High") {
+      try {
+        createCase({
+          screening_job_id: jobId,
+          trigger_risk_level: riskLevel,
+          trigger_address: address,
+          trigger_chain: chain,
+          trigger_scenario: scenario,
+          trigger_ruleset: (screeningJobs[jobId].request as Record<string, unknown>)?.ruleset as string,
+          triggered_rules: (summary.rules_triggered as string[]) || [],
+        });
+      } catch { /* best effort */ }
     }
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e);

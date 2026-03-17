@@ -18,6 +18,7 @@ import { extractRiskPaths, type Rule } from "./extract-risk-paths";
 import { getTrustInApiKey } from "./settings";
 import { logAudit } from "./audit-log";
 import { sendWebhook, shouldAlert } from "./webhook";
+import { createCase } from "./case-storage";
 import type { MonitorTask, MonitorRun, MonitorRunResult, MonitorRunSummary } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -223,6 +224,21 @@ export async function executeMonitorTask(
           risk_level: addrRiskLevel,
           job_id: jobId,
         });
+      }
+
+      // Auto-create case for High/Severe
+      if (addrRiskLevel === "Severe" || addrRiskLevel === "High") {
+        try {
+          createCase({
+            screening_job_id: jobId,
+            trigger_risk_level: addrRiskLevel,
+            trigger_address: addr.address,
+            trigger_chain: addr.chain,
+            trigger_scenario: task.scenario,
+            trigger_ruleset: task.ruleset_id,
+            triggered_rules: (summary.rules_triggered as string[]) || [],
+          });
+        } catch { /* best effort */ }
       }
     } catch (e) {
       results.push({
