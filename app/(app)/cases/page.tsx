@@ -417,17 +417,28 @@ export default function CasesPage() {
                         type="file"
                         multiple
                         onChange={(e) => setNoteFiles(Array.from(e.target.files || []))}
-                        style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", flex: 1 }}
+                        style={{ display: "none" }}
                       />
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => fileInputRef.current?.click()}
+                        type="button"
+                      >
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                        </svg>
+                        Attach Files
+                      </button>
                       {noteFiles.length > 0 && (
                         <span style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>
-                          {noteFiles.length} file(s)
+                          {noteFiles.map((f) => f.name).join(", ")}
                         </span>
                       )}
                       <button
-                        className="btn btn-sm btn-secondary"
+                        className="btn btn-sm btn-primary"
                         onClick={handleAddNote}
                         disabled={(!noteText.trim() && noteFiles.length === 0) || addingNote}
+                        style={{ marginLeft: "auto" }}
                       >
                         {addingNote ? "Uploading..." : noteFiles.length > 0 ? "Add with Files" : "Add Note"}
                       </button>
