@@ -106,6 +106,16 @@ export default function Sidebar() {
       ),
     },
     {
+      href: "/cases",
+      label: "Cases",
+      active: pathname.startsWith("/cases"),
+      icon: (
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+        </svg>
+      ),
+    },
+    {
       href: "/sar",
       label: "SAR Reports",
       active: pathname.startsWith("/sar"),
