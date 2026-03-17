@@ -1,10 +1,18 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+
+interface CaseAttachment {
+  id: string;
+  filename: string;
+  size: number;
+  uploaded_at: string;
+}
 
 interface CaseNote {
   text: string;
+  attachments?: CaseAttachment[];
   created_at: string;
 }
 
@@ -56,7 +64,9 @@ export default function CasesPage() {
 
   // Note input
   const [noteText, setNoteText] = useState("");
+  const [noteFiles, setNoteFiles] = useState<File[]>([]);
   const [addingNote, setAddingNote] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Close dialog
   const [showClose, setShowClose] = useState(false);
@@ -85,15 +95,25 @@ export default function CasesPage() {
   }, [selectedId, cases]);
 
   const handleAddNote = async () => {
-    if (!selected || !noteText.trim()) return;
+    if (!selected || (!noteText.trim() && noteFiles.length === 0)) return;
     setAddingNote(true);
     try {
-      await fetch(`/api/cases/${selected.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "add_note", text: noteText.trim() }),
-      });
+      if (noteFiles.length > 0) {
+        // Use FormData for file upload
+        const fd = new FormData();
+        fd.append("note", noteText.trim());
+        for (const f of noteFiles) fd.append("files", f);
+        await fetch(`/api/cases/${selected.id}/attachments`, { method: "POST", body: fd });
+      } else {
+        await fetch(`/api/cases/${selected.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "add_note", text: noteText.trim() }),
+        });
+      }
       setNoteText("");
+      setNoteFiles([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       loadCases();
     } catch { /* */ }
     setAddingNote(false);
@@ -349,6 +369,30 @@ export default function CasesPage() {
                       fontSize: "var(--text-sm)",
                     }}>
                       <div style={{ color: "var(--text-primary)" }}>{note.text}</div>
+                      {note.attachments && note.attachments.length > 0 && (
+                        <div style={{ display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", marginTop: 4 }}>
+                          {note.attachments.map((att) => (
+                            <a
+                              key={att.id}
+                              href={`/api/cases/${selected.id}/attachments?id=${att.id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: 4,
+                                fontSize: "var(--text-xs)", padding: "2px 8px",
+                                background: "var(--surface-2)", borderRadius: 4,
+                                color: "var(--primary-400, var(--info))", textDecoration: "none",
+                                border: "1px solid var(--border-subtle)",
+                              }}
+                            >
+                              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                              </svg>
+                              {att.filename} ({(att.size / 1024).toFixed(0)}K)
+                            </a>
+                          ))}
+                        </div>
+                      )}
                       <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginTop: 2 }}>
                         {new Date(note.created_at).toLocaleString()}
                       </div>
@@ -358,23 +402,36 @@ export default function CasesPage() {
 
                 {/* Add note */}
                 {selected.status !== "closed" && (
-                  <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
                     <textarea
                       className="input"
                       value={noteText}
                       onChange={(e) => setNoteText(e.target.value)}
                       placeholder="Add investigation note..."
                       rows={2}
-                      style={{ flex: 1, resize: "vertical", fontFamily: "inherit", fontSize: "var(--text-sm)" }}
+                      style={{ resize: "vertical", fontFamily: "inherit", fontSize: "var(--text-sm)" }}
                     />
-                    <button
-                      className="btn btn-sm btn-secondary"
-                      onClick={handleAddNote}
-                      disabled={!noteText.trim() || addingNote}
-                      style={{ alignSelf: "flex-end" }}
-                    >
-                      {addingNote ? "..." : "Add"}
-                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        onChange={(e) => setNoteFiles(Array.from(e.target.files || []))}
+                        style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", flex: 1 }}
+                      />
+                      {noteFiles.length > 0 && (
+                        <span style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>
+                          {noteFiles.length} file(s)
+                        </span>
+                      )}
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        onClick={handleAddNote}
+                        disabled={(!noteText.trim() && noteFiles.length === 0) || addingNote}
+                      >
+                        {addingNote ? "Uploading..." : noteFiles.length > 0 ? "Add with Files" : "Add Note"}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

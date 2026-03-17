@@ -11,8 +11,16 @@ const INDEX_PATH = path.join(CASES_DIR, "index.json");
 export type CaseStatus = "open" | "under_review" | "closed";
 export type CaseDisposition = "escalate_str" | "block_freeze" | "clear" | "false_positive";
 
+export interface CaseAttachment {
+  id: string;
+  filename: string;
+  size: number;
+  uploaded_at: string;
+}
+
 export interface CaseNote {
   text: string;
+  attachments?: CaseAttachment[];
   created_at: string;
 }
 
@@ -144,11 +152,13 @@ export function updateCase(id: string, updates: Partial<Case>): Case | null {
   return updated;
 }
 
-export function addNote(id: string, text: string): Case | null {
+export function addNote(id: string, text: string, attachments?: CaseAttachment[]): Case | null {
   const c = getCase(id);
   if (!c) return null;
 
-  c.notes.push({ text, created_at: new Date().toISOString() });
+  const note: CaseNote = { text, created_at: new Date().toISOString() };
+  if (attachments && attachments.length > 0) note.attachments = attachments;
+  c.notes.push(note);
   return updateCase(id, { notes: c.notes });
 }
 
@@ -177,5 +187,44 @@ export function deleteCase(id: string): boolean {
     const filePath = path.join(CASES_DIR, `${id}.json`);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   } catch { /* */ }
+  // Also remove attachments dir
+  try {
+    const attachDir = path.join(CASES_DIR, id, "attachments");
+    if (fs.existsSync(attachDir)) fs.rmSync(attachDir, { recursive: true });
+    const caseDir = path.join(CASES_DIR, id);
+    if (fs.existsSync(caseDir)) fs.rmSync(caseDir, { recursive: true });
+  } catch { /* */ }
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Attachments
+// ---------------------------------------------------------------------------
+
+function attachmentsDir(caseId: string): string {
+  const dir = path.join(CASES_DIR, caseId, "attachments");
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export function saveAttachment(caseId: string, filename: string, buffer: Buffer): CaseAttachment {
+  const dir = attachmentsDir(caseId);
+  const id = `att_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const storedName = `${id}_${safeName}`;
+  fs.writeFileSync(path.join(dir, storedName), buffer);
+  return {
+    id,
+    filename: safeName,
+    size: buffer.length,
+    uploaded_at: new Date().toISOString(),
+  };
+}
+
+export function getAttachmentPath(caseId: string, attachmentId: string): string | null {
+  const dir = path.join(CASES_DIR, caseId, "attachments");
+  if (!fs.existsSync(dir)) return null;
+  const files = fs.readdirSync(dir);
+  const match = files.find((f) => f.startsWith(attachmentId));
+  return match ? path.join(dir, match) : null;
 }

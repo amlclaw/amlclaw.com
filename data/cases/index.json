@@ -1,0 +1,39 @@
+[
+  {
+    "id": "case_1773714196238_ztyddg",
+    "reference": "CASE-2026-00001",
+    "status": "closed",
+    "screening_job_id": "837ba775",
+    "trigger_risk_level": "Severe",
+    "trigger_address": "TKC53kvyZJvKk6kyBbU8hxFjyTSoPtKKZy",
+    "trigger_chain": "Tron",
+    "trigger_scenario": "all",
+    "trigger_ruleset": "SG MAS Rules (AI Test v2)",
+    "triggered_rules": [
+      "DEP-005",
+      "DEP-007",
+      "MON-006",
+      "WIT-002",
+      "WIT-005"
+    ],
+    "notes": [
+      {
+        "text": "Case auto-created. Risk level: Severe. Address: TKC53kvyZJvKk6kyBbU8hxFjyTSoPtKKZy (Tron).",
+        "created_at": "2026-03-17T02:23:16.238Z"
+      },
+      {
+        "text": "test",
+        "created_at": "2026-03-17T02:24:59.806Z"
+      },
+      {
+        "text": "test",
+        "created_at": "2026-03-17T02:25:02.581Z"
+      }
+    ],
+    "created_at": "2026-03-17T02:23:16.238Z",
+    "updated_at": "2026-03-17T02:25:16.194Z",
+    "disposition": "clear",
+    "disposition_reason": "没有问题",
+    "closed_at": "2026-03-17T02:25:16.194Z"
+  }
+]
