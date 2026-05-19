@@ -39,11 +39,14 @@ function getToken(): string {
   }
 }
 
+// NOTE: The compat API doc claims chain_name is case-insensitive, but in
+// practice only lowercase values return data. Capitalized values short-circuit
+// to 0 connections within ~200ms. Always lowercase here.
 const CHAIN_MAPPING: Record<string, string> = {
-  Tron: "Tron",
-  Ethereum: "Ethereum",
-  Bitcoin: "Bitcoin",
-  Solana: "Solana",
+  Tron: "tron",
+  Ethereum: "ethereum",
+  Bitcoin: "bitcoin",
+  Solana: "solana",
 };
 
 export interface KYAResult {

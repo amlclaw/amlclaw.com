@@ -10,7 +10,8 @@ import { getTrustInBaseUrl, getTrustInToken } from "@/lib/settings";
  */
 
 const TEST_ADDRESS = "TGE94jU39ithtHbrYAQJRTcvv785riPLdy";
-const TEST_CHAIN = "Tron";
+// Compat API: lowercase chain_name is required to get data (despite docs).
+const TEST_CHAIN = "tron";
 
 async function callJson(
   endpoint: string,

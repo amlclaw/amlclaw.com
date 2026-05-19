@@ -117,7 +117,7 @@ describe("trustin-api", () => {
 
       // Submit payload shape
       const submitBody = JSON.parse((calls[0][1] as RequestInit).body as string);
-      expect(submitBody.chain_name).toBe("Tron");
+      expect(submitBody.chain_name).toBe("tron");
       expect(submitBody.token).toBe("USDT");
       expect(submitBody.address).toBe("QUERY");
       expect(submitBody.inflow_hops).toBe(3);
