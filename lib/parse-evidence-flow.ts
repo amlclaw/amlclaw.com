@@ -217,8 +217,118 @@ export function buildGraphData(
     }
   }
 
+  aggregateRiskClusters(nodeMap, edgeMap);
+
   return {
     nodes: Array.from(nodeMap.values()),
     edges: Array.from(edgeMap.values()),
   };
+}
+
+const RISK_ORDER = ["severe", "high", "medium", "low"];
+
+function rankRisk(level: string | undefined): number {
+  if (!level) return RISK_ORDER.length;
+  const idx = RISK_ORDER.indexOf(level.toLowerCase());
+  return idx === -1 ? RISK_ORDER.length : idx;
+}
+
+/**
+ * Mutates `nodeMap` and `edgeMap` in place: any group of 3+ risk-source nodes
+ * that share the same primary tag AND a single, identical outgoing edge target
+ * is collapsed into one synthesized cluster node + one aggregated edge.
+ */
+function aggregateRiskClusters(
+  nodeMap: Map<string, GraphNode>,
+  edgeMap: Map<string, GraphEdge>,
+): void {
+  const outgoingByNode = new Map<string, GraphEdge[]>();
+  for (const e of edgeMap.values()) {
+    const arr = outgoingByNode.get(e.source) ?? [];
+    arr.push(e);
+    outgoingByNode.set(e.source, arr);
+  }
+
+  const groups = new Map<string, { tag: string; nextHop: string; members: GraphNode[] }>();
+  for (const node of nodeMap.values()) {
+    if (!node.isRiskSource || node.isTarget) continue;
+    const outs = outgoingByNode.get(node.id) ?? [];
+    if (outs.length !== 1) continue;
+    const tag = node.tags[0];
+    if (!tag) continue;
+    const nextHop = outs[0].target;
+    const key = `${tag}|${nextHop}`;
+    const bucket = groups.get(key);
+    if (bucket) bucket.members.push(node);
+    else groups.set(key, { tag, nextHop, members: [node] });
+  }
+
+  for (const { tag, nextHop, members } of groups.values()) {
+    if (members.length < 3) continue;
+
+    const sorted = [...members].sort((a, b) => {
+      const da = a.hopDistance ?? 0;
+      const db = b.hopDistance ?? 0;
+      if (da !== db) return da - db;
+      return a.address.localeCompare(b.address);
+    });
+
+    const memberInfos: ClusterMember[] = sorted.map((m) => ({
+      address: m.address,
+      hopDistance: m.hopDistance,
+      matchedRules: m.matchedRules,
+      amount: outgoingByNode.get(m.id)![0].amount,
+    }));
+
+    let totalUsd = 0;
+    let allParsed = true;
+    for (const m of memberInfos) {
+      if (!m.amount) { allParsed = false; break; }
+      const match = m.amount.match(/^([\d.]+)\s*USD$/i);
+      if (!match) { allParsed = false; break; }
+      totalUsd += parseFloat(match[1]);
+    }
+    const aggregatedAmount = allParsed ? `${totalUsd} USD` : undefined;
+
+    let bestRisk: string | undefined;
+    for (const m of members) {
+      const rl = m.riskLevel?.toLowerCase();
+      if (!rl) continue;
+      if (!bestRisk || rankRisk(rl) < rankRisk(bestRisk)) bestRisk = rl;
+    }
+
+    const rulesSet = new Set<string>();
+    for (const m of members) for (const r of m.matchedRules ?? []) rulesSet.add(r);
+
+    const hops = members.map((m) => m.hopDistance).filter((h): h is number => typeof h === "number");
+    const minHop = hops.length ? Math.min(...hops) : undefined;
+
+    const clusterId = `cluster:${tag}:${nextHop}`;
+    const clusterNode: GraphNode = {
+      id: clusterId,
+      address: "",
+      tags: [tag],
+      riskLevel: bestRisk,
+      isRiskSource: true,
+      isCluster: true,
+      memberCount: members.length,
+      members: memberInfos,
+      matchedRules: Array.from(rulesSet),
+      hopDistance: minHop,
+    };
+
+    for (const m of members) {
+      nodeMap.delete(m.id);
+      for (const e of outgoingByNode.get(m.id) ?? []) edgeMap.delete(e.id);
+    }
+    nodeMap.set(clusterId, clusterNode);
+
+    const aggregatedEdgeId = `${clusterId}->${nextHop}`;
+    edgeMap.set(aggregatedEdgeId, {
+      id: aggregatedEdgeId,
+      source: clusterId,
+      target: nextHop,
+      amount: aggregatedAmount,
+    });
+  }
 }
