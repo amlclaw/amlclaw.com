@@ -41,11 +41,140 @@ function FlowNode({ data }: NodeProps) {
   const riskLevel = (d.riskLevel as string) || "";
   const isTarget = Boolean(d.isTarget);
   const isRiskSource = Boolean(d.isRiskSource);
+  const isCluster = Boolean(d.isCluster);
+  const memberCount = typeof d.memberCount === "number" ? d.memberCount : 0;
   const address = (d.address as string) || "";
   const tags = (d.tags as string[]) || [];
   const matchedRules = (d.matchedRules as string[]) || [];
   const hasRisk = isRiskSource || riskLevel === "severe" || riskLevel === "high" || riskLevel === "medium";
   const dotColor = RISK_DOT[riskLevel] || (isTarget ? RISK_DOT.target : "");
+
+  const card = (
+    <div style={{
+      background: "#0d0e12",
+      border: "1px solid #1e1e24",
+      borderRadius: 8,
+      minWidth: 180,
+      maxWidth: 260,
+      overflow: "hidden",
+      boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+      position: "relative",
+    }}>
+      {/* Top-right indicator: × N for clusters, risk dot otherwise */}
+      {isCluster ? (
+        <div style={{
+          position: "absolute",
+          top: -6,
+          right: -6,
+          minWidth: 24,
+          height: 18,
+          padding: "0 6px",
+          borderRadius: 9,
+          background: "#ef4444",
+          color: "#fff",
+          fontSize: "0.6rem",
+          fontWeight: 700,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 2px 6px rgba(239,68,68,0.45)",
+          border: "2px solid #0d0e12",
+          fontFamily: "'JetBrains Mono', monospace",
+        }}>
+          ×{memberCount}
+        </div>
+      ) : (hasRisk || isTarget) && dotColor && (
+        <div style={{
+          position: "absolute",
+          top: -4,
+          right: -4,
+          width: 12,
+          height: 12,
+          borderRadius: "50%",
+          background: dotColor,
+          border: "2px solid #0d0e12",
+          boxShadow: `0 0 8px ${dotColor}60`,
+        }} />
+      )}
+
+      {/* Tag labels */}
+      {tags.length > 0 && (
+        <div style={{
+          padding: "6px 10px 4px",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 3,
+        }}>
+          {tags.map((t, i) => (
+            <span key={i} style={{
+              fontSize: "0.58rem",
+              fontWeight: 600,
+              padding: "1px 6px",
+              borderRadius: 3,
+              background: hasRisk ? "rgba(239,68,68,0.15)" : isTarget ? "rgba(99,102,241,0.12)" : "rgba(255,255,255,0.06)",
+              color: hasRisk ? "#f87171" : isTarget ? "#818cf8" : "#a0a0ab",
+              lineHeight: "1.4",
+              whiteSpace: "nowrap",
+              maxWidth: 200,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}>
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Address (or cluster summary) */}
+      <div style={{
+        padding: tags.length > 0 ? "2px 10px 6px" : "8px 10px",
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+      }}>
+        <span style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: "0.65rem",
+          color: isTarget ? "#818cf8" : "#a0a0ab",
+          fontWeight: isTarget ? 600 : 400,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          flex: 1,
+        }}>
+          {isCluster ? `${memberCount} addresses` : shortenAddr(address)}
+        </span>
+
+        {!isCluster && (
+          <>
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#636370" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.5 }}>
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+            </svg>
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#636370" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.5 }}>
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </>
+        )}
+      </div>
+
+      {/* Matched rules count badge */}
+      {matchedRules.length > 0 && (
+        <div style={{
+          padding: "3px 10px 5px",
+          borderTop: "1px solid #1a1a1f",
+          fontSize: "0.55rem",
+          color: "#636370",
+        }}>
+          {isCluster
+            ? `Σ ${matchedRules.length} unique rule${matchedRules.length !== 1 ? "s" : ""}`
+            : `${matchedRules.length} rule${matchedRules.length !== 1 ? "s" : ""} matched`}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -55,103 +184,33 @@ function FlowNode({ data }: NodeProps) {
         style={{ background: "#2a2a32", border: "2px solid #3a3a44", width: 8, height: 8 }}
       />
 
-      <div style={{
-        background: "#0d0e12",
-        border: "1px solid #1e1e24",
-        borderRadius: 8,
-        minWidth: 180,
-        maxWidth: 260,
-        overflow: "hidden",
-        boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
-        position: "relative",
-      }}>
-        {/* Risk dot indicator (top-right) */}
-        {(hasRisk || isTarget) && dotColor && (
+      {isCluster ? (
+        <div style={{ position: "relative" }}>
           <div style={{
             position: "absolute",
-            top: -4,
-            right: -4,
-            width: 12,
-            height: 12,
-            borderRadius: "50%",
-            background: dotColor,
-            border: "2px solid #0d0e12",
-            boxShadow: `0 0 8px ${dotColor}60`,
+            top: 8,
+            left: 8,
+            right: -8,
+            bottom: -8,
+            background: "#0a0a0e",
+            border: "1px solid #1a1a1f",
+            borderRadius: 8,
+            zIndex: 0,
           }} />
-        )}
-
-        {/* Tag labels */}
-        {tags.length > 0 && (
           <div style={{
-            padding: "6px 10px 4px",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 3,
-          }}>
-            {tags.map((t, i) => (
-              <span key={i} style={{
-                fontSize: "0.58rem",
-                fontWeight: 600,
-                padding: "1px 6px",
-                borderRadius: 3,
-                background: hasRisk ? "rgba(239,68,68,0.15)" : isTarget ? "rgba(99,102,241,0.12)" : "rgba(255,255,255,0.06)",
-                color: hasRisk ? "#f87171" : isTarget ? "#818cf8" : "#a0a0ab",
-                lineHeight: "1.4",
-                whiteSpace: "nowrap",
-                maxWidth: 200,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}>
-                {t}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Address */}
-        <div style={{
-          padding: tags.length > 0 ? "2px 10px 6px" : "8px 10px",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-        }}>
-          <span style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: "0.65rem",
-            color: isTarget ? "#818cf8" : "#a0a0ab",
-            fontWeight: isTarget ? 600 : 400,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            flex: 1,
-          }}>
-            {shortenAddr(address)}
-          </span>
-
-          {/* Copy & link icons (decorative) */}
-          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#636370" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.5 }}>
-            <rect x="9" y="9" width="13" height="13" rx="2" />
-            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-          </svg>
-          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#636370" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.5 }}>
-            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-            <polyline points="15 3 21 3 21 9" />
-            <line x1="10" y1="14" x2="21" y2="3" />
-          </svg>
+            position: "absolute",
+            top: 4,
+            left: 4,
+            right: -4,
+            bottom: -4,
+            background: "#0c0c10",
+            border: "1px solid #1c1c22",
+            borderRadius: 8,
+            zIndex: 1,
+          }} />
+          <div style={{ position: "relative", zIndex: 2 }}>{card}</div>
         </div>
-
-        {/* Matched rules count badge */}
-        {matchedRules.length > 0 && (
-          <div style={{
-            padding: "3px 10px 5px",
-            borderTop: "1px solid #1a1a1f",
-            fontSize: "0.55rem",
-            color: "#636370",
-          }}>
-            {matchedRules.length} rule{matchedRules.length !== 1 ? "s" : ""} matched
-          </div>
-        )}
-      </div>
+      ) : card}
 
       <Handle
         type="source"
@@ -185,7 +244,8 @@ function applyDagreLayout(
     const hasMultipleTags = n.tags.length > 1;
     const hasTags = n.tags.length > 0;
     const w = 200;
-    const h = hasTags ? (hasMultipleTags ? 72 : 56) : 42;
+    let h = hasTags ? (hasMultipleTags ? 72 : 56) : 42;
+    if (n.isCluster) h += 14; // account for stacked-card visual offset
     g.setNode(n.id, { width: w, height: h });
   }
 
