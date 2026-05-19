@@ -718,7 +718,11 @@ function EdgePanel({
               <div style={{ padding: "10px 8px", color: "#636370", fontSize: "0.6rem", textAlign: "center" }}>No transactions in window.</div>
             )}
             {items.map((tx, idx) => (
-              <div key={tx.tx_id || idx} style={{
+              // The API can return the same tx_id twice (different log rows
+              // collapsed into one aggregate). Composite key avoids the React
+              // duplicate-key warning while still keeping a stable identity
+              // per row.
+              <div key={`${tx.tx_id}-${idx}`} style={{
                 padding: "6px 8px",
                 borderBottom: idx === items.length - 1 ? "none" : "1px solid #15151a",
                 fontSize: "0.6rem",
