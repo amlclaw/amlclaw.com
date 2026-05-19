@@ -366,7 +366,7 @@ function CompletedReport({ job, jobId }: { job: Record<string, unknown>; jobId: 
                 <div className="spinner spinner-lg" />
               </div>
             }>
-              <FlowGraph entities={entities} target={target} scenario={scenario} />
+              <FlowGraph entities={entities} target={target} scenario={scenario} chain={(target.chain as string) || (req.chain as string) || "Tron"} />
             </Suspense>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>

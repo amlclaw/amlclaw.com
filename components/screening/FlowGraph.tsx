@@ -23,6 +23,8 @@ interface FlowGraphProps {
   entities: Record<string, unknown>[];
   target: Record<string, unknown>;
   scenario?: string;
+  /** Blockchain identifier (e.g. "Tron", "Ethereum"). Used for tx lookup + explorer links. */
+  chain?: string;
 }
 
 /* ─── Risk Colors ─── */
@@ -286,6 +288,7 @@ function applyDagreLayout(
       style: {
         stroke: "#2a2a32",
         strokeWidth: 1.5,
+        cursor: "pointer",
       },
       labelStyle: {
         fill: "#636370",
@@ -306,8 +309,9 @@ function applyDagreLayout(
 }
 
 /* ─── Main Component ─── */
-export default function FlowGraph({ entities, target, scenario }: FlowGraphProps) {
+export default function FlowGraph({ entities, target, scenario, chain }: FlowGraphProps) {
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<{ source: string; target: string; amount?: string } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Esc closes fullscreen
@@ -332,7 +336,31 @@ export default function FlowGraph({ entities, target, scenario }: FlowGraphProps
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     const d = node.data as Record<string, unknown>;
+    setSelectedEdge(null);
     setSelected((prev) => (prev && prev.address === d.address) ? null : d);
+  }, []);
+
+  const onEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
+    // Skip cluster edges — they aggregate N member edges and don't map to a
+    // single tx list. User should drill into a cluster member instead.
+    if (edge.source.startsWith("cluster:") || edge.target.startsWith("cluster:")) {
+      setSelectedEdge({
+        source: edge.source,
+        target: edge.target,
+        amount: typeof edge.label === "string" ? edge.label : undefined,
+      });
+      return;
+    }
+    setSelected(null);
+    setSelectedEdge((prev) =>
+      prev && prev.source === edge.source && prev.target === edge.target
+        ? null
+        : {
+            source: edge.source,
+            target: edge.target,
+            amount: typeof edge.label === "string" ? edge.label : undefined,
+          },
+    );
   }, []);
 
   if (nodes.length === 0) {
@@ -359,7 +387,8 @@ export default function FlowGraph({ entities, target, scenario }: FlowGraphProps
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={onNodeClick}
-        onPaneClick={() => setSelected(null)}
+        onEdgeClick={onEdgeClick}
+        onPaneClick={() => { setSelected(null); setSelectedEdge(null); }}
         fitView
         fitViewOptions={{ padding: 0.15, maxZoom: 1.2 }}
         minZoom={0.1}
@@ -428,8 +457,19 @@ export default function FlowGraph({ entities, target, scenario }: FlowGraphProps
         </button>
       </div>
 
-      {/* Detail panel */}
+      {/* Node detail panel */}
       {selected && <DetailPanel data={selected} onClose={() => setSelected(null)} />}
+
+      {/* Edge tx panel */}
+      {selectedEdge && (
+        <EdgePanel
+          chain={chain ?? "Tron"}
+          from={selectedEdge.source}
+          to={selectedEdge.target}
+          amountLabel={selectedEdge.amount}
+          onClose={() => setSelectedEdge(null)}
+        />
+      )}
     </div>
   );
 }
@@ -546,6 +586,184 @@ function DetailPanel({ data, onClose }: { data: Record<string, unknown>; onClose
             ))}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Edge Tx Panel ─── */
+interface EdgeTx {
+  tx_id: string;
+  block_number: number;
+  block_timestamp: number;
+  amount_usd: number;
+  amount_raw: string;
+  explorer_url: string | null;
+}
+
+function EdgePanel({
+  chain, from, to, amountLabel, onClose,
+}: {
+  chain: string;
+  from: string;
+  to: string;
+  amountLabel?: string;
+  onClose: () => void;
+}) {
+  const isClusterEdge = from.startsWith("cluster:") || to.startsWith("cluster:");
+
+  const [items, setItems] = useState<EdgeTx[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Reset state when the edge identity changes.
+  useEffect(() => {
+    setItems([]);
+    setTotal(0);
+    setPage(1);
+    setErr(null);
+  }, [from, to]);
+
+  // Fetch a page of tx records.
+  useEffect(() => {
+    if (isClusterEdge) return;
+    let cancelled = false;
+    setLoading(true);
+    setErr(null);
+
+    const url = `/api/screening/edge-txs?chain=${encodeURIComponent(chain)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&page=${page}&page_size=20`;
+    fetch(url)
+      .then(async (r) => {
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(body.detail || `HTTP ${r.status}`);
+        return body as { items: EdgeTx[]; total: number };
+      })
+      .then((body) => {
+        if (cancelled) return;
+        setItems((prev) => (page === 1 ? body.items : [...prev, ...body.items]));
+        setTotal(body.total ?? 0);
+      })
+      .catch((e: Error) => { if (!cancelled) setErr(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [chain, from, to, page, isClusterEdge]);
+
+  const fmtTs = (ts: number) => {
+    if (!ts) return "—";
+    try { return new Date(ts).toISOString().slice(0, 19).replace("T", " "); }
+    catch { return String(ts); }
+  };
+  const fmtUsd = (n: number) => {
+    if (!Number.isFinite(n)) return "—";
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+    if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
+    return `$${n.toFixed(2)}`;
+  };
+  const shortHash = (h: string) => h.length > 16 ? `${h.slice(0, 8)}…${h.slice(-6)}` : h;
+
+  return (
+    <div style={{
+      position: "absolute", bottom: 12, right: 12,
+      background: "#0f0f12", border: "1px solid #2a2a32", borderRadius: 8,
+      padding: "12px 16px", width: 380, fontSize: "0.694rem",
+      boxShadow: "0 8px 32px rgba(0,0,0,0.5)", zIndex: 10,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <strong style={{ color: "#f0f0f3", fontSize: "0.694rem" }}>Edge Transactions</strong>
+        <button onClick={onClose} style={{
+          background: "none", border: "1px solid #2a2a32", borderRadius: 4,
+          color: "#636370", width: 20, height: 20, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem",
+        }}>&times;</button>
+      </div>
+
+      {/* From → To summary */}
+      <div style={{ fontSize: "0.6rem", lineHeight: 1.6, color: "#a0a0ab", marginBottom: 6 }}>
+        <div style={{ color: "#636370" }}>FROM</div>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", wordBreak: "break-all" }}>{from}</div>
+        <div style={{ color: "#636370", marginTop: 4 }}>TO</div>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", wordBreak: "break-all" }}>{to}</div>
+        {amountLabel && (
+          <div style={{ color: "#636370", marginTop: 4 }}>
+            Aggregate amount: <span style={{ color: "#a0a0ab" }}>{amountLabel}</span>
+          </div>
+        )}
+      </div>
+
+      {isClusterEdge && (
+        <div style={{
+          padding: "8px 10px",
+          background: "rgba(99,102,241,0.08)",
+          border: "1px solid rgba(99,102,241,0.2)",
+          borderRadius: 4,
+          color: "#818cf8",
+          fontSize: "0.6rem",
+          lineHeight: 1.5,
+        }}>
+          This edge is an aggregation of multiple member edges. Click the cluster node to open the member list, then click any individual member to inspect its txs.
+        </div>
+      )}
+
+      {!isClusterEdge && (
+        <>
+          {err && (
+            <div style={{ color: "#f87171", fontSize: "0.6rem", marginTop: 6 }}>{err}</div>
+          )}
+
+          <div style={{ marginTop: 6, maxHeight: 280, overflowY: "auto", border: "1px solid #1e1e24", borderRadius: 4, background: "#0a0a0e" }}>
+            {items.length === 0 && !loading && !err && (
+              <div style={{ padding: "10px 8px", color: "#636370", fontSize: "0.6rem", textAlign: "center" }}>No transactions in window.</div>
+            )}
+            {items.map((tx, idx) => (
+              <div key={tx.tx_id || idx} style={{
+                padding: "6px 8px",
+                borderBottom: idx === items.length - 1 ? "none" : "1px solid #15151a",
+                fontSize: "0.6rem",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <code style={{ fontFamily: "'JetBrains Mono', monospace", color: "#a0a0ab", flex: 1 }}>{shortHash(tx.tx_id)}</code>
+                  {tx.explorer_url && (
+                    <a href={tx.explorer_url} target="_blank" rel="noreferrer" title="View on explorer"
+                      style={{ color: "#818cf8", textDecoration: "none", display: "inline-flex" }}>
+                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                        <polyline points="15 3 21 3 21 9" />
+                        <line x1="10" y1="14" x2="21" y2="3" />
+                      </svg>
+                    </a>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 3, color: "#636370" }}>
+                  <span>{fmtTs(tx.block_timestamp)}</span>
+                  <span style={{ color: "#a0a0ab" }}>{fmtUsd(tx.amount_usd)}</span>
+                  <span>blk #{tx.block_number}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center", color: "#636370", fontSize: "0.55rem" }}>
+            <span>{items.length} / {total} shown</span>
+            {items.length < total && (
+              <button
+                onClick={() => setPage((p) => p + 1)}
+                disabled={loading}
+                style={{
+                  background: "#141418", border: "1px solid #2a2a32",
+                  borderRadius: 3, color: "#a0a0ab",
+                  padding: "3px 8px", fontSize: "0.55rem",
+                  cursor: loading ? "default" : "pointer",
+                  opacity: loading ? 0.5 : 1,
+                }}
+              >
+                {loading ? "Loading…" : "Load more"}
+              </button>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
