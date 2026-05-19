@@ -89,7 +89,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   blockchain: {
     trustinApiKey: "",
-    trustinBaseUrl: "https://platform.trustin.bond/api",
+    trustinBaseUrl: "https://platform.trustin.bond/api/infinity/api",
     trustinToken: "USDT",
   },
   screening: {

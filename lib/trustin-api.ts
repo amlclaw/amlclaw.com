@@ -23,9 +23,13 @@ function getBaseUrl(): string {
   try {
     return getTrustInBaseUrl();
   } catch {
-    return "https://platform.trustin.bond/api";
+    return "https://platform.trustin.bond/api/infinity/api";
   }
 }
+
+// Static token required by the shaula reverse-proxy to forward /api/* to infinity.
+const SHAULA_TOKEN_HEADER = "x-shaula-token";
+const SHAULA_TOKEN_VALUE = "trustin-platform";
 
 function getToken(): string {
   try {
@@ -103,7 +107,11 @@ async function postJson(
   const url = `${getBaseUrl()}${endpoint}`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "User-Agent": "amlclaw-web/1.0.0" },
+    headers: {
+      "Content-Type": "application/json",
+      "User-Agent": "amlclaw-web/1.0.0",
+      [SHAULA_TOKEN_HEADER]: SHAULA_TOKEN_VALUE,
+    },
     body: JSON.stringify(body),
   });
 
