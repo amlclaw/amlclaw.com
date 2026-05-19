@@ -1,15 +1,37 @@
 /**
- * TrustIn KYA API v2 wrapper (TypeScript port of trustin_api.py)
+ * TrustIn KYA API client — Antares Compat (Infinity).
+ *
+ * Public endpoint, no authentication required. The legacy v2 API key is kept
+ * in the signature/settings for backwards compatibility but is unused.
+ *
+ * 4-call investigation flow:
+ *   1. POST /investigatev2/submit_query_task_v2     → request_id
+ *   2. POST /investigatev2/get_query_status         (poll until finished)
+ *   3. POST /investigatev2/get_opponents            (paginated, both directions)
+ *   4. POST /investigatev2/get_opponent_paths_with_amount_and_timestamp_range
+ *                                                   (seqs batched 100 at a time)
+ *   5. POST /query/get_tag_items_v2                 (target self-tags)
+ *
+ * Result is re-packaged into the legacy `{ code, msg, data: { tags, paths } }`
+ * shape so downstream code (extract-risk-paths.ts, FlowGraph, etc.) is unchanged.
  */
 import fs from "fs";
 import path from "path";
-import { getTrustInBaseUrl, isDemoMode } from "./settings";
+import { getTrustInBaseUrl, getTrustInToken, isDemoMode } from "./settings";
 
 function getBaseUrl(): string {
   try {
     return getTrustInBaseUrl();
   } catch {
-    return "https://api.trustin.info/api/v2/investigate";
+    return "https://platform.trustin.bond/api";
+  }
+}
+
+function getToken(): string {
+  try {
+    return getTrustInToken();
+  } catch {
+    return "USDT";
   }
 }
 
@@ -37,40 +59,174 @@ export interface DetectOptions {
   maxTimestamp?: number;
 }
 
-async function makeRequest(
+interface CompatTag {
+  primary_category?: string;
+  secondary_category?: string;
+  tertiary_category?: string;
+  quaternary_category?: string;
+  risk_level?: string;
+  priority?: number;
+}
+
+interface CompatPathNode {
+  address: string;
+  deep: number;
+  pre_address?: string;
+  amount?: number;
+  last_closed_timestamp?: number;
+  tags?: CompatTag[];
+}
+
+interface CompatPathRecord {
+  direction: number; // 1 = out, -1 = in
+  request_id?: number;
+  query_address: string;
+  chain_name?: string;
+  token?: string;
+  opponent_address?: string;
+  hops?: number;
+  path: CompatPathNode[];
+  tags?: CompatTag[];
+}
+
+interface CompatOpponent {
+  seq: number;
+  direction: number;
+  opponent_address?: string;
+  tags?: CompatTag[];
+}
+
+async function postJson(
   endpoint: string,
-  data: Record<string, unknown>,
-  apiKey: string
+  body: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  // API key is optional — without it, TrustIn returns desensitized (masked) data
-  const url = apiKey
-    ? `${getBaseUrl()}/${endpoint}?apikey=${apiKey}`
-    : `${getBaseUrl()}/${endpoint}`;
+  const url = `${getBaseUrl()}${endpoint}`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "text/plain", "User-Agent": "amlclaw-web/1.0.0" },
-    body: JSON.stringify(data),
+    headers: { "Content-Type": "application/json", "User-Agent": "amlclaw-web/1.0.0" },
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
-    if (res.status === 401) throw new Error("Invalid authorization (Check API Key)");
     throw new Error(`TrustIn API error: ${res.status} ${res.statusText}`);
   }
-
   return res.json();
 }
 
-async function waitForTask(
-  taskId: number,
-  apiKey: string,
-  maxRetries = 30
-): Promise<boolean> {
+function checkBusiness(resp: Record<string, unknown>): void {
+  if (resp.code !== 0) {
+    throw new Error(`TrustIn API error: ${String(resp.msg ?? "unknown")}`);
+  }
+}
+
+async function pollStatus(requestId: number, token: string, maxRetries = 30): Promise<void> {
   for (let i = 0; i < maxRetries; i++) {
-    const res = await makeRequest("get_status", { task_id: taskId }, apiKey);
-    if (res.code === 0 && res.data === "finished") return true;
+    const res = await postJson("/investigatev2/get_query_status", { request_id: requestId });
+    const data = (res.data as Record<string, string>) || {};
+    const statField = token.toUpperCase() === "USDC" ? "token_usdc_stat" : "token_usdt_stat";
+    const stat = data[statField] ?? "";
+
+    if (stat === "finished") return;
+    if (stat === "failed") throw new Error(`Investigation task ${requestId} failed`);
+    if (stat === "") {
+      // Empty status with code:0 means request_id not found.
+      throw new Error(`Investigation task ${requestId} not found`);
+    }
     await new Promise((r) => setTimeout(r, 2000));
   }
-  return false;
+  throw new Error(`Investigation task ${requestId} timed out while processing.`);
+}
+
+async function fetchAllOpponents(
+  requestId: number,
+  token: string,
+): Promise<CompatOpponent[]> {
+  const pageSize = 200;
+  const all: CompatOpponent[] = [];
+  let page = 1;
+  for (;;) {
+    const res = await postJson("/investigatev2/get_opponents", {
+      request_id: requestId,
+      direction: 0,
+      token,
+      page,
+      page_size: pageSize,
+    });
+    checkBusiness(res);
+    const batch = (res.data as CompatOpponent[]) || [];
+    all.push(...batch);
+    const total = typeof res.total === "number" ? res.total : all.length;
+    if (all.length >= total || batch.length < pageSize) break;
+    page++;
+    if (page > 100) break; // hard cap to avoid runaway pagination
+  }
+  return all;
+}
+
+async function fetchPathsForSeqs(
+  requestId: number,
+  seqs: number[],
+  minTimestamp: number,
+  maxTimestamp: number,
+): Promise<Record<string, CompatPathRecord>> {
+  const result: Record<string, CompatPathRecord> = {};
+  const chunkSize = 100;
+  for (let i = 0; i < seqs.length; i += chunkSize) {
+    const chunk = seqs.slice(i, i + chunkSize);
+    const res = await postJson(
+      "/investigatev2/get_opponent_paths_with_amount_and_timestamp_range",
+      {
+        request_id: requestId,
+        seqs: chunk,
+        min_timestamp: minTimestamp,
+        max_timestamp: maxTimestamp,
+        // Antares gotcha: 0/negative is coerced to 1. Use a tiny positive value
+        // to effectively disable the filter.
+        min_amount: 0.000001,
+        temporal_mode: "backward_max",
+      },
+    );
+    checkBusiness(res);
+    Object.assign(result, (res.data as Record<string, CompatPathRecord>) || {});
+  }
+  return result;
+}
+
+async function fetchTargetSelfTags(chainName: string, address: string): Promise<CompatTag[]> {
+  try {
+    const res = await postJson("/query/get_tag_items_v2", {
+      chain_name: chainName,
+      address,
+    });
+    if (res.code !== 0) return [];
+    const data = res.data;
+    if (Array.isArray(data)) return data as CompatTag[];
+    // Some endpoints return zero-struct {} when no tags — normalize to [].
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Repackage a single compat path record into the legacy `{ direction, path }`
+ * shape. For `direction === -1` (inflow), the nodes are reversed so the target
+ * lands at the end of the array, matching the legacy extractor's assumptions.
+ */
+function repackagePath(rec: CompatPathRecord): {
+  direction: number;
+  path: { address: string; tags: CompatTag[]; amount: number }[];
+} {
+  const nodes = (rec.path ?? []).map((n) => ({
+    address: n.address,
+    tags: n.tags ?? [],
+    amount: typeof n.amount === "number" ? n.amount : 0,
+  }));
+
+  if (rec.direction === -1) {
+    nodes.reverse();
+  }
+  return { direction: rec.direction, path: nodes };
 }
 
 function processTagsPriority(rawGraph: unknown): {
@@ -107,9 +263,16 @@ function processTagsPriority(rawGraph: unknown): {
   } else if (typeof rawGraph === "object" && rawGraph !== null) {
     const g = rawGraph as Record<string, unknown>;
     processTags((g.tags as unknown[]) || []);
-    for (const node of (g.path as unknown[]) || []) {
-      if (typeof node === "object" && node !== null) {
-        processTags(((node as Record<string, unknown>).tags as unknown[]) || []);
+    const paths = (g.paths as unknown[]) || [];
+    for (const flow of paths) {
+      if (typeof flow === "object" && flow !== null) {
+        const f = flow as Record<string, unknown>;
+        processTags((f.tags as unknown[]) || []);
+        for (const node of (f.path as unknown[]) || []) {
+          if (typeof node === "object" && node !== null) {
+            processTags(((node as Record<string, unknown>).tags as unknown[]) || []);
+          }
+        }
       }
     }
   }
@@ -134,16 +297,17 @@ function processTagsPriority(rawGraph: unknown): {
 export async function kyaProDetect(
   chainName: string,
   address: string,
-  apiKey: string,
-  opts: DetectOptions = {}
+  // Legacy parameter — kept for backwards compatibility with callers; the new
+  // public compat API does not require authentication.
+  _apiKey: string,
+  opts: DetectOptions = {},
 ): Promise<KYAResult> {
   // Demo mode — return mock screening result
   if (isDemoMode()) {
-    await new Promise((r) => setTimeout(r, 1500)); // Simulate API delay
+    await new Promise((r) => setTimeout(r, 1500));
     try {
       const demoPath = path.join(process.cwd(), "data", "demo", "screening-result.json");
       const raw = JSON.parse(fs.readFileSync(demoPath, "utf-8"));
-      // Override address in response to match the requested one
       if (raw.data) raw.data.address = address;
       if (raw.data) raw.data.chain_name = chainName;
       const rawGraph = raw.data?.graph ?? raw.data ?? {};
@@ -172,58 +336,74 @@ export async function kyaProDetect(
     throw new Error(`Unsupported chain: ${chainName}`);
   }
 
-  const submitPayload: Record<string, unknown> = {
-    chain_name: CHAIN_MAPPING[chainName],
-    address,
-    inflow_hops: opts.inflowHops ?? 3,
-    outflow_hops: opts.outflowHops ?? 3,
-    max_nodes_per_hop: opts.maxNodesPerHop ?? 100,
-  };
-
-  if (opts.minTimestamp) submitPayload.min_timestamp = opts.minTimestamp;
-  if (opts.maxTimestamp) submitPayload.max_timestamp = opts.maxTimestamp;
+  const token = getToken();
+  const inflowHops = opts.inflowHops ?? 3;
+  const outflowHops = opts.outflowHops ?? 3;
+  const maxNodesPerHop = opts.maxNodesPerHop ?? 100;
+  const minTimestamp = opts.minTimestamp ?? 0;
+  const maxTimestamp = opts.maxTimestamp ?? 0;
 
   try {
-    const submitRes = await makeRequest("submit_task", submitPayload, apiKey);
-    const taskId = submitRes.data as number;
-    if (submitRes.code !== 0 || !taskId) {
-      throw new Error(`Failed to submit task: ${submitRes.msg}`);
+    // 1. Submit task
+    const submitRes = await postJson("/investigatev2/submit_query_task_v2", {
+      chain_name: CHAIN_MAPPING[chainName],
+      token,
+      address,
+      inflow_hops: inflowHops,
+      outflow_hops: outflowHops,
+      max_nodes_per_hop: maxNodesPerHop,
+    });
+    if (submitRes.code !== 0 || typeof submitRes.data !== "number") {
+      throw new Error(`Failed to submit task: ${String(submitRes.msg ?? "no request_id")}`);
     }
+    const requestId = submitRes.data;
 
-    if (!(await waitForTask(taskId, apiKey))) {
-      throw new Error(`Task ${taskId} timed out while processing.`);
-    }
+    // 2. Poll until finished
+    await pollStatus(requestId, token);
 
-    const resultPayload = { task_id: taskId, token: "usdt" };
-    const finalRes = await makeRequest("get_result", resultPayload, apiKey);
+    // 3. Fetch all opponents (both directions, paginated)
+    const opponents = await fetchAllOpponents(requestId, token);
 
-    if (finalRes.code === 0) {
-      let rawData = finalRes.data;
-      if (typeof rawData === "string") {
-        try { rawData = JSON.parse(rawData); } catch { rawData = {}; }
-      }
+    // 4. Batch-fetch enriched paths
+    const seqs = opponents.map((o) => o.seq).filter((s) => typeof s === "number");
+    const pathMap = seqs.length
+      ? await fetchPathsForSeqs(requestId, seqs, minTimestamp, maxTimestamp)
+      : {};
 
-      let rawGraph: unknown;
-      if (typeof rawData === "object" && rawData !== null) {
-        const d = rawData as Record<string, unknown>;
-        rawGraph = d.graph ?? d.paths ?? d;
-      } else {
-        rawGraph = rawData;
-      }
+    // 5. Fetch target self-tags
+    const targetTags = await fetchTargetSelfTags(CHAIN_MAPPING[chainName], address);
 
-      const { riskScore, riskLevel, recommendation } = processTagsPriority(rawGraph);
+    // 6. Repackage into legacy shape
+    const paths = Object.values(pathMap).map(repackagePath);
 
-      return {
-        riskScore,
-        riskLevel,
-        recommendation,
-        details: finalRes as Record<string, unknown>,
-        rawResponse: finalRes as Record<string, unknown>,
-        error: null,
-      };
-    } else {
-      throw new Error(`Failed to fetch result: ${finalRes.msg || "Unknown API error"}`);
-    }
+    const legacyData = {
+      tags: targetTags,
+      paths,
+    };
+
+    const wrappedResponse = {
+      code: 0,
+      msg: "success",
+      data: {
+        task_id: requestId,
+        chain_name: chainName,
+        address,
+        status: "finished",
+        tags: legacyData.tags,
+        paths: legacyData.paths,
+      },
+    };
+
+    const { riskScore, riskLevel, recommendation } = processTagsPriority(legacyData);
+
+    return {
+      riskScore,
+      riskLevel,
+      recommendation,
+      details: wrappedResponse,
+      rawResponse: wrappedResponse,
+      error: null,
+    };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return {

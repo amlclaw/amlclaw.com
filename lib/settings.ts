@@ -20,6 +20,8 @@ export interface Settings {
   blockchain: {
     trustinApiKey: string;
     trustinBaseUrl: string;
+    /** Stablecoin token used for path investigation (USDT or USDC). */
+    trustinToken: string;
   };
 
   // Screening Defaults
@@ -87,7 +89,8 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   blockchain: {
     trustinApiKey: "",
-    trustinBaseUrl: "https://api.trustin.info/api/v2/investigate",
+    trustinBaseUrl: "https://platform.trustin.bond/api",
+    trustinToken: "USDT",
   },
   screening: {
     defaultInflowHops: 3,
@@ -201,6 +204,14 @@ export function getTrustInApiKey(): string {
 export function getTrustInBaseUrl(): string {
   const settings = getSettings();
   return settings.blockchain.trustinBaseUrl || DEFAULT_SETTINGS.blockchain.trustinBaseUrl;
+}
+
+/**
+ * Get the configured stablecoin token (USDT/USDC) for path investigation.
+ */
+export function getTrustInToken(): string {
+  const settings = getSettings();
+  return settings.blockchain.trustinToken || DEFAULT_SETTINGS.blockchain.trustinToken;
 }
 
 /**
