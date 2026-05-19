@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useCallback, useState } from "react";
+import { useMemo, useCallback, useState, useEffect } from "react";
 import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   type Node,
   type Edge,
   type NodeProps,
@@ -309,6 +308,21 @@ function applyDagreLayout(
 /* ─── Main Component ─── */
 export default function FlowGraph({ entities, target, scenario }: FlowGraphProps) {
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Esc closes fullscreen
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setIsFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    // Prevent body scroll while fullscreen
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isFullscreen]);
 
   const { nodes, edges } = useMemo(() => {
     const { nodes: gn, edges: ge } = buildGraphData(entities, target);
@@ -329,8 +343,17 @@ export default function FlowGraph({ entities, target, scenario }: FlowGraphProps
     );
   }
 
+  const containerStyle: React.CSSProperties = isFullscreen
+    ? {
+        position: "fixed",
+        top: 0, left: 0, right: 0, bottom: 0,
+        zIndex: 1000,
+        background: "#06060f",
+      }
+    : { position: "relative" };
+
   return (
-    <div className="flow-graph-container" style={{ position: "relative" }}>
+    <div className={isFullscreen ? undefined : "flow-graph-container"} style={containerStyle}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -349,18 +372,6 @@ export default function FlowGraph({ entities, target, scenario }: FlowGraphProps
           showInteractive={false}
           position="bottom-left"
         />
-        <MiniMap
-          nodeColor={(n) => {
-            const d = n.data as Record<string, unknown>;
-            if (d.isTarget) return "#6366f1";
-            const rl = (d.riskLevel as string) || "";
-            return RISK_DOT[rl] || "#2a2a32";
-          }}
-          maskColor="rgba(9,9,11,0.7)"
-          style={{ background: "#0f0f12", border: "1px solid #1e1e24", borderRadius: 6 }}
-          pannable
-          zoomable
-        />
       </ReactFlow>
 
       {/* Scenario badge */}
@@ -375,14 +386,46 @@ export default function FlowGraph({ entities, target, scenario }: FlowGraphProps
         </div>
       )}
 
-      {/* Node count badge */}
+      {/* Top-right cluster of badges */}
       <div style={{
         position: "absolute", top: 12, right: 12,
-        fontSize: "0.6rem", color: "#636370",
-        background: "#0f0f12", border: "1px solid #1e1e24",
-        padding: "3px 8px", borderRadius: 4,
+        display: "flex", alignItems: "center", gap: 8,
       }}>
-        {nodes.length} nodes &middot; {edges.length} edges
+        <div style={{
+          fontSize: "0.6rem", color: "#636370",
+          background: "#0f0f12", border: "1px solid #1e1e24",
+          padding: "3px 8px", borderRadius: 4,
+        }}>
+          {nodes.length} nodes &middot; {edges.length} edges
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsFullscreen((v) => !v)}
+          title={isFullscreen ? "Exit fullscreen (Esc)" : "Enter fullscreen"}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 26, height: 26,
+            background: "#0f0f12", border: "1px solid #1e1e24",
+            borderRadius: 4, color: "#a0a0ab", cursor: "pointer",
+            padding: 0,
+          }}
+        >
+          {isFullscreen ? (
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+              <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+              <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+              <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 7V3h4" />
+              <path d="M21 7V3h-4" />
+              <path d="M3 17v4h4" />
+              <path d="M21 17v4h-4" />
+            </svg>
+          )}
+        </button>
       </div>
 
       {/* Detail panel */}
