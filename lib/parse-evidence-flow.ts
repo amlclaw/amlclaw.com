@@ -28,6 +28,20 @@ export interface GraphNode {
   matchedRules?: string[];
   /** Hop distance from target */
   hopDistance?: number;
+  /** True when this node represents a collapsed group of same-kind risk sources. */
+  isCluster?: boolean;
+  /** Number of original risk-source nodes folded into this cluster. */
+  memberCount?: number;
+  /** Original member descriptors, ordered by hop distance asc, address asc. */
+  members?: ClusterMember[];
+}
+
+export interface ClusterMember {
+  address: string;
+  hopDistance?: number;
+  matchedRules?: string[];
+  /** Raw outgoing-edge amount string for this member, e.g. "258000 USD". */
+  amount?: string;
 }
 
 export interface GraphEdge {
