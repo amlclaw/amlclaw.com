@@ -69,10 +69,10 @@ function happyPathSequence(): StubResponse[] {
           query_address: "QUERY",
           opponent_address: "IN1",
           path: [
-            // New API ordering: query at deep=0, opponent at deep=N regardless of direction
-            { address: "QUERY", deep: 0, amount: 0, tags: [] },
+            // For inflow the API returns opponent (source) first, target last.
+            { address: "IN1", deep: 0, amount: 0, tags: [{ primary_category: "Sanctioned Entity", priority: 1 }] },
             { address: "MID2", deep: 1, amount: 50, tags: [] },
-            { address: "IN1", deep: 2, amount: 50, tags: [{ primary_category: "Sanctioned Entity", priority: 1 }] },
+            { address: "QUERY", deep: 2, amount: 50, tags: [] },
           ],
         },
       },
@@ -144,13 +144,15 @@ describe("trustin-api", () => {
       expect(outflow.path.map((n) => n.address)).toEqual(["QUERY", "MID1", "OUT1"]);
     });
 
-    it("reverses inflow path so target lands at the end", async () => {
+    it("preserves inflow path order from the API (source → target)", async () => {
       mockFetchSequence(...happyPathSequence());
       const result = await kyaProDetect("Tron", "QUERY", "");
       const details = result.details as Record<string, unknown>;
       const data = details.data as Record<string, unknown>;
       const paths = data.paths as Array<{ direction: number; path: Array<{ address: string }> }>;
       const inflow = paths.find((p) => p.direction === -1)!;
+      // API returns inflow as opponent-first → target-last, which matches the
+      // legacy extractor's expectation. No reversal needed.
       expect(inflow.path.map((n) => n.address)).toEqual(["IN1", "MID2", "QUERY"]);
     });
 

@@ -221,8 +221,15 @@ async function fetchTargetSelfTags(chainName: string, address: string): Promise<
 
 /**
  * Repackage a single compat path record into the legacy `{ direction, path }`
- * shape. For `direction === -1` (inflow), the nodes are reversed so the target
- * lands at the end of the array, matching the legacy extractor's assumptions.
+ * shape.
+ *
+ * The new API already returns paths in the order the legacy extractor expects:
+ *   direction=1  (outflow): path[0]=target, path[N]=opponent
+ *   direction=-1 (inflow):  path[0]=opponent, path[N]=target
+ *
+ * So no reversal is needed. The `amount` on each node represents the edge
+ * coming INTO that node from the previous node in array order, which is also
+ * what `formatEvidencePath` in extract-risk-paths.ts expects.
  */
 function repackagePath(rec: CompatPathRecord): {
   direction: number;
@@ -233,10 +240,6 @@ function repackagePath(rec: CompatPathRecord): {
     tags: n.tags ?? [],
     amount: typeof n.amount === "number" ? n.amount : 0,
   }));
-
-  if (rec.direction === -1) {
-    nodes.reverse();
-  }
   return { direction: rec.direction, path: nodes };
 }
 
