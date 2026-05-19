@@ -393,18 +393,24 @@ export default function FlowGraph({ entities, target, scenario }: FlowGraphProps
 
 /* ─── Detail Panel (typed to avoid unknown-as-ReactNode) ─── */
 function DetailPanel({ data, onClose }: { data: Record<string, unknown>; onClose: () => void }) {
+  const isCluster = Boolean(data.isCluster);
   const address = String(data.address || "");
   const tags: string[] = Array.isArray(data.tags) ? (data.tags as string[]) : [];
   const matchedRules: string[] = Array.isArray(data.matchedRules) ? (data.matchedRules as string[]) : [];
   const tagDetail = (typeof data.tagDetail === "object" && data.tagDetail !== null) ? (data.tagDetail as Record<string, string>) : null;
   const hopDistance = typeof data.hopDistance === "number" ? data.hopDistance : null;
-  const nodeType = data.isTarget ? "Target Node" : data.isRiskSource ? "Risk Source" : "Intermediary";
+  const memberCount = typeof data.memberCount === "number" ? data.memberCount : 0;
+  const members: Array<Record<string, unknown>> = Array.isArray(data.members) ? (data.members as Array<Record<string, unknown>>) : [];
+
+  const nodeType = isCluster
+    ? `Cluster · ${tags[0] || "untagged"} · ${memberCount} addresses`
+    : data.isTarget ? "Target Node" : data.isRiskSource ? "Risk Source" : "Intermediary";
 
   return (
     <div style={{
       position: "absolute", bottom: 12, right: 12,
       background: "#0f0f12", border: "1px solid #2a2a32", borderRadius: 8,
-      padding: "12px 16px", maxWidth: 320, fontSize: "0.694rem",
+      padding: "12px 16px", maxWidth: 360, fontSize: "0.694rem",
       boxShadow: "0 8px 32px rgba(0,0,0,0.5)", zIndex: 10,
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -416,11 +422,13 @@ function DetailPanel({ data, onClose }: { data: Record<string, unknown>; onClose
         }}>&times;</button>
       </div>
 
-      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.6rem", wordBreak: "break-all", color: "#a0a0ab", marginBottom: 6, lineHeight: 1.5 }}>
-        {address}
-      </div>
+      {!isCluster && (
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "0.6rem", wordBreak: "break-all", color: "#a0a0ab", marginBottom: 6, lineHeight: 1.5 }}>
+          {address}
+        </div>
+      )}
 
-      {tags.length > 0 && (
+      {!isCluster && tags.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 6 }}>
           {tags.map((t, i) => (
             <span key={i} style={{
@@ -431,7 +439,7 @@ function DetailPanel({ data, onClose }: { data: Record<string, unknown>; onClose
         </div>
       )}
 
-      {tagDetail && (
+      {!isCluster && tagDetail && (
         <div style={{ fontSize: "0.6rem", color: "#636370", lineHeight: 1.7 }}>
           {tagDetail.primary_category && <div>Category: <span style={{ color: "#a0a0ab" }}>{tagDetail.primary_category}</span></div>}
           {tagDetail.secondary_category && <div>Sub: <span style={{ color: "#a0a0ab" }}>{tagDetail.secondary_category}</span></div>}
@@ -443,16 +451,47 @@ function DetailPanel({ data, onClose }: { data: Record<string, unknown>; onClose
         </div>
       )}
 
-      {hopDistance !== null && (
+      {!isCluster && hopDistance !== null && (
         <div style={{ fontSize: "0.6rem", color: "#636370", marginTop: 4 }}>
           Hop Distance: <span style={{ color: "#a0a0ab", fontFamily: "'JetBrains Mono', monospace" }}>{hopDistance}</span>
+        </div>
+      )}
+
+      {isCluster && (
+        <div style={{
+          maxHeight: 280, overflowY: "auto",
+          border: "1px solid #1e1e24", borderRadius: 4,
+          background: "#0a0a0e",
+        }}>
+          {members.map((m, idx) => {
+            const memberAddr = String(m.address || "");
+            const memberHop = typeof m.hopDistance === "number" ? m.hopDistance : null;
+            const memberAmount = typeof m.amount === "string" ? m.amount : "";
+            const memberRules: string[] = Array.isArray(m.matchedRules) ? (m.matchedRules as string[]) : [];
+            return (
+              <div key={memberAddr || idx} style={{
+                padding: "6px 8px",
+                borderBottom: idx === members.length - 1 ? "none" : "1px solid #15151a",
+                fontSize: "0.6rem",
+              }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", color: "#a0a0ab", wordBreak: "break-all" }}>
+                  {memberAddr}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 3, color: "#636370" }}>
+                  {memberHop !== null && <span>hop {memberHop}</span>}
+                  {memberAmount && <span>{formatEdgeAmount(memberAmount)}</span>}
+                  {memberRules.length > 0 && <span>{memberRules.length} rule{memberRules.length !== 1 ? "s" : ""}</span>}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
       {matchedRules.length > 0 && (
         <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid #1e1e24" }}>
           <div style={{ fontSize: "0.55rem", color: "#636370", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 3 }}>
-            Matched Rules
+            {isCluster ? "Unique Matched Rules" : "Matched Rules"}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
             {matchedRules.map((r) => (
