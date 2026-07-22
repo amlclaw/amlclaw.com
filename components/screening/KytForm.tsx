@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { showToast } from "@/lib/utils";
+import { detectChainFromTxId } from "@/lib/chain-detect";
 
 interface KytFormProps {
   onJobStarted: (jobId: string) => void;
@@ -102,7 +103,16 @@ export default function KytForm({ onJobStarted, onLoading }: KytFormProps) {
             type="text"
             className="screening-address-field"
             value={txId}
-            onChange={(e) => setTxId(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setTxId(v);
+              // Auto-detect chain from tx hash format (0x+64hex = EVM, bare 64hex = Tron)
+              const detected = detectChainFromTxId(v);
+              if (detected && detected !== chain) {
+                setChain(detected);
+                if (detected === "Tron") setToken("usdt");
+              }
+            }}
             placeholder="Enter transaction hash..."
             required
           />

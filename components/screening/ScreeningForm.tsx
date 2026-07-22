@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { showToast } from "@/lib/utils";
+import { detectChainFromAddress } from "@/lib/chain-detect";
 
 interface ScreeningFormProps {
   onJobStarted: (jobId: string) => void;
@@ -93,7 +94,16 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
             type="text"
             className="screening-address-field"
             value={address}
-            onChange={(e) => setAddress(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setAddress(v);
+              // Auto-detect chain from address format; manual select still overrides
+              const detected = detectChainFromAddress(v);
+              if (detected && detected !== chain) {
+                setChain(detected);
+                if (detected === "Tron") setToken("usdt");
+              }
+            }}
             placeholder="Enter blockchain address..."
             required
           />

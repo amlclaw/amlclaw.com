@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import PageGuide from "@/components/shared/PageGuide";
 import { showToast, shortenAddr, formatTime } from "@/lib/utils";
+import { detectChainFromAddress, detectChainFromTxId } from "@/lib/chain-detect";
 import { riskColorVar, riskLabel } from "@/lib/risk-ui";
 import type { MonitorTask, MonitorRun } from "@/lib/types";
 
@@ -278,7 +279,18 @@ function CreateModal({ type, onClose, onCreated }: { type: "address" | "kyt"; on
               <>
                 <div>
                   <label className="label">Address to watch</label>
-                  <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Blockchain address" required />
+                  <input
+                    className="input"
+                    value={address}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setAddress(v);
+                      const detected = detectChainFromAddress(v);
+                      if (detected) setChain(detected);
+                    }}
+                    placeholder="Blockchain address"
+                    required
+                  />
                 </div>
                 <div>
                   <label className="label">Minimum transfer amount (token units)</label>
@@ -292,7 +304,18 @@ function CreateModal({ type, onClose, onCreated }: { type: "address" | "kyt"; on
               <>
                 <div>
                   <label className="label">Transaction hash</label>
-                  <input className="input" value={txId} onChange={(e) => setTxId(e.target.value)} placeholder="Tx hash" required />
+                  <input
+                    className="input"
+                    value={txId}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setTxId(v);
+                      const detected = detectChainFromTxId(v);
+                      if (detected) setChain(detected);
+                    }}
+                    placeholder="Tx hash"
+                    required
+                  />
                 </div>
                 <div>
                   <label className="label">Watch side</label>
