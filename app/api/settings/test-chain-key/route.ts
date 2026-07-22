@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getEtherscanApiKey, getTrongridApiKey } from "@/lib/settings";
+import { getEtherscanApiKey, getTrongridApiKey, getWidthApiKey, getWidthBaseUrl } from "@/lib/settings";
 
 /**
- * Test an Etherscan / TronGrid API key with a cheap real request.
+ * Test a Width.info / Etherscan / TronGrid API key with a cheap real request.
  *
- * Body: { provider: "etherscan" | "trongrid", apiKey?: string }
+ * Body: { provider: "width" | "etherscan" | "trongrid", apiKey?: string, baseUrl?: string }
  * If apiKey is empty or a masked value ("*…"), the stored key is used.
  */
 export async function POST(req: Request) {
@@ -12,7 +12,59 @@ export async function POST(req: Request) {
   const provider = body.provider;
   let apiKey: string = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
   if (!apiKey || apiKey.startsWith("*")) {
-    apiKey = provider === "etherscan" ? getEtherscanApiKey() : getTrongridApiKey();
+    apiKey =
+      provider === "etherscan" ? getEtherscanApiKey()
+      : provider === "trongrid" ? getTrongridApiKey()
+      : getWidthApiKey();
+  }
+
+  if (provider === "width") {
+    if (!apiKey) {
+      return NextResponse.json({ ok: false, detail: "No Width.info API key configured" });
+    }
+    const baseUrl = (typeof body.baseUrl === "string" && body.baseUrl.trim()
+      ? body.baseUrl.trim()
+      : getWidthBaseUrl()
+    ).replace(/\/+$/, "");
+    try {
+      // Cheap probe: v3 async submit returns a job_id immediately (no waiting
+      // for the screen); an invalid key fails fast with 401 "Invalid API key".
+      const res = await fetch(
+        `${baseUrl}/api/v3/screen/kya?apikey=${encodeURIComponent(apiKey)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chain_name: "Tron",
+            address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", // USDT contract
+            inflow_hops: 0,
+            outflow_hops: 0,
+            max_nodes_per_hop: 10,
+            max_opponent_paths: 1,
+            mode: "async",
+          }),
+          signal: AbortSignal.timeout(30_000),
+        },
+      );
+      const json = (await res.json().catch(() => null)) as
+        | { code?: number; msg?: string; data?: { job_id?: number } }
+        | null;
+      if (res.status === 401 || res.status === 403 || json?.code === -1) {
+        return NextResponse.json({
+          ok: false,
+          detail: `Width API rejected the key: ${json?.msg ?? `HTTP ${res.status}`}`,
+        });
+      }
+      if (res.ok && json?.code === 0 && json.data?.job_id) {
+        return NextResponse.json({ ok: true, detail: "OK — Width API key valid" });
+      }
+      return NextResponse.json({
+        ok: false,
+        detail: `Width API error: ${json?.msg ?? `HTTP ${res.status}`}`,
+      });
+    } catch (e) {
+      return NextResponse.json({ ok: false, detail: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   if (provider === "etherscan") {
@@ -67,5 +119,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ detail: "provider must be 'etherscan' or 'trongrid'" }, { status: 400 });
+  return NextResponse.json({ detail: "provider must be 'width', 'etherscan' or 'trongrid'" }, { status: 400 });
 }

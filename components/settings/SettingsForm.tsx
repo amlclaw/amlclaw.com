@@ -93,14 +93,21 @@ export default function SettingsForm() {
     setSettings((s) => s ? { ...s, [section]: { ...s[section], [field]: value } } : s);
   };
 
-  const testChainKey = async (provider: "etherscan" | "trongrid") => {
+  const testChainKey = async (provider: "width" | "etherscan" | "trongrid") => {
     setKeyTests((t) => ({ ...t, [provider]: { testing: true } }));
     try {
-      const apiKey = provider === "etherscan" ? settings.api.etherscanApiKey : settings.api.trongridApiKey;
+      const apiKey =
+        provider === "etherscan" ? settings.api.etherscanApiKey
+        : provider === "trongrid" ? settings.api.trongridApiKey
+        : settings.api.widthApiKey;
       const res = await fetch("/api/settings/test-chain-key", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey }),
+        body: JSON.stringify({
+          provider,
+          apiKey,
+          ...(provider === "width" ? { baseUrl: settings.api.widthBaseUrl } : {}),
+        }),
       });
       const json = await res.json();
       setKeyTests((t) => ({ ...t, [provider]: { ok: !!json.ok, detail: json.detail } }));
@@ -116,14 +123,31 @@ export default function SettingsForm() {
         title="API Keys"
         description="Width.info powers KYA/KYT screening (rulesets run server-side). Etherscan / TronGrid feed address monitoring — without your own keys, shared defaults are used and may be rate-limited."
       >
-        <Field label="Width.info API Key" hint={<span>Required. Get a free key at <a href="https://width.info/api-keys" target="_blank" rel="noopener" style={{ color: "var(--primary-500)" }}>width.info/api-keys</a></span>}>
-          <input
-            className="input"
-            type="password"
-            value={settings.api.widthApiKey}
-            onChange={(e) => set("api", "widthApiKey", e.target.value)}
-            placeholder="Enter width.info API key"
-          />
+        <Field
+          label="Width.info API Key"
+          hint={<KeyTestHint state={keyTests.width} fallback={<span>Required. Get a free key at <a href="https://width.info/api-keys" target="_blank" rel="noopener" style={{ color: "var(--primary-500)" }}>width.info/api-keys</a></span>} />}
+        >
+          <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+            <input
+              className="input"
+              type="password"
+              value={settings.api.widthApiKey}
+              onChange={(e) => {
+                set("api", "widthApiKey", e.target.value);
+                setKeyTests((t) => ({ ...t, width: {} }));
+              }}
+              placeholder="Enter width.info API key"
+              style={{ flex: 1 }}
+            />
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              onClick={() => testChainKey("width")}
+              disabled={keyTests.width?.testing}
+            >
+              {keyTests.width?.testing ? "Testing..." : "Test"}
+            </button>
+          </div>
         </Field>
         <Field label="API Base URL">
           <input
@@ -294,7 +318,7 @@ function Section({ title, description, children }: { title: string; description?
 }
 
 /** Shows the test result under a key field; falls back to the static hint. */
-function KeyTestHint({ state, fallback }: { state?: { testing?: boolean; ok?: boolean; detail?: string }; fallback: string }) {
+function KeyTestHint({ state, fallback }: { state?: { testing?: boolean; ok?: boolean; detail?: string }; fallback: React.ReactNode }) {
   if (state?.detail) {
     return (
       <span style={{ color: state.ok ? "var(--success)" : "var(--danger)", fontWeight: 600 }}>
