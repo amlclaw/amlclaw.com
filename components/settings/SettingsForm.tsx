@@ -46,6 +46,7 @@ export default function SettingsForm() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [keyTests, setKeyTests] = useState<Record<string, { testing?: boolean; ok?: boolean; detail?: string }>>({});
 
   useEffect(() => {
     fetch("/api/settings")
@@ -92,6 +93,22 @@ export default function SettingsForm() {
     setSettings((s) => s ? { ...s, [section]: { ...s[section], [field]: value } } : s);
   };
 
+  const testChainKey = async (provider: "etherscan" | "trongrid") => {
+    setKeyTests((t) => ({ ...t, [provider]: { testing: true } }));
+    try {
+      const apiKey = provider === "etherscan" ? settings.api.etherscanApiKey : settings.api.trongridApiKey;
+      const res = await fetch("/api/settings/test-chain-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, apiKey }),
+      });
+      const json = await res.json();
+      setKeyTests((t) => ({ ...t, [provider]: { ok: !!json.ok, detail: json.detail } }));
+    } catch (e) {
+      setKeyTests((t) => ({ ...t, [provider]: { ok: false, detail: e instanceof Error ? e.message : "Request failed" } }));
+    }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)", maxWidth: 720 }}>
       {/* ── API Keys ── */}
@@ -117,23 +134,51 @@ export default function SettingsForm() {
           />
         </Field>
         <div style={{ display: "flex", gap: "var(--sp-3)" }}>
-          <Field label="Etherscan API Key" hint="Optional — empty = rate-limited default" style={{ flex: 1 }}>
-            <input
-              className="input"
-              type="password"
-              value={settings.api.etherscanApiKey}
-              onChange={(e) => set("api", "etherscanApiKey", e.target.value)}
-              placeholder="Optional"
-            />
+          <Field label="Etherscan API Key" hint={<KeyTestHint state={keyTests.etherscan} fallback="Optional — empty = rate-limited default" />} style={{ flex: 1 }}>
+            <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+              <input
+                className="input"
+                type="password"
+                value={settings.api.etherscanApiKey}
+                onChange={(e) => {
+                  set("api", "etherscanApiKey", e.target.value);
+                  setKeyTests((t) => ({ ...t, etherscan: {} }));
+                }}
+                placeholder="Optional"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={() => testChainKey("etherscan")}
+                disabled={keyTests.etherscan?.testing}
+              >
+                {keyTests.etherscan?.testing ? "Testing..." : "Test"}
+              </button>
+            </div>
           </Field>
-          <Field label="TronGrid API Key" hint="Optional — empty = rate-limited default" style={{ flex: 1 }}>
-            <input
-              className="input"
-              type="password"
-              value={settings.api.trongridApiKey}
-              onChange={(e) => set("api", "trongridApiKey", e.target.value)}
-              placeholder="Optional"
-            />
+          <Field label="TronGrid API Key" hint={<KeyTestHint state={keyTests.trongrid} fallback="Optional — empty = rate-limited default" />} style={{ flex: 1 }}>
+            <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+              <input
+                className="input"
+                type="password"
+                value={settings.api.trongridApiKey}
+                onChange={(e) => {
+                  set("api", "trongridApiKey", e.target.value);
+                  setKeyTests((t) => ({ ...t, trongrid: {} }));
+                }}
+                placeholder="Optional"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={() => testChainKey("trongrid")}
+                disabled={keyTests.trongrid?.testing}
+              >
+                {keyTests.trongrid?.testing ? "Testing..." : "Test"}
+              </button>
+            </div>
           </Field>
         </div>
       </Section>
@@ -246,6 +291,18 @@ function Section({ title, description, children }: { title: string; description?
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>{children}</div>
     </div>
   );
+}
+
+/** Shows the test result under a key field; falls back to the static hint. */
+function KeyTestHint({ state, fallback }: { state?: { testing?: boolean; ok?: boolean; detail?: string }; fallback: string }) {
+  if (state?.detail) {
+    return (
+      <span style={{ color: state.ok ? "var(--success)" : "var(--danger)", fontWeight: 600 }}>
+        {state.ok ? "✓ " : "✗ "}{state.detail}
+      </span>
+    );
+  }
+  return <>{fallback}</>;
 }
 
 function Field({ label, hint, style, children }: { label: string; hint?: React.ReactNode; style?: React.CSSProperties; children: React.ReactNode }) {
