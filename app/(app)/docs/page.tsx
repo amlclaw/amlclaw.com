@@ -46,7 +46,10 @@ export default function ApiDocsPage() {
         <Table
           head={[tr("概念", "Concept"), tr("说明", "Description")]}
           rows={[
-            [tr("风险等级", "Risk levels"), "low → medium → high → critical"],
+            [tr("风险等级", "Risk levels"), tr(
+              "low → medium → high → critical。riskScore 与等级 1:1 映射：critical=90 / high=80 / medium=60 / low=10；riskScore=0 仅出现在无任何规则命中时（干净）——「low + 0」= 干净，「low + 10」= 确有 low 级规则命中",
+              "low → medium → high → critical. riskScore maps 1:1: critical=90 / high=80 / medium=60 / low=10; 0 only when NO rule triggered (clean) — 'low + 0' = clean, 'low + 10' = a low-severity rule actually fired"
+            )],
             [tr("处置动作", "Actions"), tr("block（拦截）/ review（人工复核）/ alert（告警）/ monitor（持续观察）", "block / review / alert / monitor")],
             ["ruleset_id", tr("服务端规则集 ID。0 = 内置默认（KYA 默认集；KYT 按方向用 KYT-IN / KYT-OUT 内置集）。规则集在 width.info 平台管理。", "Server-side ruleset id. 0 = builtin default (KYA default; KYT uses KYT-IN / KYT-OUT builtins per direction). Rulesets are managed on width.info.")],
             [tr("异步任务", "Async jobs"), tr("筛查接口立即返回 job_id，客户端每 3 秒轮询任务接口直到 status 为 completed 或 error。", "Screening endpoints return a job_id immediately; poll the job endpoint every ~3s until status is completed or error.")],
@@ -90,7 +93,7 @@ export default function ApiDocsPage() {
         <Table
           head={[tr("字段", "Field"), tr("说明", "Description")]}
           rows={[
-            ["risk / riskScore", tr("综合风险等级与 0–100 分值", "Overall risk level and 0–100 score")],
+            ["risk / riskScore", tr("综合风险等级与分值（critical=90/high=80/medium=60/low=10，0=无命中）", "Overall risk level and score (critical=90/high=80/medium=60/low=10; 0 = no hits)")],
             ["riskReason", tr("最高风险命中的人类可读说明", "Human-readable summary of the top finding")],
             ["addressIdentifications[]", tr("地址自身身份命中（如地址本身被制裁）", "Identity-level findings (e.g. the address itself is sanctioned)")],
             ["exposures[]", tr("按类别/方向聚合的风险敞口金额", "Aggregated exposure amounts by category and direction")],

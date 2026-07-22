@@ -331,7 +331,10 @@ function ResultContainer({ children }: { children: React.ReactNode }) {
 }
 
 export function RiskBadge({ level, score }: { level: string; score?: number }) {
-  const color = riskColorVar(level);
+  // Per V3 semantics: riskScore 0 = no rule triggered at all (clean);
+  // "low + 10" means a low-severity rule actually fired.
+  const isClean = score === 0;
+  const color = isClean ? "var(--success)" : riskColorVar(level);
   return (
     <div
       style={{
@@ -341,9 +344,9 @@ export function RiskBadge({ level, score }: { level: string; score?: number }) {
         background: "var(--surface-2)", color, border: `1px solid ${color}`,
       }}
     >
-      {riskLabel(level)}{typeof score === "number" ? ` · ${score}` : ""}
+      {isClean ? "Clean" : `${riskLabel(level)}${typeof score === "number" ? ` · ${score}` : ""}`}
       <span style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 2, opacity: 0.8 }}>
-        Risk Level
+        {isClean ? "No Rules Triggered" : "Risk Level"}
       </span>
     </div>
   );

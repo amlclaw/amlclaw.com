@@ -79,6 +79,11 @@ export interface KyaScreenResult {
   address: string;
   chain: string;
   risk: string; // low | medium | high | critical
+  /**
+   * Mapped 1:1 from risk level: critical=90, high=80, medium=60, low=10.
+   * 0 ONLY when no rule triggered — "low + 0" = clean, "low + 10" = a
+   * low-severity rule actually fired.
+   */
   riskScore: number;
   riskReason: string;
   cluster: { name: string; category: string };
@@ -258,6 +263,25 @@ function asArray<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
 
+/**
+ * Normalize one path node. The docs declare pathNodes as string[] (ordered
+ * addresses opponent → target) but the live API returns rich objects
+ * {address, amount, deep, tags[]}. Accept both shapes.
+ * (Exported for unit tests.)
+ */
+export function normalizePathNode(n: unknown, index: number): WidthPathNode {
+  if (typeof n === "string") {
+    return { address: n, amount: 0, deep: index, tags: [] };
+  }
+  const o = (n ?? {}) as Record<string, unknown>;
+  return {
+    address: String(o.address ?? ""),
+    amount: Number(o.amount ?? 0),
+    deep: Number(o.deep ?? index),
+    tags: asArray<WidthTag>(o.tags),
+  };
+}
+
 function normalizeHit(raw: Record<string, unknown>): WidthHit {
   return {
     ruleCode: String(raw.ruleCode ?? ""),
@@ -270,12 +294,7 @@ function normalizeHit(raw: Record<string, unknown>): WidthHit {
     hops: Number(raw.hops ?? 0),
     opponentAddress: String(raw.opponentAddress ?? ""),
     maxAmount: Number(raw.maxAmount ?? 0),
-    pathNodes: asArray<Record<string, unknown>>(raw.pathNodes).map((n) => ({
-      address: String(n.address ?? ""),
-      amount: Number(n.amount ?? 0),
-      deep: Number(n.deep ?? 0),
-      tags: asArray<WidthTag>(n.tags),
-    })),
+    pathNodes: asArray<unknown>(raw.pathNodes).map(normalizePathNode),
   };
 }
 
