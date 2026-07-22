@@ -8,17 +8,7 @@ interface ScreeningFormProps {
   onLoading: (loading: boolean) => void;
 }
 
-const SCENARIOS = [
-  { value: "all", label: "Full Scan", desc: "All rules applied" },
-  { value: "deposit", label: "Deposit", desc: "Inflow source" },
-  { value: "withdrawal", label: "Withdrawal", desc: "Outflow dest check" },
-  { value: "cdd", label: "CDD", desc: "Threshold triggers" },
-  { value: "monitoring", label: "Monitoring", desc: "Ongoing alerts" },
-  { value: "screening", label: "Screening", desc: "Screening rules" },
-];
-
 export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningFormProps) {
-  const [scenario, setScenario] = useState("all");
   const [chain, setChain] = useState("Tron");
   const [address, setAddress] = useState("");
   const [token, setToken] = useState("usdt");
@@ -50,7 +40,7 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            scenario,
+            scenario: "all",
             chain,
             address: address.trim(),
             token,
@@ -79,7 +69,7 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
       }
       setSubmitting(false);
     },
-    [scenario, chain, address, token, rulesetId, inflowHops, outflowHops, maxNodes, minAmount, maxOpponentPaths, penetrateContract, timeFrom, timeTo, onJobStarted, onLoading]
+    [chain, address, token, rulesetId, inflowHops, outflowHops, maxNodes, minAmount, maxOpponentPaths, penetrateContract, timeFrom, timeTo, onJobStarted, onLoading]
   );
 
   return (
@@ -107,24 +97,6 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
             placeholder="Enter blockchain address..."
             required
           />
-        </div>
-
-        {/* Scenario Chips */}
-        <div style={{ marginBottom: "var(--sp-3)" }}>
-          <label className="label" style={{ fontSize: "0.65rem" }}>Scenario</label>
-          <div className="screening-chips">
-            {SCENARIOS.map((s) => (
-              <button
-                key={s.value}
-                type="button"
-                className={`screening-chip${scenario === s.value ? " active" : ""}`}
-                onClick={() => setScenario(s.value)}
-              >
-                <span className="screening-chip-label">{s.label}</span>
-                <span className="screening-chip-desc">{s.desc}</span>
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Advanced Settings Toggle */}

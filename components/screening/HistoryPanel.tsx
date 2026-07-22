@@ -89,7 +89,6 @@ export default function HistoryPanel({ type, onSelect, refreshTrigger }: History
             <div style={{ fontSize: "0.6rem", color: "var(--text-tertiary)" }}>
               {e.chain}
               {e.type === "kyt" && e.direction ? <> &middot; {e.direction}</> : null}
-              {e.type === "kya" && e.scenario ? <> &middot; {e.scenario}</> : null}
               {e.source === "monitor" ? <> &middot; ⏱</> : null}
               {" "}&middot; {formatTime(e.completed_at)}
             </div>

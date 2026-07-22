@@ -112,8 +112,6 @@ function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string 
               <span>&middot;</span>
               <span>Engine: width.info V3</span>
               <span>&middot;</span>
-              <span>Scenario: {scenario}</span>
-              <span>&middot;</span>
               <span>Ruleset #{r.rulesetId}</span>
             </div>
           </div>

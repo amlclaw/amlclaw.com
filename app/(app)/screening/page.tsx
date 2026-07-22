@@ -112,7 +112,7 @@ export default function ScreeningPage() {
           title="Address Screening (KYA)"
           description="Screen blockchain addresses via the width.info V3 API — rulesets run server-side."
           tips={[
-            "Enter an address, pick a scenario, then start screening",
+            "Enter an address and start screening — rules run server-side",
             "Ruleset ID 0 uses your default server-side ruleset",
             "Use 'Go on Monitoring' on a result to watch the address's future txs",
           ]}
