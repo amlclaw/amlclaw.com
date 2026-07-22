@@ -74,8 +74,8 @@ export const DEFAULT_SETTINGS: Settings = {
   screening: {
     defaultInflowHops: 3,
     defaultOutflowHops: 3,
-    maxNodesPerHop: 50,
-    maxOpponentPaths: 30,
+    maxNodesPerHop: 200,
+    maxOpponentPaths: 50,
     minAmount: 1,
     defaultScenario: "all",
     defaultKyaRulesetId: 0,

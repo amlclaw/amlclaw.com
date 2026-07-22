@@ -23,9 +23,9 @@ export default function KytForm({ onJobStarted, onLoading }: KytFormProps) {
   const [outRulesetId, setOutRulesetId] = useState("0");
   const [inflowHops, setInflowHops] = useState("3");
   const [outflowHops, setOutflowHops] = useState("3");
-  const [maxNodes, setMaxNodes] = useState("50");
+  const [maxNodes, setMaxNodes] = useState("200");
   const [minAmount, setMinAmount] = useState("1");
-  const [maxOpponentPaths, setMaxOpponentPaths] = useState("30");
+  const [maxOpponentPaths, setMaxOpponentPaths] = useState("50");
   const [penetrateContract, setPenetrateContract] = useState(false);
   const [timeFrom, setTimeFrom] = useState(""); // datetime-local, empty = no limit
   const [timeTo, setTimeTo] = useState("");     // datetime-local, empty = now
@@ -174,7 +174,7 @@ export default function KytForm({ onJobStarted, onLoading }: KytFormProps) {
                 <div style={{ flex: 1 }}>
                   <label className="label">Max Nodes / Hop</label>
                   <select className="input" value={maxNodes} onChange={(e) => setMaxNodes(e.target.value)}>
-                    {[20, 50, 100, 200].map((n) => <option key={n} value={n}>{n}</option>)}
+                    {[20, 50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>
                 </div>
               </div>

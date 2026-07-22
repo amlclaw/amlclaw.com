@@ -25,9 +25,9 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
   const [rulesetId, setRulesetId] = useState("0");
   const [inflowHops, setInflowHops] = useState("3");
   const [outflowHops, setOutflowHops] = useState("3");
-  const [maxNodes, setMaxNodes] = useState("50");
+  const [maxNodes, setMaxNodes] = useState("200");
   const [minAmount, setMinAmount] = useState("1");
-  const [maxOpponentPaths, setMaxOpponentPaths] = useState("30");
+  const [maxOpponentPaths, setMaxOpponentPaths] = useState("50");
   const [penetrateContract, setPenetrateContract] = useState(false);
   const [timeFrom, setTimeFrom] = useState(""); // datetime-local, empty = no limit
   const [timeTo, setTimeTo] = useState("");     // datetime-local, empty = now

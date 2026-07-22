@@ -152,10 +152,10 @@ export default function SettingsForm() {
             </select>
           </Field>
           <Field label="Max Nodes / Hop" style={{ flex: 1, minWidth: 120 }}>
-            <input className="input" type="number" min={10} max={1000} value={settings.screening.maxNodesPerHop} onChange={(e) => set("screening", "maxNodesPerHop", parseInt(e.target.value) || 50)} />
+            <input className="input" type="number" min={10} max={1000} value={settings.screening.maxNodesPerHop} onChange={(e) => set("screening", "maxNodesPerHop", parseInt(e.target.value) || 200)} />
           </Field>
           <Field label="Max Opponent Paths" style={{ flex: 1, minWidth: 120 }}>
-            <input className="input" type="number" min={1} max={200} value={settings.screening.maxOpponentPaths} onChange={(e) => set("screening", "maxOpponentPaths", parseInt(e.target.value) || 30)} />
+            <input className="input" type="number" min={1} max={200} value={settings.screening.maxOpponentPaths} onChange={(e) => set("screening", "maxOpponentPaths", parseInt(e.target.value) || 50)} />
           </Field>
         </div>
         <div style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap" }}>
