@@ -144,7 +144,6 @@ async function runKyaScreening(
         chain: p.chain,
         address: p.address,
         risk: result.risk,
-        risk_score: result.riskScore,
         job_id: jobId,
       });
     }

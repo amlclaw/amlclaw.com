@@ -111,8 +111,7 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
         <div className="report-section">
           <div className="report-section-header">Key Risk Indicators</div>
           <div className="report-kri-grid">
-            <KriCard value={r.riskScore} label="Risk Score" color={riskColorVar(r.risk)} unit="/100" />
-            <KriCard value={riskLabel(r.risk)} label="Risk Level" color={riskColorVar(r.risk)} />
+            <KriCard value={r.riskScore === 0 ? "Clean" : riskLabel(r.risk)} label="Risk Level" color={r.riskScore === 0 ? "var(--success)" : riskColorVar(r.risk)} />
             <KriCard value={alerts.length} label="Alerts" color={alerts.length ? "var(--risk-high)" : "var(--success)"} />
             <KriCard value={`${r.hitPaths}/${r.totalPaths}`} label="Hit Paths" color={r.hitPaths > 0 ? "var(--risk-high)" : "var(--success)"} />
             <KriCard value={rec} label="Recommendation" color={rec === "Pass" ? "var(--success)" : rec === "Review" ? "var(--risk-medium)" : "var(--danger)"} />

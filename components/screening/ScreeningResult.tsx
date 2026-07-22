@@ -196,8 +196,7 @@ function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string 
         <div className="report-section">
           <div className="report-section-header">Key Risk Indicators (KRI)</div>
           <div className="report-kri-grid">
-            <KriCard value={r.riskScore} label="Risk Score" color={riskColorVar(r.risk)} unit="/100" />
-            <KriCard value={riskLabel(r.risk)} label="Risk Level" color={riskColorVar(r.risk)} />
+            <KriCard value={r.riskScore === 0 ? "Clean" : riskLabel(r.risk)} label="Risk Level" color={r.riskScore === 0 ? "var(--success)" : riskColorVar(r.risk)} />
             <KriCard value={`${r.hitPaths}/${r.totalPaths}`} label="Hit Paths" color={r.hitPaths > 0 ? "var(--risk-high)" : "var(--success)"} />
             <KriCard value={`${(r.inflowRiskRate * 100).toFixed(1)}%`} label="Inflow Risk Rate" color={r.inflowRiskRate > 0 ? "var(--risk-high)" : "var(--text-secondary)"} />
             <KriCard value={`${(r.outflowRiskRate * 100).toFixed(1)}%`} label="Outflow Risk Rate" color={r.outflowRiskRate > 0 ? "var(--risk-high)" : "var(--text-secondary)"} />
@@ -331,8 +330,9 @@ function ResultContainer({ children }: { children: React.ReactNode }) {
 }
 
 export function RiskBadge({ level, score }: { level: string; score?: number }) {
-  // Per V3 semantics: riskScore 0 = no rule triggered at all (clean);
-  // "low + 10" means a low-severity rule actually fired.
+  // riskScore is a fixed mapping of the level (10/60/80/90) with no signal of
+  // its own — the level from the user's ruleset is the core. We only use
+  // score===0 to detect the "no rule triggered at all" clean state.
   const isClean = score === 0;
   const color = isClean ? "var(--success)" : riskColorVar(level);
   return (
@@ -344,7 +344,7 @@ export function RiskBadge({ level, score }: { level: string; score?: number }) {
         background: "var(--surface-2)", color, border: `1px solid ${color}`,
       }}
     >
-      {isClean ? "Clean" : `${riskLabel(level)}${typeof score === "number" ? ` · ${score}` : ""}`}
+      {isClean ? "Clean" : riskLabel(level)}
       <span style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 2, opacity: 0.8 }}>
         {isClean ? "No Rules Triggered" : "Risk Level"}
       </span>

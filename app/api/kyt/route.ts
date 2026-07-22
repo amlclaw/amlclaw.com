@@ -150,7 +150,6 @@ async function runKytScreening(
         tx_id: p.txId,
         direction: p.direction,
         risk: result.risk,
-        risk_score: result.riskScore,
         job_id: jobId,
       });
     }

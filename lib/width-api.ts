@@ -80,9 +80,10 @@ export interface KyaScreenResult {
   chain: string;
   risk: string; // low | medium | high | critical
   /**
-   * Mapped 1:1 from risk level: critical=90, high=80, medium=60, low=10.
-   * 0 ONLY when no rule triggered — "low + 0" = clean, "low + 10" = a
-   * low-severity rule actually fired.
+   * Fixed mapping of the level (critical=90, high=80, medium=60, low=10) —
+   * no independent meaning; the level from the user's ruleset is the core
+   * signal. Only useful bit: 0 = NO rule triggered at all (clean), vs 10 =
+   * a low-severity rule actually fired.
    */
   riskScore: number;
   riskReason: string;
