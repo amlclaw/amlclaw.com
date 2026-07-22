@@ -26,6 +26,11 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
   const [inflowHops, setInflowHops] = useState("3");
   const [outflowHops, setOutflowHops] = useState("3");
   const [maxNodes, setMaxNodes] = useState("50");
+  const [minAmount, setMinAmount] = useState("1");
+  const [maxOpponentPaths, setMaxOpponentPaths] = useState("30");
+  const [penetrateContract, setPenetrateContract] = useState(false);
+  const [timeFrom, setTimeFrom] = useState(""); // datetime-local, empty = no limit
+  const [timeTo, setTimeTo] = useState("");     // datetime-local, empty = now
   const [submitting, setSubmitting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -53,6 +58,11 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
             inflow_hops: inflowHops,
             outflow_hops: outflowHops,
             max_nodes: maxNodes,
+            min_amount: minAmount,
+            max_opponent_paths: maxOpponentPaths,
+            is_penetrate_contract: penetrateContract,
+            min_timestamp: timeFrom ? new Date(timeFrom).getTime() : 0,
+            max_timestamp: timeTo ? new Date(timeTo).getTime() : undefined,
           }),
         });
 
@@ -69,7 +79,7 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
       }
       setSubmitting(false);
     },
-    [scenario, chain, address, token, rulesetId, inflowHops, outflowHops, maxNodes, onJobStarted, onLoading]
+    [scenario, chain, address, token, rulesetId, inflowHops, outflowHops, maxNodes, minAmount, maxOpponentPaths, penetrateContract, timeFrom, timeTo, onJobStarted, onLoading]
   );
 
   return (
@@ -180,8 +190,57 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
                     onChange={(e) => setRulesetId(e.target.value)}
                   />
                 </div>
-                <div style={{ flex: 1 }} />
+                <div style={{ flex: 1 }}>
+                  <label className="label">Min Amount</label>
+                  <input
+                    type="number"
+                    className="input"
+                    min={0}
+                    step="any"
+                    value={minAmount}
+                    onChange={(e) => setMinAmount(e.target.value)}
+                  />
+                </div>
               </div>
+              <div style={{ display: "flex", gap: "var(--sp-3)", marginTop: "var(--sp-2)" }}>
+                <div style={{ flex: 1 }}>
+                  <label className="label">Max Opponent Paths</label>
+                  <input
+                    type="number"
+                    className="input"
+                    min={1}
+                    max={200}
+                    value={maxOpponentPaths}
+                    onChange={(e) => setMaxOpponentPaths(e.target.value)}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label className="label">Time From (empty = no limit)</label>
+                  <input
+                    type="datetime-local"
+                    className="input"
+                    value={timeFrom}
+                    onChange={(e) => setTimeFrom(e.target.value)}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label className="label">Time To (empty = now)</label>
+                  <input
+                    type="datetime-local"
+                    className="input"
+                    value={timeTo}
+                    onChange={(e) => setTimeTo(e.target.value)}
+                  />
+                </div>
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginTop: "var(--sp-2)", fontSize: "var(--text-xs)", color: "var(--text-secondary)", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={penetrateContract}
+                  onChange={(e) => setPenetrateContract(e.target.checked)}
+                />
+                Penetrate contract addresses (trace through contracts)
+              </label>
             </div>
           )}
         </div>

@@ -20,10 +20,22 @@ export async function POST(req: Request) {
   const direction: KytDirection = DIRECTIONS.includes(body.direction) ? body.direction : "both";
   const inRulesetId = parseInt(String(body.in_ruleset_id ?? settings.screening.defaultKytInRulesetId)) || 0;
   const outRulesetId = parseInt(String(body.out_ruleset_id ?? settings.screening.defaultKytOutRulesetId)) || 0;
-  const inflowHops = parseInt(body.inflow_hops || String(settings.screening.defaultInflowHops));
-  const outflowHops = parseInt(body.outflow_hops || String(settings.screening.defaultOutflowHops));
+  // NOTE: hops 0 is valid in v3 — use explicit undefined checks, not `||`
+  const inflowHops = body.inflow_hops !== undefined && body.inflow_hops !== ""
+    ? parseInt(String(body.inflow_hops))
+    : settings.screening.defaultInflowHops;
+  const outflowHops = body.outflow_hops !== undefined && body.outflow_hops !== ""
+    ? parseInt(String(body.outflow_hops))
+    : settings.screening.defaultOutflowHops;
   const maxNodes = parseInt(body.max_nodes || String(settings.screening.maxNodesPerHop));
   const token = body.token || "usdt";
+  const minAmount = body.min_amount !== undefined && body.min_amount !== ""
+    ? Number(body.min_amount)
+    : settings.screening.minAmount;
+  const maxOpponentPaths = parseInt(body.max_opponent_paths || String(settings.screening.maxOpponentPaths));
+  const isPenetrateContract = body.is_penetrate_contract === true;
+  const minTimestamp = body.min_timestamp ? Number(body.min_timestamp) : 0;
+  const maxTimestamp = body.max_timestamp ? Number(body.max_timestamp) : Date.now();
 
   if (!txId) {
     return NextResponse.json({ detail: "Transaction hash is required" }, { status: 400 });
@@ -45,6 +57,11 @@ export async function POST(req: Request) {
       inflow_hops: inflowHops,
       outflow_hops: outflowHops,
       max_nodes: maxNodes,
+      min_amount: minAmount,
+      max_opponent_paths: maxOpponentPaths,
+      is_penetrate_contract: isPenetrateContract,
+      min_timestamp: minTimestamp,
+      max_timestamp: maxTimestamp,
     },
   };
 
@@ -58,8 +75,11 @@ export async function POST(req: Request) {
     inflowHops,
     outflowHops,
     maxNodes,
-    maxOpponentPaths: settings.screening.maxOpponentPaths,
-    minAmount: settings.screening.minAmount,
+    maxOpponentPaths,
+    minAmount,
+    isPenetrateContract,
+    minTimestamp,
+    maxTimestamp,
   });
 
   return NextResponse.json({ job_id: jobId });
@@ -79,6 +99,9 @@ async function runKytScreening(
     maxNodes: number;
     maxOpponentPaths: number;
     minAmount: number;
+    isPenetrateContract: boolean;
+    minTimestamp: number;
+    maxTimestamp: number;
   },
 ) {
   try {
@@ -94,6 +117,9 @@ async function runKytScreening(
       maxNodesPerHop: p.maxNodes,
       maxOpponentPaths: p.maxOpponentPaths,
       minAmount: p.minAmount,
+      isPenetrateContract: p.isPenetrateContract,
+      minTimestamp: p.minTimestamp,
+      maxTimestamp: p.maxTimestamp,
       inRulesetId: p.inRulesetId,
       outRulesetId: p.outRulesetId,
     });
