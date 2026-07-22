@@ -193,6 +193,7 @@ describe("6. Page rendering", () => {
     ["/kyt", "KYT screening"],
     ["/monitoring", "address monitoring"],
     ["/kyt-monitoring", "KYT monitoring"],
+    ["/docs", "API docs"],
     ["/settings", "settings"],
   ];
 

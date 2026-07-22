@@ -120,5 +120,6 @@
   "risk.medium": "Medium",
   "risk.low": "Low",
   "nav.kyt": "Tx Screening",
-  "nav.kytMonitoring": "KYT Monitoring"
+  "nav.kytMonitoring": "KYT Monitoring",
+  "nav.apiDocs": "API Docs"
 }
