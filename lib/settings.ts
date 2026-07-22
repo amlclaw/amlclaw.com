@@ -8,42 +8,40 @@ import path from "path";
 const SETTINGS_PATH = path.join(process.cwd(), "data", "settings.json");
 
 export interface Settings {
-  // AI Engine (Claude Code SDK)
-  ai: {
-    oauthToken: string;
-    model: string;
-    maxTurns: number;
-    maxBudgetUsd: number;
-  };
-
-  // Blockchain Data Source
-  blockchain: {
-    trustinApiKey: string;
-    trustinBaseUrl: string;
-    /** Stablecoin token used for path investigation (USDT or USDC). */
-    trustinToken: string;
+  // API Keys
+  api: {
+    /** Width.info / TrustIn V3 screening API key (required for screening). */
+    widthApiKey: string;
+    /** V3 API base URL. width.info is the docs site; requests go to api.trustin.bond. */
+    widthBaseUrl: string;
+    /** Etherscan API key — optional; empty = shared default key (rate-limited). */
+    etherscanApiKey: string;
+    /** TronGrid API key — optional; empty = anonymous access (rate-limited). */
+    trongridApiKey: string;
   };
 
   // Screening Defaults
   screening: {
     defaultInflowHops: number;
     defaultOutflowHops: number;
-    maxNodes: number;
+    maxNodesPerHop: number;
+    maxOpponentPaths: number;
+    minAmount: number;
     defaultScenario: string;
-    defaultRuleset: string;
+    /** Server-side ruleset id. 0 = builtin default. */
+    defaultKyaRulesetId: number;
+    defaultKytInRulesetId: number;
+    defaultKytOutRulesetId: number;
     pollingTimeout: number; // seconds
   };
 
   // Monitoring Defaults
   monitoring: {
-    maxAddressesPerTask: number;
     defaultSchedule: string;
-  };
-
-  // Storage & Limits
-  storage: {
-    historyCap: number;
-    dataDirectory: string;
+    /** Address monitors: max transactions screened per run (excess skipped). */
+    maxTxPerRun: number;
+    /** Address monitors: default minimum transfer amount (token units). */
+    defaultMinAmount: number;
   };
 
   // Notifications
@@ -58,20 +56,6 @@ export interface Settings {
     apiToken: string; // empty = open access (no auth required)
   };
 
-  // Demo Mode
-  demo: {
-    enabled: boolean;
-  };
-
-  // SAR Configuration
-  sar: {
-    institution_name: string;
-    license_number: string;
-    compliance_officer: string;
-    default_jurisdiction: string;
-    auto_reference_prefix: string;
-  };
-
   // Application
   app: {
     name: string;
@@ -81,32 +65,28 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  ai: {
-    oauthToken: "",
-    model: "claude-sonnet-4-6",
-    maxTurns: 10,
-    maxBudgetUsd: 1.00,
-  },
-  blockchain: {
-    trustinApiKey: "",
-    trustinBaseUrl: "https://platform.trustin.bond/api/infinity/api",
-    trustinToken: "USDT",
+  api: {
+    widthApiKey: "",
+    widthBaseUrl: "https://api.trustin.bond",
+    etherscanApiKey: "",
+    trongridApiKey: "",
   },
   screening: {
     defaultInflowHops: 3,
     defaultOutflowHops: 3,
-    maxNodes: 100,
-    defaultScenario: "deposit",
-    defaultRuleset: "singapore_mas",
-    pollingTimeout: 60,
+    maxNodesPerHop: 50,
+    maxOpponentPaths: 30,
+    minAmount: 1,
+    defaultScenario: "all",
+    defaultKyaRulesetId: 0,
+    defaultKytInRulesetId: 0,
+    defaultKytOutRulesetId: 0,
+    pollingTimeout: 180,
   },
   monitoring: {
-    maxAddressesPerTask: 20,
     defaultSchedule: "every_4h",
-  },
-  storage: {
-    historyCap: 100,
-    dataDirectory: "data/",
+    maxTxPerRun: 20,
+    defaultMinAmount: 1,
   },
   notifications: {
     webhookUrl: "",
@@ -115,16 +95,6 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   security: {
     apiToken: "",
-  },
-  demo: {
-    enabled: false,
-  },
-  sar: {
-    institution_name: "",
-    license_number: "",
-    compliance_officer: "",
-    default_jurisdiction: "generic",
-    auto_reference_prefix: "SAR",
   },
   app: {
     name: "AMLClaw",
@@ -155,25 +125,34 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
   return result;
 }
 
+/** Sections that belong to the current settings shape. */
+const VALID_SECTIONS = new Set(["api", "screening", "monitoring", "notifications", "security", "app"]);
+
 export function getSettings(): Settings {
   try {
     if (fs.existsSync(SETTINGS_PATH)) {
       const raw = fs.readFileSync(SETTINGS_PATH, "utf-8");
       const saved = JSON.parse(raw);
-      // Deep merge with defaults to fill any missing keys
       return deepMerge(
         DEFAULT_SETTINGS as unknown as Record<string, unknown>,
-        saved
+        pruneUnknown(saved)
       ) as unknown as Settings;
     }
   } catch { /* corrupt file — return defaults */ }
 
-  // Fallback: check env vars for backward compatibility
   const settings = structuredClone(DEFAULT_SETTINGS);
-  if (process.env.TRUSTIN_API_KEY) {
-    settings.blockchain.trustinApiKey = process.env.TRUSTIN_API_KEY;
+  if (process.env.WIDTH_API_KEY) {
+    settings.api.widthApiKey = process.env.WIDTH_API_KEY;
   }
   return settings;
+}
+
+function pruneUnknown(saved: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(saved)) {
+    if (VALID_SECTIONS.has(key)) out[key] = saved[key];
+  }
+  return out;
 }
 
 export function updateSettings(partial: Partial<Settings>): Settings {
@@ -190,73 +169,57 @@ export function updateSettings(partial: Partial<Settings>): Settings {
   return merged;
 }
 
-/**
- * Get the TrustIn API key — from settings first, env var fallback.
- */
-export function getTrustInApiKey(): string {
+export function getWidthApiKey(): string {
   const settings = getSettings();
-  return settings.blockchain.trustinApiKey || process.env.TRUSTIN_API_KEY || "";
+  return settings.api.widthApiKey || process.env.WIDTH_API_KEY || "";
+}
+
+export function getWidthBaseUrl(): string {
+  const settings = getSettings();
+  return (settings.api.widthBaseUrl || DEFAULT_SETTINGS.api.widthBaseUrl).replace(/\/+$/, "");
+}
+
+export function getEtherscanApiKey(): string {
+  const settings = getSettings();
+  return settings.api.etherscanApiKey || process.env.ETHERSCAN_API_KEY || "";
+}
+
+export function getTrongridApiKey(): string {
+  const settings = getSettings();
+  return settings.api.trongridApiKey || process.env.TRONGRID_API_KEY || "";
 }
 
 /**
- * Get the TrustIn base URL from settings.
- */
-export function getTrustInBaseUrl(): string {
-  const settings = getSettings();
-  return settings.blockchain.trustinBaseUrl || DEFAULT_SETTINGS.blockchain.trustinBaseUrl;
-}
-
-/**
- * Get the configured stablecoin token (USDT/USDC) for path investigation.
- */
-export function getTrustInToken(): string {
-  const settings = getSettings();
-  return settings.blockchain.trustinToken || DEFAULT_SETTINGS.blockchain.trustinToken;
-}
-
-/**
- * Check if demo mode is enabled.
- */
-export function isDemoMode(): boolean {
-  const settings = getSettings();
-  return settings.demo?.enabled ?? false;
-}
-
-/**
- * Get the Claude Code SDK configuration.
- */
-export function getAIConfig(): { oauthToken: string; model: string; maxTurns: number; maxBudgetUsd: number } {
-  const settings = getSettings();
-  return {
-    oauthToken: settings.ai.oauthToken || process.env.CLAUDE_CODE_OAUTH_TOKEN || "",
-    model: settings.ai.model || "claude-sonnet-4-6",
-    maxTurns: settings.ai.maxTurns || 10,
-    maxBudgetUsd: settings.ai.maxBudgetUsd || 1.00,
-  };
-}
-
-/**
- * One-time migration: old multi-provider format → Claude Code SDK format.
+ * One-time migration: legacy (trustin/ai/sar era) settings → v3 shape.
+ * Preserves notifications / security / app; maps screening defaults where
+ * they still exist; drops everything else.
  */
 function migrateSettingsIfNeeded(): void {
   try {
     if (!fs.existsSync(SETTINGS_PATH)) return;
     const raw = fs.readFileSync(SETTINGS_PATH, "utf-8");
     const saved = JSON.parse(raw);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (saved.ai && ((saved.ai as any).activeProvider || (saved.ai as any).providers)) {
-      saved.ai = {
-        oauthToken: process.env.CLAUDE_CODE_OAUTH_TOKEN || "",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        model: (saved.ai as any).providers?.claude?.model || "claude-sonnet-4-6",
-        maxTurns: 10,
-        maxBudgetUsd: 1.00,
-      };
-      // Remove old embedding section
-      delete saved.embedding;
-      fs.writeFileSync(SETTINGS_PATH, JSON.stringify(saved, null, 2));
-      console.log("[settings] Migrated AI settings to Claude Code SDK format");
-    }
+    if (saved.api || (!saved.blockchain && !saved.ai && !saved.sar && !saved.demo)) return; // already migrated
+
+    const legacyScreening = (saved.screening as Record<string, unknown>) || {};
+    const migrated: Record<string, unknown> = {
+      api: structuredClone(DEFAULT_SETTINGS.api),
+      screening: {
+        ...structuredClone(DEFAULT_SETTINGS.screening),
+        defaultInflowHops: legacyScreening.defaultInflowHops ?? 3,
+        defaultOutflowHops: legacyScreening.defaultOutflowHops ?? 3,
+      },
+      monitoring: {
+        ...structuredClone(DEFAULT_SETTINGS.monitoring),
+        defaultSchedule:
+          ((saved.monitoring as Record<string, unknown>)?.defaultSchedule as string) || "every_4h",
+      },
+      notifications: saved.notifications ?? structuredClone(DEFAULT_SETTINGS.notifications),
+      security: saved.security ?? structuredClone(DEFAULT_SETTINGS.security),
+      app: saved.app ?? structuredClone(DEFAULT_SETTINGS.app),
+    };
+    fs.writeFileSync(SETTINGS_PATH, JSON.stringify(migrated, null, 2));
+    console.log("[settings] Migrated legacy settings to v3 (width.info) format");
   } catch { /* best-effort */ }
 }
 

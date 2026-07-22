@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 
 export default function SetupBanner() {
   const pathname = usePathname();
-  const [cliMissing, setCliMissing] = useState(false);
+  const [keyMissing, setKeyMissing] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
@@ -17,22 +18,18 @@ export default function SetupBanner() {
       return;
     }
 
-    // Check if Claude Code is available by testing connection
-    fetch("/api/settings/test-connection", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    })
+    // Check whether the width.info API key is configured
+    fetch("/api/settings")
       .then((r) => r.json())
       .then((data) => {
-        if (!data.ok) {
-          setCliMissing(true);
+        if (!data?.api?.widthApiKey) {
+          setKeyMissing(true);
         }
       })
       .catch(() => {});
   }, [pathname]);
 
-  if (!cliMissing || dismissed || pathname === "/settings") return null;
+  if (!keyMissing || dismissed || pathname === "/settings") return null;
 
   return (
     <div className="setup-banner">
@@ -43,7 +40,9 @@ export default function SetupBanner() {
           <line x1="12" y1="17" x2="12.01" y2="17" />
         </svg>
         <span>
-          Claude Code not detected. Please install Claude Code CLI and run <code style={{ fontFamily: "var(--mono)", fontSize: "inherit", background: "var(--surface-3)", padding: "1px 4px", borderRadius: 3 }}>claude login</code> to get started.
+          Width.info API key not configured — screening will fail. Get a free key at{" "}
+          <a href="https://width.info/api-keys" target="_blank" rel="noopener" style={{ color: "var(--primary-500)" }}>width.info</a>
+          {" "}and set it in <Link href="/settings" style={{ color: "var(--primary-500)" }}>Settings</Link>.
         </span>
         <button
           className="btn-icon"

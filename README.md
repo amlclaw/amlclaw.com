@@ -1,6 +1,6 @@
 <!-- Badges -->
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](CHANGELOG.md)
 [![Build](https://img.shields.io/github/actions/workflow/status/amlclaw/amlclaw.com/ci.yml?branch=main)](https://github.com/amlclaw/amlclaw.com/actions)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org)
@@ -8,17 +8,17 @@
 
 # AMLClaw
 
-> Your AI Compliance Team — zero-config, open-source crypto AML platform powered by Claude Code.
+> Open-source crypto AML screening desk — KYA address screening, KYT transaction screening, and 24/7 monitoring, powered by the [width.info](https://width.info) V3 compliance API.
 
-**Regulations in, compliance out. No API keys, no setup, no vendor lock-in.**
+**One API key, professional server-side rulesets, full path evidence.**
 
 ```
-Documents → Policies → Rules → Screening → Monitoring
+KYA Screening  ·  KYT Screening  ·  Address Monitoring  ·  KYT Monitoring
 ```
 
 ---
 
-## Zero Config — Just Run It
+## Quick Start
 
 ```bash
 git clone https://github.com/amlclaw/amlclaw.com.git
@@ -27,152 +27,68 @@ npm install
 npm run dev
 ```
 
-That's it. Open `http://localhost:3000` and start using.
+Open `http://localhost:3000`, go to **Settings → API Keys**, paste your width.info API key, and start screening.
 
 ### Prerequisites
 
 - **Node.js 18+**
-- **Claude Code CLI** — installed and logged in
-
-```bash
-# Install Claude Code (if you haven't)
-npm install -g @anthropic-ai/claude-code
-
-# Login (one-time)
-claude login
-```
-
-AMLClaw uses your local Claude Code session directly — no API keys to configure, no tokens to paste. Your Claude Pro/Max subscription powers all AI features.
-
-> **TrustIn API Key** (optional): For blockchain address screening. Get a free key at [trustin.info](https://trustin.info) (100 req/day). Without it, screening works in desensitized mode.
-
----
-
-## Why AMLClaw?
-
-Crypto AML compliance is broken. A new regulation drops — lawyers spend 2 weeks interpreting it, compliance experts spend a week writing rules, engineers spend another week shipping. Screening a single address? Half a day of manual work. Repeat next month.
-
-**AMLClaw replaces that entire cycle with AI.**
-
-| | Traditional | AMLClaw |
-|---|---------|---------|
-| **Understand regulations** | Lawyers + experts, 1-2 weeks | AI reads & generates policy in minutes |
-| **Write detection rules** | Manual, days of work | AI auto-generates, visual editor to fine-tune |
-| **Screen an address** | Manual, half a day | One click, report in < 5 min |
-| **Continuous monitoring** | Manual spot-checks | 7x24 automated scheduling |
-| **Audit trail** | Dig through emails | Full audit log, one-click export |
+- **Width.info API key** — free at [width.info/api-keys](https://width.info/api-keys). Powers all KYA/KYT screening; compliance rulesets run server-side.
+- **Etherscan / TronGrid API keys** (optional) — feed the address-monitoring tx stream. Without your own keys, shared defaults are used and may be rate-limited.
 
 ---
 
 ## What It Does
 
-```
-  Documents        Policies          Rules           Screening        Monitoring
- -----------     -----------     -----------      -----------      -----------
-|  40+ intl  |   |  AI reads  |   | AI converts|   | On-chain  |   |  Cron     |
-| regulations| > | & generates| > | to JSON    | > | tracing + | > | scheduler |
-| + uploads  |   |  policies  |   |  rules     |   | risk match|   | 7x24 auto |
- -----------     -----------     -----------      -----------      -----------
-     1               2               3               4               5
-```
+### 1. Address Screening (KYA)
 
-1. **Documents** — 40+ international AML regulations (FATF, MAS, SFC, VARA) plus custom uploads
-2. **Policies** — AI reads regulatory docs and generates compliance policies. Add custom instructions to tailor output.
-3. **Rules** — AI converts policies into machine-readable detection rules (JSON) with visual editor
-4. **Screening** — On-chain address screening via TrustIn KYA API, cross-referenced against your rules
-5. **Monitoring** — Scheduled recurring screening with cron scheduler & webhook alerts
+Screen any Ethereum or Tron address against professional compliance rulesets — Sanctions, Terrorism Financing, Cybercrime, Gambling, Public Freezing Actions, and more. Multi-hop fund tracing (0–5 hops each direction) with:
 
-Every step runs fully automated or with human-in-the-loop. Every action is audit-logged.
+- Risk level (`low / medium / high / critical`) + 0–100 risk score
+- Address identity checks (is the address itself sanctioned?)
+- Exposure breakdown by category and direction
+- Per-rule hits with full path evidence and an interactive fund-flow graph
+- Scenario filtering: deposit / withdrawal / CDD / monitoring / screening / full scan
 
----
+### 2. Transaction Screening (KYT)
 
-## Screenshots
+Paste a transaction hash and screen its **source of funds (in)**, **destination (out)**, or **both**. Each direction uses its own dedicated server-side ruleset (KYT-IN / KYT-OUT builtins by default). Results are Chainalysis-aligned: alert list with exposure types (DIRECT/INDIRECT), recommended actions (block / review / alert / monitor), plus per-hit path evidence.
 
-### Dashboard
-![Dashboard](public/screenshots/dashboard.png)
+### 3. Address Monitoring — watch future transactions
 
-### Address Screening
-![Screening Input & Report](public/screenshots/screening-1.png)
-![Rule Triggers & Evidence Chains](public/screenshots/screening-2.png)
+Add an address and AMLClaw watches its **future** stablecoin transfers (Ethereum: USDT + USDC; Tron: USDT) via Etherscan/TronGrid on your schedule (hourly to daily). Every new transfer above your minimum amount is automatically KYT-screened — receiving = `in`, sending = `out`. High-risk hits fire webhook alerts.
 
-### On-Chain Graph
-![Transaction Flow Graph](public/screenshots/screening-graph.png)
+### 4. KYT Monitoring — watch a counterparty
 
-### AI-Generated Rules
-![Rule Sets](public/screenshots/rules-1.png)
-![Rule Details](public/screenshots/rules-2.png)
-
-### Compliance Policies
-![AI Policy Generation](public/screenshots/policies.png)
-
-### Document Library
-![40+ Regulatory Documents](public/screenshots/documents.png)
+From any KYT result, put the transaction's `from` or `to` address under watch. Each cycle re-runs a KYA screen, tracks the risk trend, and alerts the moment the counterparty's risk level **escalates**.
 
 ---
 
 ## Features
 
-### Core
-
-- **Zero-config AI** — Uses your local Claude Code installation directly, no API keys needed
-- **Custom Instructions** — Guide AI output when generating policies and rules
-- **40+ regulations** built-in (FATF, MAS, SFC, VARA) across 3 jurisdictions
-- **On-chain screening** via TrustIn KYA API with evidence graph (1-5 hops, up to 1000 nodes)
-- **Continuous monitoring** with cron scheduler & webhook alerts
+- **Server-side rulesets** — no local rule maintenance; `ruleset_id 0` = builtin defaults, or manage custom rulesets on width.info
+- **Evidence graph** — interactive fund-flow visualization (React Flow + dagre), cluster aggregation for same-tag risk sources
+- **Webhook alerts** — real-time notifications on high/critical results and risk escalations
+- **Screening history** — typed KYA/KYT history with one-click recall
+- **API authentication** — optional Bearer token protection on all endpoints
 - **Bilingual** (English / Chinese) with dark/light theme
 - **No database** — file-based storage, backup-friendly, deploy anywhere
-
-### Enterprise-Grade
-
-- **API authentication** — Bearer token protection on all endpoints
-- **Audit logging** — Append-only JSONL, tamper-resistant, full operation trail
-- **Webhook integration** — Real-time alerts for high-risk events
-- **Batch screening** — Up to 100 addresses per submission
-- **Report export** — Markdown & PDF with custom branding
-- **SAR generation** — AI-generated Suspicious Activity Reports (Singapore, Hong Kong, Dubai)
-- **Self-hosted** — Data never leaves your server
-
----
-
-## AI Engine
-
-AMLClaw uses **Claude Code** as its AI engine with two modes:
-
-| Mode | Auth | When Used |
-|------|------|-----------|
-| **CLI** (default) | Your local `claude login` session | Zero config — just works |
-| **SDK** (advanced) | OAuth token in Settings | When you need MCP tools, budget control |
-
-**CLI mode** is the default. It spawns `claude -p` as a subprocess and inherits your existing Claude Code login. No configuration needed.
-
-**SDK mode** activates when you paste an OAuth token in Settings. This enables Agent SDK features like MCP tool calling for the Copilot, budget caps, and turn limits.
-
----
-
-## Built-in Rulesets & Scenarios
-
-3 jurisdictions (Singapore MAS, Hong Kong SFC, Dubai VARA) x 5 screening scenarios:
-
-| Scenario | What It Checks |
-|----------|---------------|
-| **Deposit** | Inflow source risk + address self-tags |
-| **Withdrawal** | Outflow destination risk |
-| **CDD** | Transaction threshold triggers |
-| **Monitoring** | Structuring/smurfing patterns |
-| **Full Scan** | All rules, all directions |
+- **Self-hosted** — your data never leaves your server (MIT license)
 
 ---
 
 ## Project Structure
 
 ```
-app/(app)/        # Product pages (dashboard, documents, policies, rules, screening, ...)
-app/api/          # API routes
-components/       # React components by domain
-lib/              # Core logic (ai-agent.ts, storage.ts, settings.ts, scheduler.ts, ...)
-data/             # Runtime data + built-in rulesets (file-based, no database)
-references/       # 40+ regulatory source documents
-prompts/          # AI prompt templates
+app/(app)/        # Product pages: dashboard, screening (KYA), kyt, monitoring, kyt-monitoring, settings
+app/api/          # API routes: screening, kyt, monitors, dashboard, settings
+components/       # React components by domain (screening, monitoring, settings, landing, shared)
+lib/              # Core logic:
+                  #   width-api.ts   — width.info V3 client (KYA/KYT sync screening)
+                  #   chain-txs.ts   — Etherscan/TronGrid tx feeds + cursor management
+                  #   scheduler.ts   — node-cron monitor execution (both monitor types)
+                  #   storage.ts     — file-based history + monitors
+                  #   settings.ts    — settings with key masking + legacy migration
+data/             # Runtime data (gitignored: settings.json with API keys, history, monitors)
 tests/            # Unit (vitest) + integration tests
 ```
 
@@ -196,15 +112,14 @@ npm test             # Integration tests (requires dev server running)
 docker compose up -d
 ```
 
-Open http://localhost:3000. Claude Code CLI must be available in the container.
-
-Data is persisted in the `./data` directory via volume mount.
+Open http://localhost:3000. Data is persisted in the `./data` directory via volume mount.
 
 ### Production Tips
 
 - Mount `./data` to a persistent volume for data durability
 - Use a reverse proxy (nginx/Caddy) for HTTPS
 - Set `security.apiToken` in Settings for API authentication
+- Add your own Etherscan/TronGrid keys to avoid shared rate limits on monitoring
 
 ---
 
@@ -221,11 +136,11 @@ locales/zh.json   # Chinese
 
 ## Roadmap
 
-- **More chains** — Solana, Polygon, BSC, Arbitrum
-- **MiCA compliance** — EU Markets in Crypto-Assets regulation
-- **US FinCEN** — BSA/AML rules for US-based entities
-- **Analytics** — Trend analysis, risk heatmaps, compliance KPIs
-- **Case management** — SAR filing workflow and investigation tools
+- **More chains** — as supported by the width.info API
+- **Batch screening** — multi-address KYA submissions
+- **Report export** — Markdown & PDF with custom branding
+- **Analytics** — trend analysis, risk heatmaps, compliance KPIs
+- **Case workflow** — investigation and disposition on top of screening history
 
 ---
 
@@ -235,7 +150,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and PR process.
 
 ## Security
 
-See [SECURITY.md](SECURITY.md). AMLClaw is self-hosted by design — your data never leaves your server.
+See [SECURITY.md](SECURITY.md). AMLClaw is self-hosted by design — your data never leaves your server. API keys live only in `data/settings.json` (gitignored) or environment variables.
 
 ## License
 

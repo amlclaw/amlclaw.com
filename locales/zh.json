@@ -1,12 +1,7 @@
 {
   "nav.dashboard": "仪表盘",
-  "nav.documents": "文档",
-  "nav.policies": "合规政策",
-  "nav.rules": "规则",
   "nav.screening": "地址筛查",
-  "nav.monitoring": "持续监控",
-  "nav.audit": "审计日志",
-  "nav.docs": "技术文档",
+  "nav.monitoring": "地址监控",
   "nav.settings": "设置",
   "nav.lightMode": "浅色模式",
   "nav.darkMode": "深色模式",
@@ -123,5 +118,7 @@
   "risk.severe": "严重",
   "risk.high": "高",
   "risk.medium": "中",
-  "risk.low": "低"
+  "risk.low": "低",
+  "nav.kyt": "交易筛查",
+  "nav.kytMonitoring": "KYT 监控"
 }

@@ -3,7 +3,6 @@
  * Sends POST requests to configured webhook URLs when high-risk events occur.
  */
 import { getSettings } from "./settings";
-import { logAudit } from "./audit-log";
 
 export interface WebhookPayload {
   event: string;
@@ -30,27 +29,17 @@ export async function sendWebhook(event: string, data: Record<string, unknown>):
       signal: AbortSignal.timeout(10000),
     });
 
-    if (res.ok) {
-      logAudit("webhook.sent", { event, url: webhookUrl, status: res.status });
-      return true;
-    } else {
-      logAudit("webhook.failed", { event, url: webhookUrl, status: res.status });
-      return false;
-    }
-  } catch (e) {
-    logAudit("webhook.failed", {
-      event,
-      url: webhookUrl,
-      error: e instanceof Error ? e.message : String(e),
-    });
+    return res.ok;
+  } catch {
     return false;
   }
 }
 
 /**
  * Check if a screening result should trigger a webhook alert.
+ * Risk vocabulary (v3): low | medium | high | critical
  */
 export function shouldAlert(riskLevel: string): boolean {
-  const highRisk = ["Severe", "High"];
-  return highRisk.includes(riskLevel);
+  const highRisk = ["critical", "high"];
+  return highRisk.includes(String(riskLevel).toLowerCase());
 }

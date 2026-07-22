@@ -7,16 +7,10 @@ vi.mock("@/lib/settings", () => ({
   getSettings: vi.fn(),
 }));
 
-vi.mock("@/lib/audit-log", () => ({
-  logAudit: vi.fn(),
-}));
-
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
 import { getSettings } from "@/lib/settings";
-import { logAudit } from "@/lib/audit-log";
 
 const mockGetSettings = vi.mocked(getSettings);
-const mockLogAudit = vi.mocked(logAudit);
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -28,6 +22,7 @@ describe("webhook", () => {
     it("returns false when webhook disabled", async () => {
       mockGetSettings.mockReturnValue({
         notifications: { webhookEnabled: false, webhookUrl: "" },
+         
       } as any);
       const result = await sendWebhook("test.event", { foo: "bar" });
       expect(result).toBe(false);
@@ -37,6 +32,7 @@ describe("webhook", () => {
     it("returns false when no webhook URL", async () => {
       mockGetSettings.mockReturnValue({
         notifications: { webhookEnabled: true, webhookUrl: "" },
+         
       } as any);
       const result = await sendWebhook("test.event", {});
       expect(result).toBe(false);
@@ -45,10 +41,11 @@ describe("webhook", () => {
     it("sends POST to webhook URL and returns true on success", async () => {
       mockGetSettings.mockReturnValue({
         notifications: { webhookEnabled: true, webhookUrl: "https://hook.example.com" },
+         
       } as any);
       vi.mocked(fetch).mockResolvedValue({ ok: true, status: 200 } as Response);
 
-      const result = await sendWebhook("screening.completed", { risk: "High" });
+      const result = await sendWebhook("screening.high_risk", { risk: "critical" });
       expect(result).toBe(true);
       expect(fetch).toHaveBeenCalledWith(
         "https://hook.example.com",
@@ -56,41 +53,39 @@ describe("webhook", () => {
       );
       // Check payload shape
       const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
-      expect(body.event).toBe("screening.completed");
-      expect(body.data.risk).toBe("High");
+      expect(body.event).toBe("screening.high_risk");
+      expect(body.data.risk).toBe("critical");
       expect(body.timestamp).toBeTruthy();
-      expect(mockLogAudit).toHaveBeenCalledWith("webhook.sent", expect.any(Object));
     });
 
-    it("returns false and logs failure on non-ok response", async () => {
+    it("returns false on non-ok response", async () => {
       mockGetSettings.mockReturnValue({
         notifications: { webhookEnabled: true, webhookUrl: "https://hook.example.com" },
+         
       } as any);
       vi.mocked(fetch).mockResolvedValue({ ok: false, status: 500 } as Response);
 
       const result = await sendWebhook("test", {});
       expect(result).toBe(false);
-      expect(mockLogAudit).toHaveBeenCalledWith("webhook.failed", expect.any(Object));
     });
 
     it("returns false on fetch error", async () => {
       mockGetSettings.mockReturnValue({
         notifications: { webhookEnabled: true, webhookUrl: "https://hook.example.com" },
+         
       } as any);
       vi.mocked(fetch).mockRejectedValue(new Error("Network error"));
 
       const result = await sendWebhook("test", {});
       expect(result).toBe(false);
-      expect(mockLogAudit).toHaveBeenCalledWith("webhook.failed", expect.objectContaining({
-        error: "Network error",
-      }));
     });
   });
 
-  describe("shouldAlert", () => {
-    it("returns true for Severe", () => expect(shouldAlert("Severe")).toBe(true));
-    it("returns true for High", () => expect(shouldAlert("High")).toBe(true));
-    it("returns false for Medium", () => expect(shouldAlert("Medium")).toBe(false));
-    it("returns false for Low", () => expect(shouldAlert("Low")).toBe(false));
+  describe("shouldAlert (v3 vocabulary)", () => {
+    it("returns true for critical", () => expect(shouldAlert("critical")).toBe(true));
+    it("returns true for high", () => expect(shouldAlert("high")).toBe(true));
+    it("is case-insensitive", () => expect(shouldAlert("Critical")).toBe(true));
+    it("returns false for medium", () => expect(shouldAlert("medium")).toBe(false));
+    it("returns false for low", () => expect(shouldAlert("low")).toBe(false));
   });
 });

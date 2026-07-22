@@ -1,5 +1,5 @@
 /**
- * Unit tests for lib/settings.ts — settings read/write, default merging
+ * Unit tests for lib/settings.ts — settings read/write, default merging (v3 shape)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import fs from "fs";
@@ -12,104 +12,101 @@ beforeEach(() => {
   mockFs.existsSync.mockReturnValue(false);
   mockFs.readFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
   mockFs.writeFileSync.mockImplementation(() => {});
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   mockFs.mkdirSync.mockImplementation(() => "" as any);
-  delete process.env.TRUSTIN_API_KEY;
-  delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  delete process.env.WIDTH_API_KEY;
+  delete process.env.ETHERSCAN_API_KEY;
+  delete process.env.TRONGRID_API_KEY;
 });
 
 import {
   getSettings,
   updateSettings,
-  getTrustInApiKey,
-  getTrustInBaseUrl,
-  getAIConfig,
+  getWidthApiKey,
+  getWidthBaseUrl,
+  getEtherscanApiKey,
   DEFAULT_SETTINGS,
+  type Settings,
 } from "@/lib/settings";
 
 describe("settings", () => {
   describe("getSettings", () => {
     it("returns defaults when no file exists", () => {
       const s = getSettings();
-      expect(s.ai.model).toBe("claude-sonnet-4-6");
-      expect(s.ai.maxTurns).toBe(10);
+      expect(s.api.widthApiKey).toBe("");
+      expect(s.api.widthBaseUrl).toBe("https://api.trustin.bond");
       expect(s.screening.defaultInflowHops).toBe(3);
+      expect(s.screening.defaultKyaRulesetId).toBe(0);
+      expect(s.monitoring.maxTxPerRun).toBe(20);
       expect(s.security.apiToken).toBe("");
     });
 
     it("merges saved settings with defaults", () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify({
-        ai: { model: "claude-opus-4-6" },
-        // screening section missing — should get defaults
-      }));
+      mockFs.readFileSync.mockReturnValue(
+        JSON.stringify({ api: { widthApiKey: "test-key" } })
+      );
       const s = getSettings();
-      expect(s.ai.model).toBe("claude-opus-4-6");
-      expect(s.screening.defaultInflowHops).toBe(3); // from defaults
+      expect(s.api.widthApiKey).toBe("test-key");
+      // Missing keys filled from defaults
+      expect(s.api.widthBaseUrl).toBe("https://api.trustin.bond");
+      expect(s.screening.maxNodesPerHop).toBe(DEFAULT_SETTINGS.screening.maxNodesPerHop);
     });
 
-    it("falls back to env var for TRUSTIN_API_KEY", () => {
-      process.env.TRUSTIN_API_KEY = "env-key";
-      const s = getSettings();
-      expect(s.blockchain.trustinApiKey).toBe("env-key");
-    });
-
-    it("handles corrupt settings file gracefully", () => {
+    it("drops unknown legacy sections", () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue("not valid json{{{");
+      mockFs.readFileSync.mockReturnValue(
+        JSON.stringify({ api: { widthApiKey: "k" }, blockchain: { trustinApiKey: "old" }, ai: { model: "x" } })
+      );
+      const s = getSettings() as unknown as Record<string, unknown>;
+      expect(s.blockchain).toBeUndefined();
+      expect(s.ai).toBeUndefined();
+    });
+
+    it("returns defaults on corrupt file", () => {
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockReturnValue("{not json");
       const s = getSettings();
-      expect(s).toBeTruthy();
-      expect(s.ai.model).toBe("claude-sonnet-4-6");
+      expect(s.api.widthBaseUrl).toBe("https://api.trustin.bond");
+    });
+
+    it("falls back to WIDTH_API_KEY env var when no file", () => {
+      process.env.WIDTH_API_KEY = "env-key";
+      const s = getSettings();
+      expect(s.api.widthApiKey).toBe("env-key");
     });
   });
 
   describe("updateSettings", () => {
-    it("deep-merges partial update", () => {
-      mockFs.existsSync.mockReturnValue(false);
-      const result = updateSettings({ security: { apiToken: "new-token" } });
-      expect(result.security.apiToken).toBe("new-token");
-      expect(result.ai.model).toBe("claude-sonnet-4-6"); // preserved default
+    it("deep-merges partial updates and writes to disk", () => {
+      const updated = updateSettings({ api: { widthApiKey: "new-key" } } as unknown as Partial<Settings>);
+      expect(updated.api.widthApiKey).toBe("new-key");
+      expect(updated.api.widthBaseUrl).toBe("https://api.trustin.bond");
       expect(mockFs.writeFileSync).toHaveBeenCalled();
     });
   });
 
-  describe("getTrustInApiKey", () => {
-    it("returns settings value first", () => {
+  describe("key getters", () => {
+    it("getWidthApiKey prefers settings over env", () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify({
-        blockchain: { trustinApiKey: "settings-key" },
-      }));
-      expect(getTrustInApiKey()).toBe("settings-key");
+      mockFs.readFileSync.mockReturnValue(JSON.stringify({ api: { widthApiKey: "file-key" } }));
+      process.env.WIDTH_API_KEY = "env-key";
+      expect(getWidthApiKey()).toBe("file-key");
     });
 
-    it("falls back to env var", () => {
-      process.env.TRUSTIN_API_KEY = "env-key";
-      expect(getTrustInApiKey()).toBe("env-key");
+    it("getWidthApiKey falls back to env", () => {
+      process.env.WIDTH_API_KEY = "env-key";
+      expect(getWidthApiKey()).toBe("env-key");
     });
 
-    it("returns empty string when nothing configured", () => {
-      expect(getTrustInApiKey()).toBe("");
-    });
-  });
-
-  describe("getTrustInBaseUrl", () => {
-    it("returns default base URL", () => {
-      expect(getTrustInBaseUrl()).toBe(DEFAULT_SETTINGS.blockchain.trustinBaseUrl);
-    });
-  });
-
-  describe("getAIConfig", () => {
-    it("returns default model and settings", () => {
-      const config = getAIConfig();
-      expect(config.model).toBe("claude-sonnet-4-6");
-      expect(config.maxTurns).toBe(10);
-      expect(config.maxBudgetUsd).toBe(1.00);
+    it("getWidthBaseUrl strips trailing slash", () => {
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockReturnValue(JSON.stringify({ api: { widthBaseUrl: "https://x.example/" } }));
+      expect(getWidthBaseUrl()).toBe("https://x.example");
     });
 
-    it("falls back to env var for oauth token", () => {
-      process.env.CLAUDE_CODE_OAUTH_TOKEN = "test-token";
-      const config = getAIConfig();
-      expect(config.oauthToken).toBe("test-token");
+    it("getEtherscanApiKey returns empty when unset", () => {
+      expect(getEtherscanApiKey()).toBe("");
     });
   });
 });

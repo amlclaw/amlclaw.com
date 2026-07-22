@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 
 const lines = [
-  { time: "09:00", text: "Upload MAS PSN02 regulation document", status: "" },
-  { time: "09:01", text: "AI generates compliance policy", status: "done" },
-  { time: "09:02", text: "38 detection rules created", status: "done" },
-  { time: "09:03", text: "Submit address → select 'Onboarding' scenario", status: "" },
-  { time: "09:05", text: "Screening complete — Recommendation: Enhanced Due Diligence", status: "warn" },
-  { time: "09:06", text: "Continuous monitoring configured — daily at 08:00", status: "done" },
+  { time: "09:00", text: "Submit Tron address → KYA screening (server-side ruleset)", status: "" },
+  { time: "09:01", text: "Critical: exposure to sanctioned address — action: block", status: "warn" },
+  { time: "09:02", text: "Screen incoming tx hash → KYT-IN ruleset", status: "done" },
+  { time: "09:03", text: "2 alerts: Sanctions (DIRECT), Cybercrime (INDIRECT)", status: "warn" },
+  { time: "09:04", text: "Address added to monitoring — new txs auto-screened", status: "done" },
+  { time: "09:05", text: "Counterparty under KYA watch — alert on risk escalation", status: "done" },
 ];
 
 export default function ScreenDemo() {

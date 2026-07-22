@@ -43,15 +43,8 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
-# runtime data (user-generated, not committed)
-/data/history/
-/data/monitors/
-/data/policies/
-/data/rulesets/
-/data/uploads/
-/data/audit/
-/data/settings.json
-/data/.ai-lock.json
+# runtime data (user-generated, contains API keys — never committed)
+/data/
 
 # vercel
 .vercel
@@ -59,5 +52,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-data/vectors/
 .next

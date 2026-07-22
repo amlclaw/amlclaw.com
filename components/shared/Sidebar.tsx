@@ -49,41 +49,6 @@ export default function Sidebar() {
       ),
     },
     {
-      href: "/documents",
-      label: t("nav.documents"),
-      active: pathname.startsWith("/documents"),
-      icon: (
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-        </svg>
-      ),
-    },
-    {
-      href: "/policies",
-      label: t("nav.policies"),
-      active: pathname.startsWith("/policies"),
-      icon: (
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="16" y1="13" x2="8" y2="13" />
-          <line x1="16" y1="17" x2="8" y2="17" />
-        </svg>
-      ),
-    },
-    {
-      href: "/rules",
-      label: t("nav.rules"),
-      active: pathname.startsWith("/rules"),
-      icon: (
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="9 11 12 14 22 4" />
-          <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
-        </svg>
-      ),
-    },
-    {
       href: "/screening",
       label: t("nav.screening"),
       active: pathname.startsWith("/screening"),
@@ -91,6 +56,17 @@ export default function Sidebar() {
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="11" cy="11" r="8" />
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+      ),
+    },
+    {
+      href: "/kyt",
+      label: t("nav.kyt"),
+      active: pathname.startsWith("/kyt") && !pathname.startsWith("/kyt-monitoring"),
+      icon: (
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+          <line x1="7" y1="17" x2="17" y2="7" />
+          <polyline points="7 7 17 7 17 17" />
         </svg>
       ),
     },
@@ -106,36 +82,12 @@ export default function Sidebar() {
       ),
     },
     {
-      href: "/cases",
-      label: "Cases",
-      active: pathname.startsWith("/cases"),
+      href: "/kyt-monitoring",
+      label: t("nav.kytMonitoring"),
+      active: pathname.startsWith("/kyt-monitoring"),
       icon: (
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
-        </svg>
-      ),
-    },
-    {
-      href: "/sar",
-      label: "SAR Reports",
-      active: pathname.startsWith("/sar"),
-      icon: (
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      ),
-    },
-    {
-      href: "/audit",
-      label: t("nav.audit"),
-      active: pathname.startsWith("/audit"),
-      icon: (
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="16" y1="13" x2="8" y2="13" />
-          <line x1="16" y1="17" x2="8" y2="17" />
-          <polyline points="10 9 9 9 8 9" />
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
         </svg>
       ),
     },

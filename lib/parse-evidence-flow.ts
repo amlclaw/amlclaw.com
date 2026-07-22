@@ -2,6 +2,121 @@
  * Parse evidence flow strings and build graph data for React Flow visualization.
  * Flow direction: risk source (left) → intermediaries → target (right)
  */
+import type { WidthHit, WidthTag } from "./width-api";
+
+/**
+ * Legacy risk-entity shape consumed by buildGraphData / FlowGraph / EntityCard.
+ * V3 hits are adapted into this shape by hitsToEntities().
+ */
+export interface LegacyEntity {
+  address: string;
+  tag?: WidthTag;
+  matched_rules: string[];
+  matched_rules_detail: { rule_id: string; name: string; risk_level: string; action: string }[];
+  min_deep: number;
+  evidence_paths: { deep: number; flow: string }[];
+}
+
+/** Pick the most severe tag, preferring one whose primary_category matches. */
+function pickTag(tags: WidthTag[], preferCategory?: string): WidthTag | undefined {
+  if (!tags.length) return undefined;
+  const order = ["critical", "severe", "high", "medium", "low"];
+  const rank = (t: WidthTag) => {
+    const i = order.indexOf(String(t.risk_level ?? "").toLowerCase());
+    return i === -1 ? order.length : i;
+  };
+  const preferred = preferCategory
+    ? tags.filter((t) => t.primary_category === preferCategory)
+    : [];
+  const pool = preferred.length ? preferred : tags;
+  return [...pool].sort((a, b) => rank(a) - rank(b))[0];
+}
+
+/**
+ * Build a legacy flow string from v3 pathNodes.
+ * pathNodes are ordered opponent (deep 0) → target; node.amount is the edge
+ * flowing into that node from the previous node in array order.
+ * For outflow hits the display order is reversed (target → opponent) so the
+ * arrow follows the money.
+ */
+function hitToFlowString(hit: WidthHit): string {
+  const nodes = hit.pathNodes.length
+    ? hit.pathNodes
+    : [
+        { address: hit.opponentAddress, amount: 0, deep: 0, tags: [] },
+        { address: "", amount: hit.maxAmount, deep: hit.hops, tags: [] },
+      ];
+
+  // Edges between consecutive original nodes: amount lives on nodes[i+1]
+  const parts: { address: string; tag?: string }[] = nodes.map((n) => {
+    const t = pickTag(n.tags);
+    const label = t?.quaternary_category || t?.primary_category;
+    return { address: n.address, tag: label };
+  });
+  const amounts = nodes.slice(1).map((n) => n.amount);
+
+  const ordered = hit.pathFlow === "outflow" ? [...parts].reverse() : parts;
+  const orderedAmounts = hit.pathFlow === "outflow" ? [...amounts].reverse() : amounts;
+
+  let out = "";
+  ordered.forEach((p, i) => {
+    out += p.tag ? `[${p.address} (${p.tag})]` : `[${p.address}]`;
+    if (i < ordered.length - 1) {
+      const amt = orderedAmounts[i];
+      out += ` --(${amt ? `${amt} USD` : ""})--> `;
+    }
+  });
+  return out;
+}
+
+/**
+ * Adapt v3 screening hits into the legacy risk-entity list used by
+ * FlowGraph/buildGraphData and the evidence list UI. Hits sharing the same
+ * opponent address are merged into one entity.
+ */
+export function hitsToEntities(hits: WidthHit[]): LegacyEntity[] {
+  const byOpponent = new Map<string, LegacyEntity>();
+
+  for (const hit of hits) {
+    const key = hit.opponentAddress || `${hit.ruleCode}:${hit.hops}`;
+    const opponentNode = hit.pathNodes.find((n) => n.deep === 0) ?? hit.pathNodes[0];
+    const tag = pickTag(opponentNode?.tags ?? [], hit.category);
+    const flow = hitToFlowString(hit);
+
+    const existing = byOpponent.get(key);
+    if (!existing) {
+      byOpponent.set(key, {
+        address: hit.opponentAddress,
+        tag: tag ?? { primary_category: hit.category, risk_level: hit.riskLevel },
+        matched_rules: [hit.ruleCode],
+        matched_rules_detail: [{
+          rule_id: hit.ruleCode,
+          name: hit.ruleName,
+          risk_level: hit.riskLevel,
+          action: hit.action,
+        }],
+        min_deep: hit.hops,
+        evidence_paths: [{ deep: hit.hops, flow }],
+      });
+    } else {
+      if (!existing.matched_rules.includes(hit.ruleCode)) {
+        existing.matched_rules.push(hit.ruleCode);
+        existing.matched_rules_detail.push({
+          rule_id: hit.ruleCode,
+          name: hit.ruleName,
+          risk_level: hit.riskLevel,
+          action: hit.action,
+        });
+      }
+      existing.min_deep = Math.min(existing.min_deep, hit.hops);
+      if (!existing.evidence_paths.some((p) => p.flow === flow)) {
+        existing.evidence_paths.push({ deep: hit.hops, flow });
+      }
+    }
+  }
+
+  return Array.from(byOpponent.values());
+}
 
 export interface FlowStep {
   address: string;

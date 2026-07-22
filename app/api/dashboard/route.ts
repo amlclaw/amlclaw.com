@@ -1,61 +1,54 @@
 import { NextResponse } from "next/server";
-import { loadHistoryIndex, loadMonitorIndex, loadAllPolicies, getAllRulesets } from "@/lib/storage";
+import { loadHistoryIndex, loadMonitorIndex } from "@/lib/storage";
 import { getSchedulerStatus } from "@/lib/scheduler";
-import { getSettings } from "@/lib/settings";
+import { getSettings, getWidthApiKey } from "@/lib/settings";
 
 export async function GET() {
   const history = loadHistoryIndex();
   const monitors = loadMonitorIndex();
-  const policies = loadAllPolicies();
-  const rulesets = getAllRulesets();
   const scheduler = getSchedulerStatus();
   const settings = getSettings();
 
   // Recent screenings (last 7 days)
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const recentScreenings = history.filter(
-    (h) => (h.completed_at as string) >= weekAgo
-  );
+  const recentScreenings = history.filter((h) => h.completed_at >= weekAgo);
 
-  // Risk distribution
-  const riskDistribution: Record<string, number> = { Severe: 0, High: 0, Medium: 0, Low: 0 };
+  // Risk distribution (v3 vocabulary)
+  const riskDistribution: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
   for (const h of recentScreenings) {
-    const level = (h.risk_level as string) || "Low";
+    const level = (h.risk_level || "low").toLowerCase();
     riskDistribution[level] = (riskDistribution[level] || 0) + 1;
   }
 
-  // Active monitors
-  const activeMonitors = monitors.filter((m) => m.enabled);
-  const runningMonitors = monitors.filter((m) => m.running);
+  const kyaCount = history.filter((h) => h.type === "kya").length;
+  const kytCount = history.filter((h) => h.type === "kyt").length;
 
-  // Total monitored addresses
-  const monitoredAddresses = monitors.reduce(
-    (acc, m) => acc + m.addresses.length,
-    0
-  );
+  const addressMonitors = monitors.filter((m) => m.type === "address");
+  const kytMonitors = monitors.filter((m) => m.type === "kyt");
 
-  // API status — CLI mode is always "configured" (uses local login)
-  const hasAiConfigured = !!settings.ai.oauthToken || true; // CLI mode = always available
-  const hasTrustinKey = !!settings.blockchain.trustinApiKey || !!process.env.TRUSTIN_API_KEY;
-  const aiMode = settings.ai.oauthToken ? "sdk" : "cli";
+  // Recent high-risk alerts
+  const recentAlerts = history
+    .filter((h) => ["critical", "high"].includes((h.risk_level || "").toLowerCase()))
+    .slice(0, 8);
 
   return NextResponse.json({
     stats: {
       total_screenings: history.length,
       screenings_this_week: recentScreenings.length,
-      policies_count: policies.length,
-      rulesets_count: rulesets.length,
-      monitors_active: activeMonitors.length,
-      monitors_running: runningMonitors.length,
-      monitored_addresses: monitoredAddresses,
+      kya_count: kyaCount,
+      kyt_count: kytCount,
+      address_monitors_active: addressMonitors.filter((m) => m.enabled).length,
+      address_monitors_total: addressMonitors.length,
+      kyt_monitors_active: kytMonitors.filter((m) => m.enabled).length,
+      kyt_monitors_total: kytMonitors.length,
     },
     risk_distribution: riskDistribution,
     recent_screenings: history.slice(0, 10),
+    recent_alerts: recentAlerts,
     api_status: {
-      ai_configured: hasAiConfigured,
-      ai_provider: "claude-code",
-      ai_mode: aiMode,
-      trustin_configured: hasTrustinKey,
+      width_configured: !!getWidthApiKey(),
+      etherscan_configured: !!settings.api.etherscanApiKey,
+      trongrid_configured: !!settings.api.trongridApiKey,
       scheduler_active: scheduler.initialized,
       scheduler_jobs: scheduler.active_jobs,
     },

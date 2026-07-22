@@ -36,13 +36,16 @@ export async function PUT(
   const updates: Record<string, unknown> = {};
 
   if (body.name !== undefined) updates.name = body.name;
-  if (body.addresses !== undefined) updates.addresses = body.addresses;
-  if (body.scenario !== undefined) updates.scenario = body.scenario;
-  if (body.ruleset_id !== undefined) updates.ruleset_id = body.ruleset_id;
-  if (body.inflow_hops !== undefined) updates.inflow_hops = parseInt(body.inflow_hops);
-  if (body.outflow_hops !== undefined) updates.outflow_hops = parseInt(body.outflow_hops);
-  if (body.max_nodes !== undefined) updates.max_nodes = parseInt(body.max_nodes);
   if (body.enabled !== undefined) updates.enabled = body.enabled;
+
+  // address monitors
+  if (body.tokens !== undefined) updates.tokens = body.tokens;
+  if (body.min_amount !== undefined) updates.min_amount = Number(body.min_amount);
+  if (body.in_ruleset_id !== undefined) updates.in_ruleset_id = parseInt(body.in_ruleset_id) || 0;
+  if (body.out_ruleset_id !== undefined) updates.out_ruleset_id = parseInt(body.out_ruleset_id) || 0;
+
+  // kyt monitors
+  if (body.kya_ruleset_id !== undefined) updates.kya_ruleset_id = parseInt(body.kya_ruleset_id) || 0;
 
   // Handle schedule changes
   if (body.schedule_preset !== undefined || body.schedule !== undefined) {

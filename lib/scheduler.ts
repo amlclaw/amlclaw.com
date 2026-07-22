@@ -1,6 +1,12 @@
 /**
- * Singleton in-process scheduler for continuous monitoring tasks.
- * Uses node-cron to schedule recurring screening jobs.
+ * Singleton in-process scheduler for the two monitoring modules.
+ *
+ * Both monitor types watch FUTURE activity:
+ *  - "address" monitors: each cycle pulls the address's NEW stablecoin
+ *    transfers (Etherscan/TronGrid), filters by amount, and KYT-screens each
+ *    tx — receiving = screen_direction "in", sending = "out".
+ *  - "kyt" monitors: each cycle runs a KYA screen of the watched counterparty
+ *    address (from/to of the origin tx) and alerts on risk escalation.
  */
 import cron, { type ScheduledTask } from "node-cron";
 import crypto from "crypto";
@@ -9,16 +15,12 @@ import {
   loadMonitor,
   updateMonitor,
   saveMonitorRun,
-  findRuleset,
-  loadRuleset,
   saveHistoryEntry,
 } from "./storage";
-import { kyaProDetect } from "./trustin-api";
-import { extractRiskPaths, type Rule } from "./extract-risk-paths";
-import { getTrustInApiKey } from "./settings";
-import { logAudit } from "./audit-log";
+import { kyaScreen, kytScreen, riskRank, normalizeRisk } from "./width-api";
+import { fetchNewTxs } from "./chain-txs";
+import { getSettings } from "./settings";
 import { sendWebhook, shouldAlert } from "./webhook";
-import { createCase } from "./case-storage";
 import type { MonitorTask, MonitorRun, MonitorRunResult, MonitorRunSummary } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -104,18 +106,8 @@ export async function executeMonitorTask(
   const task = loadMonitor(taskId);
   if (!task) return null;
 
-  const apiKey = getTrustInApiKey();
-
-  const { meta, filepath } = findRuleset(task.ruleset_id);
-  if (!meta || !filepath) {
-    console.error(`[Scheduler] Ruleset not found: ${task.ruleset_id}`);
-    return null;
-  }
-  const rules = loadRuleset(filepath) as Rule[];
-
   runningTasks.add(taskId);
   updateMonitor(taskId, { running: true });
-  logAudit("monitor.run_started", { task_id: taskId, trigger, address_count: task.addresses.length });
 
   const runId = `run_${Date.now()}_${crypto.randomUUID().slice(0, 6)}`;
   const run: MonitorRun = {
@@ -128,161 +120,34 @@ export async function executeMonitorTask(
   };
   saveMonitorRun(taskId, run);
 
-  const results: MonitorRunResult[] = [];
+  let results: MonitorRunResult[] = [];
+  let summary: MonitorRunSummary;
   let hasError = false;
 
-  for (const addr of task.addresses) {
-    try {
-      const directionMap: Record<string, string> = { withdrawal: "outflow" };
-      const direction = directionMap[task.scenario] || "all";
-
-      const opts = {
-        inflowHops: direction === "outflow" ? 0 : task.inflow_hops,
-        outflowHops: direction === "inflow" ? 0 : task.outflow_hops,
-        maxNodesPerHop: task.max_nodes,
-      };
-      if (direction === "all") {
-        opts.inflowHops = task.inflow_hops;
-        opts.outflowHops = task.outflow_hops;
-      }
-
-      const apiResult = await kyaProDetect(addr.chain, addr.address, apiKey, opts);
-
-      if (apiResult.error) {
-        results.push({
-          chain: addr.chain,
-          address: addr.address,
-          status: "error",
-          error: apiResult.error,
-        });
-        hasError = true;
-        continue;
-      }
-
-      const graphData = { graph_data: apiResult.details, address: addr.address };
-      const { riskEntities, summary, targetFindings, targetTagsRaw } = extractRiskPaths(
-        graphData,
-        rules,
-        Math.max(task.inflow_hops, task.outflow_hops),
-        task.scenario
-      );
-
-      const selfMatched: string[] = [];
-      for (const f of targetFindings) {
-        selfMatched.push(...f.matched_rules);
-      }
-
-      // Save as a screening history entry (cross-link)
-      const jobId = crypto.randomUUID().slice(0, 8);
-      const jobData: Record<string, unknown> = {
-        status: "completed",
-        completed_at: new Date().toISOString(),
-        source: "monitor",
-        monitor_task_id: taskId,
-        monitor_run_id: runId,
-        request: {
-          chain: addr.chain,
-          address: addr.address,
-          scenario: task.scenario,
-          ruleset: (meta.name as string) || task.ruleset_id,
-          ruleset_id: task.ruleset_id,
-          inflow_hops: task.inflow_hops,
-          outflow_hops: task.outflow_hops,
-          max_nodes: task.max_nodes,
-        },
-        result: {
-          target: {
-            chain: addr.chain,
-            address: addr.address,
-            tags: targetTagsRaw || [],
-            self_matched_rules: selfMatched,
-          },
-          scenario: task.scenario,
-          summary,
-          risk_entities: riskEntities,
-          rules_used: rules,
-        },
-      };
-      saveHistoryEntry(jobId, jobData);
-
-      const addrRiskLevel = summary.highest_severity as string || "Low";
-      results.push({
-        chain: addr.chain,
-        address: addr.address,
-        status: "completed",
-        job_id: jobId,
-        risk_level: addrRiskLevel,
-        risk_entities_count: riskEntities.length,
-      });
-
-      // Webhook alert for high risk
-      if (shouldAlert(addrRiskLevel)) {
-        sendWebhook("monitor.high_risk", {
-          task_id: taskId,
-          chain: addr.chain,
-          address: addr.address,
-          risk_level: addrRiskLevel,
-          job_id: jobId,
-        });
-      }
-
-      // Auto-create case for High/Severe
-      if (addrRiskLevel === "Severe" || addrRiskLevel === "High") {
-        try {
-          createCase({
-            screening_job_id: jobId,
-            trigger_risk_level: addrRiskLevel,
-            trigger_address: addr.address,
-            trigger_chain: addr.chain,
-            trigger_scenario: task.scenario,
-            trigger_ruleset: task.ruleset_id,
-            triggered_rules: (summary.rules_triggered as string[]) || [],
-          });
-        } catch { /* best effort */ }
-      }
-    } catch (e) {
-      results.push({
-        chain: addr.chain,
-        address: addr.address,
-        status: "error",
-        error: e instanceof Error ? e.message : String(e),
-      });
-      hasError = true;
+  try {
+    if (task.type === "address") {
+      ({ results, summary } = await runAddressMonitor(task, runId));
+    } else {
+      ({ results, summary } = await runKytMonitor(task, runId));
     }
+    hasError = results.some((r) => r.status === "error");
+  } catch (e) {
+    hasError = true;
+    results.push({
+      status: "error",
+      error: e instanceof Error ? e.message : String(e),
+    });
+    summary = { new_txs: 0, screened: 0, skipped: 0, flagged: 0, highest_risk: "low" };
   }
-
-  // Build summary
-  const flagged = results.filter((r) => r.risk_entities_count && r.risk_entities_count > 0).length;
-  const riskOrder = ["Severe", "High", "Medium", "Low"];
-  let highestRisk = "Low";
-  for (const r of results) {
-    if (r.risk_level && riskOrder.indexOf(r.risk_level) < riskOrder.indexOf(highestRisk)) {
-      highestRisk = r.risk_level;
-    }
-  }
-
-  const runSummary: MonitorRunSummary = {
-    total_addresses: task.addresses.length,
-    completed: results.filter((r) => r.status === "completed").length,
-    flagged,
-    highest_risk: highestRisk,
-  };
 
   const completedRun: MonitorRun = {
     ...run,
     completed_at: new Date().toISOString(),
     status: hasError && results.some((r) => r.status === "completed") ? "partial" : hasError ? "error" : "completed",
     results,
-    summary: runSummary,
+    summary,
   };
   saveMonitorRun(taskId, completedRun);
-  logAudit("monitor.run_completed", {
-    task_id: taskId,
-    run_id: runId,
-    status: completedRun.status,
-    flagged: runSummary.flagged,
-    highest_risk: highestRisk,
-  });
 
   // Update task
   runningTasks.delete(taskId);
@@ -291,10 +156,236 @@ export async function executeMonitorTask(
     running: false,
     last_run_at: completedRun.completed_at,
     next_run_at: nextRun || undefined,
-    last_result_summary: runSummary,
+    last_result_summary: summary,
   });
 
   return completedRun;
+}
+
+// ---------------------------------------------------------------------------
+// Address monitor — new txs → KYT each
+// ---------------------------------------------------------------------------
+async function runAddressMonitor(
+  task: MonitorTask,
+  runId: string,
+): Promise<{ results: MonitorRunResult[]; summary: MonitorRunSummary }> {
+  const settings = getSettings();
+  const maxTxPerRun = settings.monitoring.maxTxPerRun || 20;
+  const minAmount = task.min_amount ?? settings.monitoring.defaultMinAmount ?? 1;
+  const watchedTokens = task.tokens?.length ? task.tokens : ["USDT", "USDC"];
+
+  // 1. Pull new transfers since cursor
+  const { txs, cursor } = await fetchNewTxs(task.chain, task.address, task.cursor ?? {});
+  // Persist advanced cursor immediately so a mid-run crash doesn't re-screen.
+  updateMonitor(task.id, { cursor });
+
+  // 2. Filter: token + amount
+  const eligible = txs.filter(
+    (tx) => watchedTokens.includes(tx.token) && tx.amount >= minAmount,
+  );
+  const toScreen = eligible.slice(0, maxTxPerRun);
+  const skippedCount = eligible.length - toScreen.length;
+
+  const results: MonitorRunResult[] = [];
+
+  // 3. KYT-screen each tx — receiving = in, sending = out
+  for (const tx of toScreen) {
+    const direction = tx.direction; // "in" | "out"
+    try {
+      const result = await kytScreen({
+        chain: task.chain,
+        txId: tx.txId,
+        token: tx.token.toLowerCase(),
+        screenDirection: direction,
+        inRulesetId: task.in_ruleset_id ?? 0,
+        outRulesetId: task.out_ruleset_id ?? 0,
+        inflowHops: settings.screening.defaultInflowHops,
+        outflowHops: settings.screening.defaultOutflowHops,
+        maxNodesPerHop: settings.screening.maxNodesPerHop,
+        maxOpponentPaths: settings.screening.maxOpponentPaths,
+        minAmount: settings.screening.minAmount,
+      });
+
+      // Save as screening history (cross-link)
+      const jobId = crypto.randomUUID().slice(0, 8);
+      const completedAt = new Date().toISOString();
+      saveHistoryEntry(jobId, {
+        status: "completed",
+        type: "kyt",
+        completed_at: completedAt,
+        source: "monitor",
+        monitor_task_id: task.id,
+        monitor_run_id: runId,
+        request: {
+          chain: task.chain,
+          tx_id: tx.txId,
+          token: tx.token.toLowerCase(),
+          direction,
+          in_ruleset_id: task.in_ruleset_id ?? 0,
+          out_ruleset_id: task.out_ruleset_id ?? 0,
+        },
+        result,
+      }, {
+        type: "kyt",
+        chain: task.chain,
+        subject: tx.txId,
+        direction,
+        risk_level: result.risk,
+        hits_count: result.hits.length,
+        completed_at: completedAt,
+        source: "monitor",
+      });
+
+      results.push({
+        status: "completed",
+        job_id: jobId,
+        risk_level: result.risk,
+        tx_id: tx.txId,
+        direction,
+        token: tx.token,
+        amount: tx.amount,
+        counterparty: direction === "in" ? tx.from : tx.to,
+      });
+
+      if (shouldAlert(result.risk)) {
+        sendWebhook("monitor.high_risk", {
+          monitor_type: "address",
+          task_id: task.id,
+          chain: task.chain,
+          address: task.address,
+          tx_id: tx.txId,
+          direction,
+          amount: tx.amount,
+          token: tx.token,
+          risk: result.risk,
+          job_id: jobId,
+        });
+      }
+    } catch (e) {
+      results.push({
+        status: "error",
+        tx_id: tx.txId,
+        direction,
+        token: tx.token,
+        amount: tx.amount,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  // Record skipped overflow
+  for (const tx of eligible.slice(maxTxPerRun)) {
+    results.push({
+      status: "skipped",
+      tx_id: tx.txId,
+      direction: tx.direction,
+      token: tx.token,
+      amount: tx.amount,
+    });
+  }
+
+  const screened = results.filter((r) => r.status === "completed");
+  let highest = "low";
+  for (const r of screened) {
+    if (r.risk_level && riskRank(r.risk_level) > riskRank(highest)) highest = normalizeRisk(r.risk_level);
+  }
+
+  return {
+    results,
+    summary: {
+      new_txs: eligible.length,
+      screened: screened.length,
+      skipped: skippedCount,
+      flagged: screened.filter((r) => shouldAlert(r.risk_level || "low")).length,
+      highest_risk: highest,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// KYT monitor — periodic KYA of the watched counterparty address
+// ---------------------------------------------------------------------------
+async function runKytMonitor(
+  task: MonitorTask,
+  runId: string,
+): Promise<{ results: MonitorRunResult[]; summary: MonitorRunSummary }> {
+  const settings = getSettings();
+  const previousRisk = normalizeRisk(task.last_risk_level ?? "low");
+
+  const result = await kyaScreen({
+    chain: task.chain,
+    address: task.address,
+    rulesetId: task.kya_ruleset_id ?? 0,
+    scenario: "all",
+    inflowHops: settings.screening.defaultInflowHops,
+    outflowHops: settings.screening.defaultOutflowHops,
+    maxNodesPerHop: settings.screening.maxNodesPerHop,
+    maxOpponentPaths: settings.screening.maxOpponentPaths,
+    minAmount: settings.screening.minAmount,
+  });
+
+  const escalated = riskRank(result.risk) > riskRank(previousRisk);
+  updateMonitor(task.id, { last_risk_level: result.risk });
+
+  // Save as screening history (cross-link)
+  const jobId = crypto.randomUUID().slice(0, 8);
+  const completedAt = new Date().toISOString();
+  saveHistoryEntry(jobId, {
+    status: "completed",
+    type: "kya",
+    completed_at: completedAt,
+    source: "monitor",
+    monitor_task_id: task.id,
+    monitor_run_id: runId,
+    request: {
+      chain: task.chain,
+      address: task.address,
+      ruleset_id: task.kya_ruleset_id ?? 0,
+      scenario: "all",
+    },
+    result,
+  }, {
+    type: "kya",
+    chain: task.chain,
+    subject: task.address,
+    scenario: "all",
+    risk_level: result.risk,
+    hits_count: result.hits.length,
+    completed_at: completedAt,
+    source: "monitor",
+  });
+
+  if (escalated || shouldAlert(result.risk)) {
+    sendWebhook(escalated ? "monitor.risk_escalated" : "monitor.high_risk", {
+      monitor_type: "kyt",
+      task_id: task.id,
+      chain: task.chain,
+      address: task.address,
+      origin_tx_id: task.origin_tx_id,
+      watch_side: task.watch_side,
+      previous_risk: previousRisk,
+      risk: result.risk,
+      job_id: jobId,
+    });
+  }
+
+  return {
+    results: [{
+      status: "completed",
+      job_id: jobId,
+      address: task.address,
+      risk_level: result.risk,
+      previous_risk_level: previousRisk,
+      escalated,
+    }],
+    summary: {
+      new_txs: 1,
+      screened: 1,
+      skipped: 0,
+      flagged: shouldAlert(result.risk) || escalated ? 1 : 0,
+      highest_risk: result.risk,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

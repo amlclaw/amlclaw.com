@@ -2,11 +2,11 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import PageGuide from "@/components/shared/PageGuide";
-import ScreeningForm from "@/components/screening/ScreeningForm";
-import ScreeningResult from "@/components/screening/ScreeningResult";
+import KytForm from "@/components/screening/KytForm";
+import KytResult from "@/components/screening/KytResult";
 import HistoryPanel from "@/components/screening/HistoryPanel";
 
-export default function ScreeningPage() {
+export default function KytPage() {
   const [loading, setLoading] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobData, setJobData] = useState<Record<string, unknown> | null>(null);
@@ -37,7 +37,7 @@ export default function ScreeningPage() {
           setLoading(false);
           return;
         }
-        fetch(`/api/screening/${id}`)
+        fetch(`/api/kyt/${id}`)
           .then((r) => r.json())
           .then((data) => {
             failCount = 0;
@@ -74,7 +74,7 @@ export default function ScreeningPage() {
     (id: string) => {
       setJobId(id);
       setJobData(null);
-      setProgress("Submitting screening request...");
+      setProgress("Submitting KYT screening request...");
       setLoading(true);
       pollJob(id);
     },
@@ -87,7 +87,7 @@ export default function ScreeningPage() {
       setJobData(null);
       setProgress("Loading...");
       setLoading(true);
-      fetch(`/api/screening/${id}`)
+      fetch(`/api/kyt/${id}`)
         .then((r) => r.json())
         .then((data) => {
           setJobData(data);
@@ -108,22 +108,22 @@ export default function ScreeningPage() {
     <div style={{ display: "flex", gap: "var(--sp-4)", padding: "var(--sp-5) var(--sp-6)" }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <PageGuide
-          pageKey="screening"
-          title="Address Screening (KYA)"
-          description="Screen blockchain addresses via the width.info V3 API — rulesets run server-side."
+          pageKey="kyt"
+          title="Transaction Screening (KYT)"
+          description="Screen a transaction hash via the width.info V3 API. Choose in (source of funds), out (destination), or both — each direction uses its own KYT ruleset."
           tips={[
-            "Enter an address, pick a scenario, then start screening",
-            "Ruleset ID 0 uses your default server-side ruleset",
-            "Use 'Go on Monitoring' on a result to watch the address's future txs",
+            "Paste a tx hash, pick the screen direction, then start screening",
+            "IN / OUT ruleset IDs default to the KYT-IN / KYT-OUT builtins",
+            "Use 'Monitor from/to address' on a result to track the counterparty with periodic KYA",
           ]}
         />
-        <ScreeningForm onJobStarted={handleJobStarted} onLoading={setLoading} />
+        <KytForm onJobStarted={handleJobStarted} onLoading={setLoading} />
         <div style={{ marginTop: "var(--sp-3)" }}>
-          <ScreeningResult job={jobData} jobId={jobId} loading={loading} progress={progress} />
+          <KytResult job={jobData} jobId={jobId} loading={loading} progress={progress} />
         </div>
       </div>
       <div style={{ width: 200, flexShrink: 0 }}>
-        <HistoryPanel type="kya" onSelect={handleHistorySelect} refreshTrigger={refreshTrigger} />
+        <HistoryPanel type="kyt" onSelect={handleHistorySelect} refreshTrigger={refreshTrigger} />
       </div>
     </div>
   );

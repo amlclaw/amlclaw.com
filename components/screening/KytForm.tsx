@@ -3,26 +3,24 @@
 import { useState, useCallback } from "react";
 import { showToast } from "@/lib/utils";
 
-interface ScreeningFormProps {
+interface KytFormProps {
   onJobStarted: (jobId: string) => void;
   onLoading: (loading: boolean) => void;
 }
 
-const SCENARIOS = [
-  { value: "all", label: "Full Scan", desc: "All rules applied" },
-  { value: "deposit", label: "Deposit", desc: "Inflow source" },
-  { value: "withdrawal", label: "Withdrawal", desc: "Outflow dest check" },
-  { value: "cdd", label: "CDD", desc: "Threshold triggers" },
-  { value: "monitoring", label: "Monitoring", desc: "Ongoing alerts" },
-  { value: "screening", label: "Screening", desc: "Screening rules" },
+const DIRECTIONS = [
+  { value: "both", label: "Both", desc: "Source + destination" },
+  { value: "in", label: "In", desc: "Source of funds (KYT-IN)" },
+  { value: "out", label: "Out", desc: "Destination (KYT-OUT)" },
 ];
 
-export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningFormProps) {
-  const [scenario, setScenario] = useState("all");
+export default function KytForm({ onJobStarted, onLoading }: KytFormProps) {
   const [chain, setChain] = useState("Tron");
-  const [address, setAddress] = useState("");
+  const [txId, setTxId] = useState("");
   const [token, setToken] = useState("usdt");
-  const [rulesetId, setRulesetId] = useState("0");
+  const [direction, setDirection] = useState("both");
+  const [inRulesetId, setInRulesetId] = useState("0");
+  const [outRulesetId, setOutRulesetId] = useState("0");
   const [inflowHops, setInflowHops] = useState("3");
   const [outflowHops, setOutflowHops] = useState("3");
   const [maxNodes, setMaxNodes] = useState("50");
@@ -32,8 +30,8 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!address.trim()) {
-        showToast("Please enter an address", "error");
+      if (!txId.trim()) {
+        showToast("Please enter a transaction hash", "error");
         return;
       }
 
@@ -41,15 +39,16 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
       onLoading(true);
 
       try {
-        const res = await fetch("/api/screening", {
+        const res = await fetch("/api/kyt", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            scenario,
             chain,
-            address: address.trim(),
+            tx_id: txId.trim(),
             token,
-            ruleset_id: rulesetId,
+            direction,
+            in_ruleset_id: inRulesetId,
+            out_ruleset_id: outRulesetId,
             inflow_hops: inflowHops,
             outflow_hops: outflowHops,
             max_nodes: maxNodes,
@@ -58,7 +57,7 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
 
         if (!res.ok) {
           const err = await res.json();
-          throw new Error(err.detail || "Failed to start screening");
+          throw new Error(err.detail || "Failed to start KYT screening");
         }
 
         const { job_id } = await res.json();
@@ -69,13 +68,13 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
       }
       setSubmitting(false);
     },
-    [scenario, chain, address, token, rulesetId, inflowHops, outflowHops, maxNodes, onJobStarted, onLoading]
+    [chain, txId, token, direction, inRulesetId, outRulesetId, inflowHops, outflowHops, maxNodes, onJobStarted, onLoading]
   );
 
   return (
     <div className="card" style={{ padding: "var(--sp-3) var(--sp-4)" }}>
       <form onSubmit={handleSubmit}>
-        {/* Address Input */}
+        {/* Tx Hash Input */}
         <div className="screening-address-input" style={{ marginBottom: "var(--sp-3)" }}>
           <select
             className="screening-chain-select"
@@ -92,26 +91,26 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
           <input
             type="text"
             className="screening-address-field"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Enter blockchain address..."
+            value={txId}
+            onChange={(e) => setTxId(e.target.value)}
+            placeholder="Enter transaction hash..."
             required
           />
         </div>
 
-        {/* Scenario Chips */}
+        {/* Direction Chips */}
         <div style={{ marginBottom: "var(--sp-3)" }}>
-          <label className="label" style={{ fontSize: "0.65rem" }}>Scenario</label>
+          <label className="label" style={{ fontSize: "0.65rem" }}>Screen Direction</label>
           <div className="screening-chips">
-            {SCENARIOS.map((s) => (
+            {DIRECTIONS.map((d) => (
               <button
-                key={s.value}
+                key={d.value}
                 type="button"
-                className={`screening-chip${scenario === s.value ? " active" : ""}`}
-                onClick={() => setScenario(s.value)}
+                className={`screening-chip${direction === d.value ? " active" : ""}`}
+                onClick={() => setDirection(d.value)}
               >
-                <span className="screening-chip-label">{s.label}</span>
-                <span className="screening-chip-desc">{s.desc}</span>
+                <span className="screening-chip-label">{d.label}</span>
+                <span className="screening-chip-desc">{d.desc}</span>
               </button>
             ))}
           </div>
@@ -162,25 +161,26 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
                     {[0, 1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>
                 </div>
-              </div>
-              <div style={{ display: "flex", gap: "var(--sp-3)", marginTop: "var(--sp-2)" }}>
                 <div style={{ flex: 1 }}>
                   <label className="label">Max Nodes / Hop</label>
                   <select className="input" value={maxNodes} onChange={(e) => setMaxNodes(e.target.value)}>
-                    {[20, 50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}</option>)}
+                    {[20, 50, 100, 200].map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label className="label">Ruleset ID (0 = default)</label>
-                  <input
-                    type="number"
-                    className="input"
-                    min={0}
-                    value={rulesetId}
-                    onChange={(e) => setRulesetId(e.target.value)}
-                  />
-                </div>
-                <div style={{ flex: 1 }} />
+              </div>
+              <div style={{ display: "flex", gap: "var(--sp-3)", marginTop: "var(--sp-2)" }}>
+                {(direction === "in" || direction === "both") && (
+                  <div style={{ flex: 1 }}>
+                    <label className="label">IN Ruleset ID (0 = KYT-IN builtin)</label>
+                    <input type="number" className="input" min={0} value={inRulesetId} onChange={(e) => setInRulesetId(e.target.value)} />
+                  </div>
+                )}
+                {(direction === "out" || direction === "both") && (
+                  <div style={{ flex: 1 }}>
+                    <label className="label">OUT Ruleset ID (0 = KYT-OUT builtin)</label>
+                    <input type="number" className="input" min={0} value={outRulesetId} onChange={(e) => setOutRulesetId(e.target.value)} />
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -194,10 +194,10 @@ export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningForm
           style={{ width: "100%" }}
         >
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <line x1="7" y1="17" x2="17" y2="7" />
+            <polyline points="7 7 17 7 17 17" />
           </svg>
-          {submitting ? "Screening..." : "Start KYA Screening"}
+          {submitting ? "Screening..." : "Start KYT Screening"}
         </button>
       </form>
     </div>

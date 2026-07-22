@@ -47,7 +47,7 @@ export default function LandingNav() {
           </svg>
           GitHub
         </a>
-        <a href="/documents" className="landing-nav-cta">
+        <a href="/screening" className="landing-nav-cta">
           Launch App
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 12h14" /><path d="M12 5l7 7-7 7" />
@@ -106,7 +106,7 @@ export default function LandingNav() {
           >
             GitHub
           </a>
-          <a href="/documents" className="landing-nav-cta" style={{ justifyContent: "center", marginTop: 4 }}>
+          <a href="/screening" className="landing-nav-cta" style={{ justifyContent: "center", marginTop: 4 }}>
             Launch App →
           </a>
         </div>

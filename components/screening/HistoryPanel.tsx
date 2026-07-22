@@ -2,42 +2,39 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { shortenAddr, formatTime } from "@/lib/utils";
+import { riskColorVar, riskLabel } from "@/lib/risk-ui";
 
 interface HistoryEntry {
   job_id: string;
+  type: "kya" | "kyt";
   chain: string;
-  address: string;
-  scenario: string;
-  ruleset_name: string;
-  status: string;
-  risk_score?: number;
-  timestamp: string;
+  subject: string;
+  scenario?: string;
+  direction?: string;
+  risk_level: string;
+  hits_count: number;
+  completed_at: string;
+  source?: string;
 }
 
 interface HistoryPanelProps {
+  /** Filter: show only KYA or KYT entries. */
+  type: "kya" | "kyt";
   onSelect: (jobId: string) => void;
   refreshTrigger?: number;
 }
 
-export default function HistoryPanel({ onSelect, refreshTrigger }: HistoryPanelProps) {
+export default function HistoryPanel({ type, onSelect, refreshTrigger }: HistoryPanelProps) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
 
   const load = useCallback(() => {
-    fetch("/api/screening/history")
+    fetch(`/api/screening/history?type=${type}`)
       .then((r) => r.json())
       .then((data) => setEntries(Array.isArray(data) ? data : []))
       .catch(() => {});
-  }, []);
+  }, [type]);
 
   useEffect(() => { load(); }, [load, refreshTrigger]);
-
-  const riskColor = (score?: number) => {
-    if (score === undefined || score === null) return "var(--text-tertiary)";
-    if (score >= 80) return "var(--risk-severe)";
-    if (score >= 50) return "var(--risk-high)";
-    if (score >= 20) return "var(--risk-medium)";
-    return "var(--success)";
-  };
 
   return (
     <div className="card">
@@ -77,26 +74,24 @@ export default function HistoryPanel({ onSelect, refreshTrigger }: HistoryPanelP
                   fontWeight: 500, flex: 1, minWidth: 0,
                 }}
               >
-                {shortenAddr(e.address)}
+                {shortenAddr(e.subject)}
               </span>
-              {e.status === "completed" && e.risk_score !== undefined ? (
-                <span
-                  style={{
-                    fontSize: "0.65rem", fontWeight: 700,
-                    fontFamily: "var(--mono)", color: riskColor(e.risk_score),
-                    flexShrink: 0, marginLeft: 4,
-                  }}
-                >
-                  {e.risk_score}
-                </span>
-              ) : e.status === "running" ? (
-                <span style={{ fontSize: "0.6rem", color: "var(--warning)", flexShrink: 0 }}>Running</span>
-              ) : e.status === "error" ? (
-                <span style={{ fontSize: "0.6rem", color: "var(--danger)", flexShrink: 0 }}>Error</span>
-              ) : null}
+              <span
+                style={{
+                  fontSize: "0.6rem", fontWeight: 700,
+                  color: riskColorVar(e.risk_level),
+                  flexShrink: 0, marginLeft: 4, textTransform: "uppercase",
+                }}
+              >
+                {riskLabel(e.risk_level)}
+              </span>
             </div>
             <div style={{ fontSize: "0.6rem", color: "var(--text-tertiary)" }}>
-              {e.chain} &middot; {e.scenario} &middot; {formatTime(e.timestamp)}
+              {e.chain}
+              {e.type === "kyt" && e.direction ? <> &middot; {e.direction}</> : null}
+              {e.type === "kya" && e.scenario ? <> &middot; {e.scenario}</> : null}
+              {e.source === "monitor" ? <> &middot; ⏱</> : null}
+              {" "}&middot; {formatTime(e.completed_at)}
             </div>
           </div>
         ))}

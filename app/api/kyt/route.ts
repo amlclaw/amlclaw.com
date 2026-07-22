@@ -1,57 +1,60 @@
 import { NextResponse } from "next/server";
 import { saveHistoryEntry } from "@/lib/storage";
-import { kyaScreen, type KyaScreenResult } from "@/lib/width-api";
+import { kytScreen, type KytScreenResult, type KytDirection } from "@/lib/width-api";
 import { getSettings } from "@/lib/settings";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
 import crypto from "crypto";
 
 // In-memory job storage
-const screeningJobs: Record<string, Record<string, unknown>> = {};
+const kytJobs: Record<string, Record<string, unknown>> = {};
 
-// Make accessible to status routes
-export { screeningJobs };
+export { kytJobs };
+
+const DIRECTIONS: KytDirection[] = ["in", "out", "both"];
 
 export async function POST(req: Request) {
   const settings = getSettings();
   const body = await req.json();
   const chain = body.chain || "Tron";
-  const address = (body.address || "").trim();
-  const scenario = body.scenario || settings.screening.defaultScenario;
-  const rulesetId = parseInt(String(body.ruleset_id ?? settings.screening.defaultKyaRulesetId)) || 0;
+  const txId = (body.tx_id || "").trim();
+  const direction: KytDirection = DIRECTIONS.includes(body.direction) ? body.direction : "both";
+  const inRulesetId = parseInt(String(body.in_ruleset_id ?? settings.screening.defaultKytInRulesetId)) || 0;
+  const outRulesetId = parseInt(String(body.out_ruleset_id ?? settings.screening.defaultKytOutRulesetId)) || 0;
   const inflowHops = parseInt(body.inflow_hops || String(settings.screening.defaultInflowHops));
   const outflowHops = parseInt(body.outflow_hops || String(settings.screening.defaultOutflowHops));
   const maxNodes = parseInt(body.max_nodes || String(settings.screening.maxNodesPerHop));
   const token = body.token || "usdt";
 
-  if (!address) {
-    return NextResponse.json({ detail: "Address is required" }, { status: 400 });
+  if (!txId) {
+    return NextResponse.json({ detail: "Transaction hash is required" }, { status: 400 });
   }
 
   const jobId = crypto.randomUUID().slice(0, 8);
-  screeningJobs[jobId] = {
+  kytJobs[jobId] = {
     status: "running",
-    type: "kya",
-    progress: "Submitting KYA screen to width.info...",
+    type: "kyt",
+    progress: "Submitting KYT screen to width.info...",
     started_at: new Date().toISOString(),
     request: {
       chain,
-      address,
+      tx_id: txId,
       token,
-      scenario,
-      ruleset_id: rulesetId,
+      direction,
+      in_ruleset_id: inRulesetId,
+      out_ruleset_id: outRulesetId,
       inflow_hops: inflowHops,
       outflow_hops: outflowHops,
       max_nodes: maxNodes,
     },
   };
 
-  // Run screening in background (non-blocking)
-  runKyaScreening(jobId, {
+  runKytScreening(jobId, {
     chain,
-    address,
+    txId,
     token,
-    scenario,
-    rulesetId,
+    direction,
+    inRulesetId,
+    outRulesetId,
     inflowHops,
     outflowHops,
     maxNodes,
@@ -62,14 +65,15 @@ export async function POST(req: Request) {
   return NextResponse.json({ job_id: jobId });
 }
 
-async function runKyaScreening(
+async function runKytScreening(
   jobId: string,
   p: {
     chain: string;
-    address: string;
+    txId: string;
     token: string;
-    scenario: string;
-    rulesetId: number;
+    direction: KytDirection;
+    inRulesetId: number;
+    outRulesetId: number;
     inflowHops: number;
     outflowHops: number;
     maxNodes: number;
@@ -78,34 +82,35 @@ async function runKyaScreening(
   },
 ) {
   try {
-    screeningJobs[jobId].progress = "Screening in progress (server-side ruleset engine, 30-90s)...";
+    kytJobs[jobId].progress = "Screening transaction (server-side ruleset engine, 30-90s)...";
 
-    const result: KyaScreenResult = await kyaScreen({
+    const result: KytScreenResult = await kytScreen({
       chain: p.chain,
-      address: p.address,
+      txId: p.txId,
       token: p.token,
+      screenDirection: p.direction,
       inflowHops: p.inflowHops,
       outflowHops: p.outflowHops,
       maxNodesPerHop: p.maxNodes,
       maxOpponentPaths: p.maxOpponentPaths,
       minAmount: p.minAmount,
-      rulesetId: p.rulesetId,
-      scenario: p.scenario,
+      inRulesetId: p.inRulesetId,
+      outRulesetId: p.outRulesetId,
     });
 
     const jobData: Record<string, unknown> = {
       status: "completed",
-      type: "kya",
+      type: "kyt",
       completed_at: new Date().toISOString(),
-      request: screeningJobs[jobId].request,
+      request: kytJobs[jobId].request,
       result,
     };
-    screeningJobs[jobId] = jobData;
+    kytJobs[jobId] = jobData;
     saveHistoryEntry(jobId, jobData, {
-      type: "kya",
+      type: "kyt",
       chain: p.chain,
-      subject: p.address,
-      scenario: p.scenario,
+      subject: p.txId,
+      direction: p.direction,
       risk_level: result.risk,
       hits_count: result.hits.length,
       completed_at: jobData.completed_at as string,
@@ -114,9 +119,10 @@ async function runKyaScreening(
 
     if (shouldAlert(result.risk)) {
       sendWebhook("screening.high_risk", {
-        type: "kya",
+        type: "kyt",
         chain: p.chain,
-        address: p.address,
+        tx_id: p.txId,
+        direction: p.direction,
         risk: result.risk,
         risk_score: result.riskScore,
         job_id: jobId,
@@ -124,11 +130,11 @@ async function runKyaScreening(
     }
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e);
-    screeningJobs[jobId] = {
+    kytJobs[jobId] = {
       status: "error",
-      type: "kya",
+      type: "kyt",
       error: errMsg,
-      request: screeningJobs[jobId].request,
+      request: kytJobs[jobId].request,
     };
   }
 }

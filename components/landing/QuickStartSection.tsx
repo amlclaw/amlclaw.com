@@ -11,15 +11,15 @@ const steps = [
   },
   {
     num: "02",
-    title: "Add Your AI Key",
-    code: "Settings → AI Provider → paste your API key → done",
-    desc: "Works with OpenAI, Anthropic, or any compatible provider.",
+    title: "Add Your Width.info Key",
+    code: "Settings → API Keys → paste your width.info API key → done",
+    desc: "Free key at width.info — powers KYA/KYT screening with server-side rulesets.",
   },
   {
     num: "03",
     title: "Start Screening",
-    code: "Upload regulations → Generate policies → Screen addresses",
-    desc: "Your AI compliance team is live.",
+    code: "Screen an address (KYA) → Screen a tx (KYT) → Go on Monitoring",
+    desc: "Your compliance screening desk is live.",
   },
 ];
 
@@ -33,7 +33,7 @@ export default function QuickStartSection() {
           Up and Running in 3 Steps
         </h2>
         <p className="landing-section-desc" style={{ margin: "0 auto 0" }}>
-          No database. No complex configuration. Just your AI API key.
+          No database. No complex configuration. Just your width.info API key.
         </p>
       </div>
 

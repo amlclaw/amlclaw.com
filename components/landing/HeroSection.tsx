@@ -69,11 +69,11 @@ export default function HeroSection() {
         </h1>
 
         <p className="landing-hero-sub">
-          AMLClaw is five AI agents that read regulations, write policies,
+          AMLClaw screens addresses (KYA) and transactions (KYT)
           <br />
-          build rules, screen addresses, and monitor on-chain activity 24/7.
+          against professional server-side compliance rulesets — and keeps
           <br />
-          Just add your AI API key and go.
+          watching with 24/7 address &amp; counterparty monitoring.
         </p>
 
         <p className="landing-hero-sub-en">
@@ -81,7 +81,7 @@ export default function HeroSection() {
         </p>
 
         <div className="landing-hero-actions">
-          <a href="/documents" className="landing-hero-btn-primary">
+          <a href="/screening" className="landing-hero-btn-primary">
             Get Started
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14" /><path d="M12 5l7 7-7 7" />

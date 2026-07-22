@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, Suspense, lazy } from "react";
-import SARGenerator from "./SARGenerator";
-import { formatTime, shortenAddr } from "@/lib/utils";
-import { computeRiskDimensions } from "@/lib/risk-score";
-import type { RiskEntity, Tag } from "@/lib/extract-risk-paths";
+import { formatTime, shortenAddr, showToast } from "@/lib/utils";
+import { hitsToEntities } from "@/lib/parse-evidence-flow";
+import { riskPillClass, riskColorVar, riskLabel, recommendation, formatUsd } from "@/lib/risk-ui";
+import type { KyaScreenResult, WidthHit } from "@/lib/width-api";
 
 const FlowGraph = lazy(() => import("./FlowGraph"));
-const RiskRadar = lazy(() => import("./RiskRadar"));
 
 interface ScreeningResultProps {
   job: Record<string, unknown> | null;
@@ -43,7 +42,7 @@ export default function ScreeningResult({ job, jobId, loading, progress }: Scree
             <path d="M12 2L4 6v6c0 5.5 3.5 10.7 8 12 4.5-1.3 8-6.5 8-12V6l-8-4z" />
           </svg>
           <p style={{ color: "var(--text-tertiary)", fontSize: "var(--text-sm)", marginTop: "var(--sp-4)" }}>
-            Configure parameters above and click <strong>Start Screening</strong> to begin.
+            Configure parameters above and click <strong>Start KYA Screening</strong> to begin.
           </p>
         </div>
       </ResultContainer>
@@ -75,43 +74,22 @@ export default function ScreeningResult({ job, jobId, loading, progress }: Scree
   return <CompletedReport job={job} jobId={jobId} />;
 }
 
-function CompletedReport({ job, jobId }: { job: Record<string, unknown>; jobId: string | null }) {
+function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string | null }) {
   const [evidenceView, setEvidenceView] = useState<"list" | "graph">("list");
-  const [sarOpen, setSarOpen] = useState(false);
 
-  const r = (job.result as Record<string, unknown>) || {};
+  const r = (job.result ?? {}) as unknown as KyaScreenResult;
   const req = (job.request as Record<string, unknown>) || {};
-  const target = (r.target as Record<string, unknown>) || {};
-  const summary = (r.summary as Record<string, unknown>) || {};
-  const entities = (r.risk_entities as Record<string, unknown>[]) || [];
-  const selfMatchedRules = (target.self_matched_rules as string[]) || [];
-  const selfTags = (target.tags as Record<string, unknown>[]) || [];
-  const triggeredRules = (summary.rules_triggered as string[]) || [];
-  const rulesLoaded = (summary.rules_loaded as number) || 0;
-  const totalRules = (summary.total_rules as number) || rulesLoaded;
-  const categoriesApplied = (summary.categories_applied as string[]) || [];
-  const pathsDirection = (summary.paths_direction_filtered as string) || "";
+  const hits = r.hits || [];
+  const entities = hitsToEntities(hits);
+  const target = { address: r.address, chain: r.chain, tags: [] };
+  const rec = recommendation(hits.map((h) => h.action));
+  const scenario = (req.scenario as string) || "all";
 
-  const overallRisk = computeOverallRisk(summary, entities);
-  const riskScore = computeRiskScore(overallRisk);
-
-  // Six-dimension risk scoring
-  const riskResult = computeRiskDimensions(
-    entities as unknown as RiskEntity[],
-    selfTags as unknown as Tag[],
-    selfMatchedRules
-  );
-
-  const scenario = (r.scenario as string) || (req.scenario as string) || "all";
-
-  // Group entities by triggered rule
-  const ruleGroups = new Map<string, Record<string, unknown>[]>();
-  for (const entity of entities) {
-    const matched = (entity.matched_rules as string[]) || [];
-    for (const rid of matched) {
-      if (!ruleGroups.has(rid)) ruleGroups.set(rid, []);
-      ruleGroups.get(rid)!.push(entity);
-    }
+  // Group hits by rule
+  const ruleGroups = new Map<string, WidthHit[]>();
+  for (const hit of hits) {
+    if (!ruleGroups.has(hit.ruleCode)) ruleGroups.set(hit.ruleCode, []);
+    ruleGroups.get(hit.ruleCode)!.push(hit);
   }
 
   return (
@@ -127,46 +105,30 @@ function CompletedReport({ job, jobId }: { job: Record<string, unknown>; jobId: 
         >
           <div>
             <div style={{ fontSize: "var(--text-md)", fontWeight: 700, letterSpacing: "-0.01em" }}>
-              AML Address Screening Report
+              KYA Address Screening Report
             </div>
             <div style={{ color: "var(--text-tertiary)", fontSize: "var(--text-xs)", marginTop: "var(--sp-1)", display: "flex", gap: "var(--sp-3)", flexWrap: "wrap" }}>
               <span>{formatTime(job.completed_at as string)}</span>
               <span>&middot;</span>
-              <span>Engine: AMLClaw Web</span>
+              <span>Engine: width.info V3</span>
               <span>&middot;</span>
               <span>Scenario: {scenario}</span>
-              {categoriesApplied.length > 0 && (
-                <>
-                  <span>&middot;</span>
-                  <span>Categories: {categoriesApplied.join(", ")}</span>
-                </>
-              )}
+              <span>&middot;</span>
+              <span>Ruleset #{r.rulesetId}</span>
             </div>
           </div>
           <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "flex-start" }}>
-            {jobId && (
-              <div style={{ display: "flex", gap: "var(--sp-1)", marginTop: "var(--sp-2)" }}>
-                <a href={`/api/screening/${jobId}/export?format=pdf`} download className="btn btn-sm btn-secondary">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  PDF
-                </a>
-                <a href={`/api/screening/${jobId}/export?format=md`} download className="btn btn-sm btn-secondary">
-                  MD
-                </a>
-                <button className="btn btn-sm btn-primary" onClick={() => setSarOpen(true)}>
-                  📋 SAR
-                </button>
-              </div>
-            )}
-            <Suspense fallback={<RiskBadge level={overallRisk} />}>
-              <RiskRadar dimensions={riskResult.dimensions} total={riskResult.total} level={riskResult.level} />
-            </Suspense>
+            <GoMonitorButton chain={r.chain} address={r.address} />
+            <RiskBadge level={r.risk} score={r.riskScore} />
           </div>
         </div>
+
+        {/* Risk reason banner */}
+        {r.riskReason && (
+          <div className={`report-alert ${["critical", "high"].includes(r.risk) ? "report-alert-danger" : "report-alert-success"}`} style={{ marginBottom: "var(--sp-4)" }}>
+            {r.riskReason}
+          </div>
+        )}
 
         {/* ── 2. Subject Identification ── */}
         <div className="report-section">
@@ -175,161 +137,56 @@ function CompletedReport({ job, jobId }: { job: Record<string, unknown>; jobId: 
             <tbody>
               <tr>
                 <td style={{ color: "var(--text-tertiary)", width: 140, fontWeight: 600 }}>Network</td>
-                <td>{(target.chain as string) || (req.chain as string) || "-"}</td>
+                <td>{r.chain || (req.chain as string) || "-"}</td>
               </tr>
               <tr>
                 <td style={{ color: "var(--text-tertiary)", fontWeight: 600 }}>Address</td>
                 <td style={{ fontFamily: "var(--mono)", fontSize: "0.7rem", wordBreak: "break-all" }}>
-                  {(target.address as string) || (req.address as string) || "-"}
+                  {r.address || (req.address as string) || "-"}
                 </td>
               </tr>
+              {r.cluster?.name ? (
+                <tr>
+                  <td style={{ color: "var(--text-tertiary)", fontWeight: 600 }}>Cluster</td>
+                  <td>{r.cluster.name}{r.cluster.category ? ` (${r.cluster.category})` : ""}</td>
+                </tr>
+              ) : null}
+              {r.addressType ? (
+                <tr>
+                  <td style={{ color: "var(--text-tertiary)", fontWeight: 600 }}>Address Type</td>
+                  <td>{r.addressType}</td>
+                </tr>
+              ) : null}
               <tr>
-                <td style={{ color: "var(--text-tertiary)", fontWeight: 600 }}>Validation</td>
+                <td style={{ color: "var(--text-tertiary)", fontWeight: 600 }}>Identity Check</td>
                 <td>
-                  <span className={`badge ${selfTags.length > 0 || selfMatchedRules.length > 0 ? "badge-danger" : "badge-success"}`}>
-                    {selfTags.length > 0 || selfMatchedRules.length > 0 ? "FLAGS DETECTED" : "CLEAN"}
+                  <span className={`badge ${r.addressIdentifications?.length ? "badge-danger" : "badge-success"}`}>
+                    {r.addressIdentifications?.length ? "FLAGS DETECTED" : "CLEAN"}
                   </span>
                 </td>
-              </tr>
-              <tr>
-                <td style={{ color: "var(--text-tertiary)", fontWeight: 600 }}>Ruleset</td>
-                <td>{(req.ruleset as string) || "-"}</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        {/* ── 3. Target Self-Risk Assessment ── */}
-        {(selfTags.length > 0 || selfMatchedRules.length > 0) && (
+        {/* ── 3. Address Identifications ── */}
+        {r.addressIdentifications?.length > 0 && (
           <div className="report-section">
-            <div className="report-section-header">Target Self-Risk Assessment</div>
-            <div className="report-alert report-alert-danger">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-              Address has {selfTags.length} self-tag{selfTags.length !== 1 ? "s" : ""} and {selfMatchedRules.length} self-triggered rule{selfMatchedRules.length !== 1 ? "s" : ""}
-            </div>
-            {selfTags.length > 0 && (
-              <table className="data-table" style={{ marginBottom: "var(--sp-3)" }}>
-                <thead>
-                  <tr>
-                    <th>Primary Category</th>
-                    <th>Secondary Category</th>
-                    <th>Risk Level</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selfTags.map((t, i) => (
-                    <tr key={i}>
-                      <td><span className={`pill-${((t.risk_level as string) || "low").toLowerCase()}`}>{(t.primary_category as string) || "-"}</span></td>
-                      <td>{(t.secondary_category as string) || "-"}</td>
-                      <td>{(t.risk_level as string) || "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {selfMatchedRules.length > 0 && (
-              <div style={{ display: "flex", gap: "var(--sp-1)", flexWrap: "wrap" }}>
-                {selfMatchedRules.map((rid) => (
-                  <code key={rid} style={{ fontFamily: "var(--mono)", fontSize: "0.7rem", background: "var(--surface-2)", padding: "2px 6px", borderRadius: 3, border: "1px solid var(--border-default)" }}>
-                    {rid}
-                  </code>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── 4. Key Risk Indicators ── */}
-        <div className="report-section">
-          <div className="report-section-header">Key Risk Indicators (KRI)</div>
-          <div className="report-kri-grid">
-            <KriCard value={riskResult.total} label="Risk Score" color={riskScoreColor(riskResult.total)} unit="/100" />
-            <KriCard value={riskResult.level} label="Risk Level" color={riskLevelColor(riskResult.level)} />
-            <KriCard value={scenario} label="Scenario" color="var(--text-secondary)" />
-            <KriCard value={pathsDirection || "all"} label="Direction" color="var(--text-secondary)" />
-            <KriCard value={entities.length} label="Paths Analyzed" color={entities.length > 0 ? "var(--risk-high)" : "var(--success)"} />
-            <KriCard
-              value={entities.length === 0 ? "Pass" : overallRisk === "Severe" || overallRisk === "High" ? "Reject" : "Review"}
-              label="Recommendation"
-              color={entities.length === 0 ? "var(--success)" : "var(--danger)"}
-            />
-          </div>
-        </div>
-
-        {/* ── 5. Custom Policy Enforcement ── */}
-        <div className="report-section">
-          <div className="report-section-header">Custom Policy Enforcement</div>
-          <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginBottom: "var(--sp-2)" }}>
-            Loaded <strong style={{ color: "var(--text-secondary)" }}>{rulesLoaded || totalRules}</strong> of <strong style={{ color: "var(--text-secondary)" }}>{totalRules}</strong> rules
-          </div>
-          {triggeredRules.length > 0 ? (
-            <>
-              <div className="report-alert report-alert-danger">
-                {triggeredRules.length} rule{triggeredRules.length !== 1 ? "s" : ""} triggered
-              </div>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Rule ID</th>
-                    <th>Risk</th>
-                    <th>Name</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {triggeredRules.map((rid) => {
-                    const ruleDetail = findRuleInEntities(rid, entities);
-                    return (
-                      <tr key={rid}>
-                        <td style={{ fontFamily: "var(--mono)" }}>{rid}</td>
-                        <td>
-                          <span className={`risk-pill ${(ruleDetail.risk_level || "").toLowerCase()}`}>
-                            {ruleDetail.risk_level || "-"}
-                          </span>
-                        </td>
-                        <td>{ruleDetail.name || "-"}</td>
-                        <td>
-                          <span className="action-pill" style={{ background: "var(--surface-3)", border: "1px solid var(--border-default)" }}>
-                            {ruleDetail.action || "-"}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </>
-          ) : (
-            <div className="report-alert report-alert-success">
-              All rules passed — no policy violations detected
-            </div>
-          )}
-        </div>
-
-        {/* ── 6. On-Chain Graph Discovery ── */}
-        {entities.length > 0 && (
-          <div className="report-section">
-            <div className="report-section-header">On-Chain Graph Discovery</div>
+            <div className="report-section-header">Address Identifications</div>
             <table className="data-table">
               <thead>
                 <tr>
                   <th>Category</th>
-                  <th>Risk Level</th>
-                  <th>Min Depth</th>
-                  <th>Entities</th>
+                  <th>Name</th>
+                  <th>Description</th>
                 </tr>
               </thead>
               <tbody>
-                {groupEntitiesByCategory(entities).map(({ category, riskLevel, minDepth, count }) => (
-                  <tr key={category + riskLevel}>
-                    <td><span className={`pill-${riskLevel.toLowerCase()}`}>{category}</span></td>
-                    <td>{riskLevel}</td>
-                    <td>Hop {minDepth}</td>
-                    <td>{count}</td>
+                {r.addressIdentifications.map((id, i) => (
+                  <tr key={i}>
+                    <td><span className="pill-severe">{id.category}</span></td>
+                    <td>{id.name}</td>
+                    <td style={{ color: "var(--text-tertiary)" }}>{id.description}</td>
                   </tr>
                 ))}
               </tbody>
@@ -337,10 +194,93 @@ function CompletedReport({ job, jobId }: { job: Record<string, unknown>; jobId: 
           </div>
         )}
 
-        {/* ── 7. Detailed Risk Evidence ── */}
+        {/* ── 4. Key Risk Indicators ── */}
+        <div className="report-section">
+          <div className="report-section-header">Key Risk Indicators (KRI)</div>
+          <div className="report-kri-grid">
+            <KriCard value={r.riskScore} label="Risk Score" color={riskColorVar(r.risk)} unit="/100" />
+            <KriCard value={riskLabel(r.risk)} label="Risk Level" color={riskColorVar(r.risk)} />
+            <KriCard value={`${r.hitPaths}/${r.totalPaths}`} label="Hit Paths" color={r.hitPaths > 0 ? "var(--risk-high)" : "var(--success)"} />
+            <KriCard value={`${(r.inflowRiskRate * 100).toFixed(1)}%`} label="Inflow Risk Rate" color={r.inflowRiskRate > 0 ? "var(--risk-high)" : "var(--text-secondary)"} />
+            <KriCard value={`${(r.outflowRiskRate * 100).toFixed(1)}%`} label="Outflow Risk Rate" color={r.outflowRiskRate > 0 ? "var(--risk-high)" : "var(--text-secondary)"} />
+            <KriCard
+              value={rec}
+              label="Recommendation"
+              color={rec === "Pass" ? "var(--success)" : rec === "Review" ? "var(--risk-medium)" : "var(--danger)"}
+            />
+          </div>
+        </div>
+
+        {/* ── 5. Exposure Breakdown ── */}
+        {r.exposures?.length > 0 && (
+          <div className="report-section">
+            <div className="report-section-header">Exposure Breakdown</div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Direction</th>
+                  <th>Exposure Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.exposures.map((ex, i) => (
+                  <tr key={i}>
+                    <td><span className={`pill-${riskPillClass(ex.category === "Sanctions" ? "critical" : "medium")}`}>{ex.category}</span></td>
+                    <td>{ex.direction}</td>
+                    <td style={{ fontFamily: "var(--mono)" }}>{formatUsd(ex.value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ── 6. Rules Triggered ── */}
+        <div className="report-section">
+          <div className="report-section-header">Rules Triggered</div>
+          {ruleGroups.size > 0 ? (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Rule Code</th>
+                  <th>Risk</th>
+                  <th>Name</th>
+                  <th>Action</th>
+                  <th>Paths</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from(ruleGroups.entries()).map(([code, groupHits]) => (
+                  <tr key={code}>
+                    <td style={{ fontFamily: "var(--mono)" }}>{code}</td>
+                    <td>
+                      <span className={`risk-pill ${riskPillClass(groupHits[0].riskLevel)}`}>
+                        {riskLabel(groupHits[0].riskLevel)}
+                      </span>
+                    </td>
+                    <td>{groupHits[0].ruleName}</td>
+                    <td>
+                      <span className="action-pill" style={{ background: "var(--surface-3)", border: "1px solid var(--border-default)" }}>
+                        {groupHits[0].action}
+                      </span>
+                    </td>
+                    <td>{groupHits.length}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="report-alert report-alert-success">
+              All rules passed — no policy violations detected
+            </div>
+          )}
+        </div>
+
+        {/* ── 7. Risk Evidence ── */}
         <div className="report-section">
           <div className="report-section-header">
-            <span>Detailed Risk Evidence ({entities.length})</span>
+            <span>Risk Evidence ({entities.length})</span>
             {entities.length > 0 && (
               <div className="tab-bar" style={{ width: "auto" }}>
                 <button className={`tab-btn ${evidenceView === "list" ? "active" : ""}`} onClick={() => setEvidenceView("list")}>
@@ -355,7 +295,7 @@ function CompletedReport({ job, jobId }: { job: Record<string, unknown>; jobId: 
 
           {entities.length === 0 ? (
             <div style={{ textAlign: "center", padding: "var(--sp-8)", color: "var(--success)" }}>
-              <div style={{ fontSize: "2rem", marginBottom: "var(--sp-2)" }}>{"\u2713"}</div>
+              <div style={{ fontSize: "2rem", marginBottom: "var(--sp-2)" }}>{"✓"}</div>
               <div style={{ fontSize: "var(--text-sm)", fontWeight: 500 }}>
                 No risk entities detected. Address appears clean.
               </div>
@@ -366,30 +306,22 @@ function CompletedReport({ job, jobId }: { job: Record<string, unknown>; jobId: 
                 <div className="spinner spinner-lg" />
               </div>
             }>
-              <FlowGraph entities={entities} target={target} scenario={scenario} chain={(target.chain as string) || (req.chain as string) || "Tron"} />
+              <FlowGraph
+                entities={entities as unknown as Record<string, unknown>[]}
+                target={target as unknown as Record<string, unknown>}
+                scenario={scenario}
+                chain={r.chain || "Tron"}
+              />
             </Suspense>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
-              {/* Group by rule */}
-              {Array.from(ruleGroups.entries()).map(([rid, ruleEntities]) => (
-                <div key={rid}>
-                  <div style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "var(--sp-2)" }}>
-                    Trigger: <code style={{ fontFamily: "var(--mono)", fontSize: "0.7rem", background: "var(--surface-2)", padding: "1px 5px", borderRadius: 3 }}>{rid}</code>
-                  </div>
-                  {ruleEntities.map((entity, idx) => (
-                    <EntityCard key={idx} entity={entity} />
-                  ))}
-                </div>
-              ))}
-              {/* Entities with no specific rule grouping */}
-              {entities.filter((e) => !((e.matched_rules as string[]) || []).length).map((entity, idx) => (
-                <EntityCard key={`ungrouped-${idx}`} entity={entity} />
+              {entities.map((entity, idx) => (
+                <EntityCard key={idx} entity={entity as unknown as Record<string, unknown>} />
               ))}
             </div>
           )}
         </div>
       </div>
-      {sarOpen && jobId && <SARGenerator jobId={jobId} job={job} onClose={() => setSarOpen(false)} />}
     </ResultContainer>
   );
 }
@@ -400,24 +332,18 @@ function ResultContainer({ children }: { children: React.ReactNode }) {
   return <div className="card" style={{ minHeight: 300 }}>{children}</div>;
 }
 
-function RiskBadge({ level }: { level: string }) {
-  const colors: Record<string, { bg: string; color: string; border: string }> = {
-    severe: { bg: "rgba(239,68,68,0.15)", color: "var(--risk-severe)", border: "rgba(239,68,68,0.3)" },
-    high: { bg: "rgba(249,115,22,0.15)", color: "var(--risk-high)", border: "rgba(249,115,22,0.3)" },
-    medium: { bg: "rgba(234,179,8,0.15)", color: "var(--risk-medium)", border: "rgba(234,179,8,0.3)" },
-    low: { bg: "rgba(34,197,94,0.15)", color: "var(--risk-low)", border: "rgba(34,197,94,0.3)" },
-  };
-  const c = colors[level.toLowerCase()] || colors.low;
+export function RiskBadge({ level, score }: { level: string; score?: number }) {
+  const color = riskColorVar(level);
   return (
     <div
       style={{
         display: "flex", flexDirection: "column", alignItems: "center",
         padding: "10px 16px", borderRadius: "var(--radius)",
         fontWeight: 700, fontSize: "var(--text-sm)", minWidth: 80,
-        background: c.bg, color: c.color, border: `1px solid ${c.border}`,
+        background: "var(--surface-2)", color, border: `1px solid ${color}`,
       }}
     >
-      {level}
+      {riskLabel(level)}{typeof score === "number" ? ` · ${score}` : ""}
       <span style={{ fontSize: "0.65rem", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 2, opacity: 0.8 }}>
         Risk Level
       </span>
@@ -425,7 +351,45 @@ function RiskBadge({ level }: { level: string }) {
   );
 }
 
-function KriCard({ value, label, color, unit }: { value: string | number; label: string; color: string; unit?: string }) {
+/** One-click add the screened address to Address Monitoring. */
+export function GoMonitorButton({ chain, address }: { chain: string; address: string }) {
+  const [state, setState] = useState<"idle" | "saving" | "done">("idle");
+
+  const add = async () => {
+    if (state !== "idle") return;
+    setState("saving");
+    try {
+      const res = await fetch("/api/monitors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "address", chain, address }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to create monitor");
+      }
+      setState("done");
+      showToast("Address added to monitoring", "success");
+    } catch (e) {
+      setState("idle");
+      showToast(e instanceof Error ? e.message : "Error", "error");
+    }
+  };
+
+  return (
+    <button
+      className="btn btn-sm btn-secondary"
+      onClick={add}
+      disabled={state !== "idle"}
+      style={{ marginTop: "var(--sp-2)" }}
+      title="Watch this address's future transactions — each new tx is KYT-screened"
+    >
+      {state === "done" ? "✓ Monitoring" : state === "saving" ? "Adding..." : "⏱ Go on Monitoring"}
+    </button>
+  );
+}
+
+export function KriCard({ value, label, color, unit }: { value: string | number; label: string; color: string; unit?: string }) {
   return (
     <div
       style={{
@@ -444,17 +408,18 @@ function KriCard({ value, label, color, unit }: { value: string | number; label:
   );
 }
 
-function EntityCard({ entity }: { entity: Record<string, unknown> }) {
+export function EntityCard({ entity }: { entity: Record<string, unknown> }) {
   const [open, setOpen] = useState(false);
   const addr = (entity.address as string) || "Unknown";
   const tag = entity.tag as Record<string, unknown> | undefined;
   const matchedRules = (entity.matched_rules as string[]) || [];
   const minDeep = entity.min_deep as number;
   const evidencePaths = (entity.evidence_paths as Record<string, unknown>[]) || [];
-  const riskLevel = tag?.risk_level ? String(tag.risk_level).toLowerCase() : "low";
+  const riskLevelRaw = tag?.risk_level ? String(tag.risk_level) : "low";
+  const pillCls = riskPillClass(riskLevelRaw);
 
   return (
-    <div className={`report-evidence ${riskLevel}`}>
+    <div className={`report-evidence ${pillCls}`}>
       <div
         onClick={() => setOpen(!open)}
         style={{
@@ -463,8 +428,8 @@ function EntityCard({ entity }: { entity: Record<string, unknown> }) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-          <span className={`pill-${riskLevel}`} style={{ flexShrink: 0 }}>
-            {tag?.primary_category ? String(tag.primary_category) : riskLevel}
+          <span className={`pill-${pillCls}`} style={{ flexShrink: 0 }}>
+            {tag?.primary_category ? String(tag.primary_category) : riskLabel(riskLevelRaw)}
           </span>
           <span style={{ fontFamily: "var(--mono)", fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>
             {shortenAddr(addr)}
@@ -544,80 +509,4 @@ function Badge({ children }: { children: React.ReactNode }) {
       {children}
     </span>
   );
-}
-
-/* ── Helper Functions ── */
-
-function computeOverallRisk(summary: Record<string, unknown>, entities: Record<string, unknown>[]): string {
-  if (summary.highest_severity) return summary.highest_severity as string;
-  if (entities.length === 0) return "Low";
-  if (entities.some((e) => hasSeverity(e, "Severe"))) return "Severe";
-  if (entities.some((e) => hasSeverity(e, "High"))) return "High";
-  if (entities.some((e) => hasSeverity(e, "Medium"))) return "Medium";
-  return "Low";
-}
-
-function hasSeverity(entity: Record<string, unknown>, level: string): boolean {
-  const tag = entity.tag as Record<string, unknown> | undefined;
-  return tag?.risk_level?.toString().toLowerCase() === level.toLowerCase();
-}
-
-function computeRiskScore(overallRisk: string): number {
-  const scores: Record<string, number> = { severe: 100, high: 85, medium: 50, low: 20 };
-  return scores[overallRisk.toLowerCase()] || 20;
-}
-
-function riskScoreColor(score: number): string {
-  if (score >= 85) return "var(--risk-severe)";
-  if (score >= 50) return "var(--risk-high)";
-  if (score >= 30) return "var(--risk-medium)";
-  return "var(--risk-low)";
-}
-
-function riskLevelColor(level: string): string {
-  const colors: Record<string, string> = {
-    severe: "var(--risk-severe)", high: "var(--risk-high)",
-    medium: "var(--risk-medium)", low: "var(--risk-low)",
-  };
-  return colors[level.toLowerCase()] || "var(--text-secondary)";
-}
-
-function findRuleInEntities(ruleId: string, entities: Record<string, unknown>[]): { name: string; risk_level: string; action: string } {
-  for (const e of entities) {
-    const rules = (e.matched_rules_detail as Record<string, unknown>[]) || [];
-    for (const r of rules) {
-      if (r.rule_id === ruleId) return { name: (r.name as string) || "", risk_level: (r.risk_level as string) || "", action: (r.action as string) || "" };
-    }
-  }
-  // Fallback: infer from entity tag
-  for (const e of entities) {
-    const matched = (e.matched_rules as string[]) || [];
-    if (matched.includes(ruleId)) {
-      const tag = e.tag as Record<string, unknown> | undefined;
-      return { name: "", risk_level: (tag?.risk_level as string) || "", action: "" };
-    }
-  }
-  return { name: "", risk_level: "", action: "" };
-}
-
-function groupEntitiesByCategory(entities: Record<string, unknown>[]): { category: string; riskLevel: string; minDepth: number; count: number }[] {
-  const groups = new Map<string, { riskLevel: string; minDepth: number; count: number }>();
-  for (const e of entities) {
-    const tag = e.tag as Record<string, unknown> | undefined;
-    const cat = (tag?.primary_category as string) || "Unknown";
-    const risk = (tag?.risk_level as string) || "Low";
-    const depth = (e.min_deep as number) || 0;
-    const key = `${cat}|${risk}`;
-    const existing = groups.get(key);
-    if (existing) {
-      existing.count++;
-      existing.minDepth = Math.min(existing.minDepth, depth);
-    } else {
-      groups.set(key, { riskLevel: risk, minDepth: depth, count: 1 });
-    }
-  }
-  return Array.from(groups.entries()).map(([key, val]) => ({
-    category: key.split("|")[0],
-    ...val,
-  }));
 }
