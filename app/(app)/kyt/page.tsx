@@ -1,12 +1,21 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import PageGuide from "@/components/shared/PageGuide";
 import KytForm from "@/components/screening/KytForm";
 import KytResult from "@/components/screening/KytResult";
 import HistoryPanel from "@/components/screening/HistoryPanel";
 
 export default function KytPage() {
+  return (
+    <Suspense fallback={null}>
+      <KytPageInner />
+    </Suspense>
+  );
+}
+
+function KytPageInner() {
   const [loading, setLoading] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobData, setJobData] = useState<Record<string, unknown> | null>(null);
@@ -69,6 +78,18 @@ export default function KytPage() {
   useEffect(() => {
     return () => stopPolling();
   }, [stopPolling]);
+
+  // Deep link: /kyt?job=<id> auto-loads that report (monitor "view" links)
+  const searchParams = useSearchParams();
+  const deepLinkedRef = useRef(false);
+  useEffect(() => {
+    const job = searchParams.get("job");
+    if (job && !deepLinkedRef.current) {
+      deepLinkedRef.current = true;
+      handleHistorySelect(job);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleJobStarted = useCallback(
     (id: string) => {

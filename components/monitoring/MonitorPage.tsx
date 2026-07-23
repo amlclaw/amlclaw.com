@@ -86,7 +86,9 @@ export default function MonitorPage({ type }: MonitorPageProps) {
         <CreateModal type={type} onClose={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); load(); }} />
       )}
       {selected && (
-        <RunsModal monitor={selected} onClose={() => setSelected(null)} />
+        selected.type === "address"
+          ? <TxLedgerModal monitor={selected} onClose={() => setSelected(null)} />
+          : <RunsModal monitor={selected} onClose={() => setSelected(null)} />
       )}
     </div>
   );
@@ -354,9 +356,251 @@ function CreateModal({ type, onClose, onCreated }: { type: "address" | "kyt"; on
   );
 }
 
-/* ── Runs Modal ── */
+/* ── Time helper ── */
+
+function relTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min${mins !== 1 ? "s" : ""} ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hr${hrs !== 1 ? "s" : ""} ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} day${days !== 1 ? "s" : ""} ago`;
+}
+
+/* ── Tx Ledger Modal (address monitors) — tronscan-style table ── */
+
+interface LedgerTx {
+  tx_id: string;
+  block_number: number;
+  timestamp: number;
+  from: string;
+  to: string;
+  token: string;
+  amount: number;
+  direction: "in" | "out";
+  kyt_status: "pending" | "screened" | "error" | "failed";
+  retry_count: number;
+  risk_level?: string;
+  job_id?: string;
+  error?: string;
+}
+
+function TxLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: () => void }) {
+  const [tab, setTab] = useState<"txs" | "runs">("txs");
+  const [txs, setTxs] = useState<LedgerTx[]>([]);
+  const [stats, setStats] = useState<{ total: number; pending: number; screened: number; failed: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    fetch(`/api/monitors/${monitor.id}/txs`)
+      .then((r) => r.json())
+      .then((data) => {
+        setTxs(Array.isArray(data.txs) ? data.txs : []);
+        setStats(data.stats ?? null);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [monitor.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 980, width: "94vw", maxHeight: "84vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", minWidth: 0 }}>
+            <span className="truncate">{monitor.name}</span>
+            <div className="tab-bar" style={{ width: "auto", flexShrink: 0 }}>
+              <button className={`tab-btn ${tab === "txs" ? "active" : ""}`} onClick={() => setTab("txs")}>Transactions</button>
+              <button className={`tab-btn ${tab === "runs" ? "active" : ""}`} onClick={() => setTab("runs")}>Runs</button>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "var(--sp-2)", alignItems: "center" }}>
+            <button className="btn-icon" onClick={load} title="Refresh">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+            </button>
+            <button className="btn-icon" onClick={onClose}>✕</button>
+          </div>
+        </div>
+
+        {tab === "txs" ? (
+          <div style={{ overflowY: "auto", padding: "var(--sp-3) var(--sp-4)" }}>
+            {stats && (
+              <div style={{ display: "flex", gap: "var(--sp-3)", fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginBottom: "var(--sp-2)" }}>
+                <span>{stats.total} captured</span>
+                <span style={{ color: "var(--success)" }}>{stats.screened} screened</span>
+                {stats.pending > 0 && <span style={{ color: "var(--warning)" }}>{stats.pending} queued (next runs)</span>}
+                {stats.failed > 0 && <span style={{ color: "var(--danger)" }}>{stats.failed} failed</span>}
+              </div>
+            )}
+            {loading ? (
+              <div className="spinner spinner-lg" style={{ margin: "var(--sp-8) auto" }} />
+            ) : txs.length === 0 ? (
+              <div style={{ textAlign: "center", color: "var(--text-tertiary)", fontSize: "var(--text-sm)", padding: "var(--sp-8)" }}>
+                No transactions captured yet — new transfers appear here after the next run.
+              </div>
+            ) : (
+              <table className="data-table" style={{ fontSize: "var(--text-xs)" }}>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Txn Hash</th>
+                    <th>Age</th>
+                    <th>From</th>
+                    <th></th>
+                    <th>To</th>
+                    <th style={{ textAlign: "right" }}>Amount</th>
+                    <th>Token</th>
+                    <th>KYT Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {txs.map((tx) => (
+                    <TxRow key={tx.tx_id} tx={tx} monitorAddress={monitor.address} />
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ) : (
+          <div style={{ padding: "var(--sp-4)", overflowY: "auto" }}>
+            <RunsList monitor={monitor} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** One ledger row + expandable KYT detail (alerts list from the linked job). */
+function TxRow({ tx, monitorAddress }: { tx: LedgerTx; monitorAddress: string }) {
+  const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && tx.job_id && !detail) {
+      setDetailLoading(true);
+      fetch(`/api/kyt/${tx.job_id}`)
+        .then((r) => r.json())
+        .then(setDetail)
+        .catch(() => {})
+        .finally(() => setDetailLoading(false));
+    }
+  };
+
+  const kytCell = tx.kyt_status === "screened" ? (
+    <span style={{ color: riskColorVar(tx.risk_level || "low"), fontWeight: 700, textTransform: "uppercase" }}>
+      {riskLabel(tx.risk_level || "low")}
+    </span>
+  ) : tx.kyt_status === "pending" ? (
+    <span style={{ color: "var(--warning)" }}>Queued</span>
+  ) : tx.kyt_status === "error" ? (
+    <span style={{ color: "var(--warning)" }} title={tx.error}>Retry {tx.retry_count}/3</span>
+  ) : (
+    <span style={{ color: "var(--danger)" }} title={tx.error}>Failed</span>
+  );
+
+  const alerts = ((detail?.result as Record<string, unknown> | undefined)?.alerts as Record<string, unknown>[] | undefined) ?? [];
+
+  return (
+    <>
+      <tr onClick={toggle} style={{ cursor: "pointer" }}>
+        <td style={{ width: 20 }}>
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" style={{ transition: "transform 0.2s", transform: open ? "rotate(90deg)" : "" }}>
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </td>
+        <td style={{ fontFamily: "var(--mono)" }}>{shortenAddr(tx.tx_id)}</td>
+        <td style={{ whiteSpace: "nowrap" }} title={new Date(tx.timestamp).toLocaleString()}>{relTime(tx.timestamp)}</td>
+        <td style={{ fontFamily: "var(--mono)" }}>
+          <span style={tx.from === monitorAddress ? { color: "var(--primary-500)" } : undefined}>{shortenAddr(tx.from)}</span>
+        </td>
+        <td style={{ color: tx.direction === "in" ? "var(--success)" : "var(--risk-high)", fontWeight: 700 }}>
+          {tx.direction === "in" ? "⬇" : "⬆"}
+        </td>
+        <td style={{ fontFamily: "var(--mono)" }}>
+          <span style={tx.to === monitorAddress ? { color: "var(--primary-500)" } : undefined}>{shortenAddr(tx.to)}</span>
+        </td>
+        <td style={{ fontFamily: "var(--mono)", textAlign: "right" }}>{tx.amount.toLocaleString()}</td>
+        <td>{tx.token}</td>
+        <td>{kytCell}</td>
+      </tr>
+      {open && (
+        <tr>
+          <td colSpan={9} style={{ background: "var(--surface-1)", padding: "var(--sp-3)" }}>
+            {tx.kyt_status !== "screened" ? (
+              <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)" }}>
+                {tx.kyt_status === "pending" && "Waiting for the next monitor run to screen this transaction."}
+                {tx.kyt_status === "error" && `Last attempt failed (${tx.error}) — will retry automatically.`}
+                {tx.kyt_status === "failed" && `Screening failed after ${tx.retry_count} attempts: ${tx.error}`}
+              </div>
+            ) : detailLoading ? (
+              <div className="spinner" style={{ margin: "var(--sp-2) auto" }} />
+            ) : alerts.length === 0 ? (
+              <div style={{ fontSize: "var(--text-xs)", color: "var(--success)" }}>
+                ✓ No alerts — transaction clean under the applied KYT ruleset.
+              </div>
+            ) : (
+              <table className="data-table" style={{ fontSize: "0.65rem" }}>
+                <thead>
+                  <tr>
+                    <th>Level</th><th>Category</th><th>Exposure</th><th>Amount</th><th>Rule</th><th>Counterparty</th><th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {alerts.slice(0, 10).map((a, i) => (
+                    <tr key={i}>
+                      <td><span style={{ color: riskColorVar(String(a.alertLevel)), fontWeight: 700, textTransform: "uppercase" }}>{riskLabel(String(a.alertLevel))}</span></td>
+                      <td>{String(a.category ?? "")}</td>
+                      <td>{String(a.exposureType ?? "")}{a.hops ? ` · ${a.hops}h` : ""}</td>
+                      <td style={{ fontFamily: "var(--mono)" }}>{Number(a.alertAmount ?? 0).toLocaleString()}</td>
+                      <td style={{ fontFamily: "var(--mono)" }}>{String(a.categoryId ?? "")}</td>
+                      <td style={{ fontFamily: "var(--mono)" }}>{shortenAddr(String(a.opponentAddress ?? ""))}</td>
+                      <td>{String(a.action ?? "")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {tx.job_id && alerts.length > 10 && (
+              <div style={{ fontSize: "0.65rem", color: "var(--text-tertiary)", marginTop: 4 }}>
+                Showing first 10 of {alerts.length} alerts — open the full report from Tx Screening history (job {tx.job_id}).
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+/* ── Runs Modal (kyt monitors) ── */
 
 function RunsModal({ monitor, onClose }: { monitor: MonitorTask; onClose: () => void }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 720, maxHeight: "80vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <span>Run History — {monitor.name}</span>
+          <button className="btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div style={{ padding: "var(--sp-4)", overflowY: "auto" }}>
+          <RunsList monitor={monitor} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RunsList({ monitor }: { monitor: MonitorTask }) {
   const [runs, setRuns] = useState<MonitorRun[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -369,13 +613,7 @@ function RunsModal({ monitor, onClose }: { monitor: MonitorTask; onClose: () => 
   }, [monitor.id]);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 720, maxHeight: "80vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <span>Run History — {monitor.name}</span>
-          <button className="btn-icon" onClick={onClose}>✕</button>
-        </div>
-        <div style={{ padding: "var(--sp-4)", overflowY: "auto" }}>
+    <div>
           {loading && <div className="spinner" style={{ margin: "var(--sp-4) auto" }} />}
           {!loading && runs.length === 0 && (
             <div style={{ textAlign: "center", color: "var(--text-tertiary)", fontSize: "var(--text-sm)", padding: "var(--sp-6)" }}>
@@ -424,7 +662,7 @@ function RunsModal({ monitor, onClose }: { monitor: MonitorTask; onClose: () => 
                           {riskLabel(res.risk_level || "low")}
                         </span>
                         {res.job_id && (
-                          <a href={`/screening?job=${res.job_id}`} style={{ color: "var(--primary-500)" }}>view</a>
+                          <a href={`/kyt?job=${res.job_id}`} style={{ color: "var(--primary-500)" }}>view</a>
                         )}
                       </>
                     ) : (
@@ -441,8 +679,6 @@ function RunsModal({ monitor, onClose }: { monitor: MonitorTask; onClose: () => 
               </div>
             </div>
           ))}
-        </div>
-      </div>
     </div>
   );
 }

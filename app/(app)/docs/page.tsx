@@ -181,6 +181,7 @@ export default function ApiDocsPage() {
         <Endpoint method="DELETE" path="/api/monitors/{id}" desc={tr("删除任务（运行记录保留以备审计）。", "Delete (run records kept for audit).")} />
         <Endpoint method="POST" path="/api/monitors/{id}/run" desc={tr("立即手动执行一轮。", "Trigger a manual run now.")} />
         <Endpoint method="GET" path="/api/monitors/{id}/history" desc={tr("查看运行记录：每轮的新交易数 / 已筛查 / 跳过 / 最高风险，逐条结果含 job_id 可回查完整报告。", "Run records: per-run new/screened/skipped counts, highest risk; each result links a job_id to the full report.")} />
+        <Endpoint method="GET" path="/api/monitors/{id}/txs" desc={tr("地址监控的交易台账（区块浏览器式列表）：每笔捕获的转账及其 KYT 状态（pending/screened/error/failed）、风险等级与 job_id。筛查失败的交易保留在台账中，后续运行自动重试（最多 3 次）。", "Address monitor's transaction ledger (explorer-style list): every captured transfer with its KYT state (pending/screened/error/failed), risk level and job_id. Failed screens stay in the ledger and are retried on later runs (max 3 attempts).")} />
       </Section>
 
       {/* ── Webhook ── */}

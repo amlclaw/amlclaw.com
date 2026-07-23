@@ -1,12 +1,21 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import PageGuide from "@/components/shared/PageGuide";
 import ScreeningForm from "@/components/screening/ScreeningForm";
 import ScreeningResult from "@/components/screening/ScreeningResult";
 import HistoryPanel from "@/components/screening/HistoryPanel";
 
 export default function ScreeningPage() {
+  return (
+    <Suspense fallback={null}>
+      <ScreeningPageInner />
+    </Suspense>
+  );
+}
+
+function ScreeningPageInner() {
   const [loading, setLoading] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobData, setJobData] = useState<Record<string, unknown> | null>(null);
@@ -69,6 +78,18 @@ export default function ScreeningPage() {
   useEffect(() => {
     return () => stopPolling();
   }, [stopPolling]);
+
+  // Deep link: /screening?job=<id> auto-loads that report
+  const searchParams = useSearchParams();
+  const deepLinkedRef = useRef(false);
+  useEffect(() => {
+    const job = searchParams.get("job");
+    if (job && !deepLinkedRef.current) {
+      deepLinkedRef.current = true;
+      handleHistorySelect(job);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleJobStarted = useCallback(
     (id: string) => {

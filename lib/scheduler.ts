@@ -19,6 +19,13 @@ import {
 } from "./storage";
 import { kyaScreen, kytScreen, riskRank, normalizeRisk } from "./width-api";
 import { fetchNewTxs } from "./chain-txs";
+import {
+  appendMonitorTxs,
+  txsDueForScreening,
+  updateMonitorTx,
+  ledgerStats,
+  MAX_KYT_RETRIES,
+} from "./monitor-txs";
 import { getSettings } from "./settings";
 import { sendWebhook, shouldAlert } from "./webhook";
 import type { MonitorTask, MonitorRun, MonitorRunResult, MonitorRunSummary } from "./types";
@@ -163,8 +170,13 @@ export async function executeMonitorTask(
 }
 
 // ---------------------------------------------------------------------------
-// Address monitor — new txs → KYT each
+// Address monitor — new txs land in a per-monitor ledger, then get KYT-screened.
+// Failed screens stay in the ledger and are retried on later runs.
 // ---------------------------------------------------------------------------
+
+/** Pause between consecutive KYT screens to avoid hammering the width API. */
+const SCREEN_INTERVAL_MS = 2_000;
+
 async function runAddressMonitor(
   task: MonitorTask,
   runId: string,
@@ -174,29 +186,42 @@ async function runAddressMonitor(
   const minAmount = task.min_amount ?? settings.monitoring.defaultMinAmount ?? 1;
   const watchedTokens = task.tokens?.length ? task.tokens : ["USDT", "USDC"];
 
-  // 1. Pull new transfers since cursor
+  // 1. Pull new transfers since cursor; advance cursor on CAPTURE — screening
+  //    state lives in the ledger, so nothing is lost if screening fails.
   const { txs, cursor } = await fetchNewTxs(task.chain, task.address, task.cursor ?? {});
-  // Persist advanced cursor immediately so a mid-run crash doesn't re-screen.
   updateMonitor(task.id, { cursor });
 
-  // 2. Filter: token + amount
+  // 2. Filter token + amount, record into the ledger as pending
   const eligible = txs.filter(
     (tx) => watchedTokens.includes(tx.token) && tx.amount >= minAmount,
   );
-  const toScreen = eligible.slice(0, maxTxPerRun);
-  const skippedCount = eligible.length - toScreen.length;
+  appendMonitorTxs(
+    task.id,
+    eligible.map((tx) => ({
+      tx_id: tx.txId,
+      block_number: tx.blockNumber,
+      timestamp: tx.timestamp,
+      from: tx.from,
+      to: tx.to,
+      token: tx.token,
+      amount: tx.amount,
+      direction: tx.direction,
+    })),
+  );
 
+  // 3. Screen the due backlog (pending + retryable errors), oldest first
+  const queue = txsDueForScreening(task.id, maxTxPerRun);
   const results: MonitorRunResult[] = [];
 
-  // 3. KYT-screen each tx — receiving = in, sending = out
-  for (const tx of toScreen) {
-    const direction = tx.direction; // "in" | "out"
+  for (let i = 0; i < queue.length; i++) {
+    const tx = queue[i];
+    if (i > 0) await new Promise((r) => setTimeout(r, SCREEN_INTERVAL_MS));
     try {
       const result = await kytScreen({
         chain: task.chain,
-        txId: tx.txId,
+        txId: tx.tx_id,
         token: tx.token.toLowerCase(),
-        screenDirection: direction,
+        screenDirection: tx.direction,
         inRulesetId: task.in_ruleset_id ?? 0,
         outRulesetId: task.out_ruleset_id ?? 0,
         inflowHops: settings.screening.defaultInflowHops,
@@ -218,9 +243,9 @@ async function runAddressMonitor(
         monitor_run_id: runId,
         request: {
           chain: task.chain,
-          tx_id: tx.txId,
+          tx_id: tx.tx_id,
           token: tx.token.toLowerCase(),
-          direction,
+          direction: tx.direction,
           in_ruleset_id: task.in_ruleset_id ?? 0,
           out_ruleset_id: task.out_ruleset_id ?? 0,
         },
@@ -228,23 +253,31 @@ async function runAddressMonitor(
       }, {
         type: "kyt",
         chain: task.chain,
-        subject: tx.txId,
-        direction,
+        subject: tx.tx_id,
+        direction: tx.direction,
         risk_level: result.risk,
         hits_count: result.hits.length,
         completed_at: completedAt,
         source: "monitor",
       });
 
+      updateMonitorTx(task.id, tx.tx_id, {
+        kyt_status: "screened",
+        risk_level: result.risk,
+        job_id: jobId,
+        screened_at: completedAt,
+        error: undefined,
+      });
+
       results.push({
         status: "completed",
         job_id: jobId,
         risk_level: result.risk,
-        tx_id: tx.txId,
-        direction,
+        tx_id: tx.tx_id,
+        direction: tx.direction,
         token: tx.token,
         amount: tx.amount,
-        counterparty: direction === "in" ? tx.from : tx.to,
+        counterparty: tx.direction === "in" ? tx.from : tx.to,
       });
 
       if (shouldAlert(result.risk)) {
@@ -253,8 +286,8 @@ async function runAddressMonitor(
           task_id: task.id,
           chain: task.chain,
           address: task.address,
-          tx_id: tx.txId,
-          direction,
+          tx_id: tx.tx_id,
+          direction: tx.direction,
           amount: tx.amount,
           token: tx.token,
           risk: result.risk,
@@ -262,26 +295,22 @@ async function runAddressMonitor(
         });
       }
     } catch (e) {
+      const retries = tx.retry_count + 1;
+      const errMsg = e instanceof Error ? e.message : String(e);
+      updateMonitorTx(task.id, tx.tx_id, {
+        kyt_status: retries >= MAX_KYT_RETRIES ? "failed" : "error",
+        retry_count: retries,
+        error: errMsg,
+      });
       results.push({
         status: "error",
-        tx_id: tx.txId,
-        direction,
+        tx_id: tx.tx_id,
+        direction: tx.direction,
         token: tx.token,
         amount: tx.amount,
-        error: e instanceof Error ? e.message : String(e),
+        error: errMsg,
       });
     }
-  }
-
-  // Record skipped overflow
-  for (const tx of eligible.slice(maxTxPerRun)) {
-    results.push({
-      status: "skipped",
-      tx_id: tx.txId,
-      direction: tx.direction,
-      token: tx.token,
-      amount: tx.amount,
-    });
   }
 
   const screened = results.filter((r) => r.status === "completed");
@@ -289,13 +318,15 @@ async function runAddressMonitor(
   for (const r of screened) {
     if (r.risk_level && riskRank(r.risk_level) > riskRank(highest)) highest = normalizeRisk(r.risk_level);
   }
+  const stats = ledgerStats(task.id);
 
   return {
     results,
     summary: {
       new_txs: eligible.length,
       screened: screened.length,
-      skipped: skippedCount,
+      // remaining backlog (will be picked up by the next run)
+      skipped: stats.pending,
       flagged: screened.filter((r) => shouldAlert(r.risk_level || "low")).length,
       highest_risk: highest,
     },
