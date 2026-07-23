@@ -3,7 +3,7 @@
 import { useState, Suspense, lazy } from "react";
 import { formatTime, shortenAddr, showToast } from "@/lib/utils";
 import { hitsToEntities } from "@/lib/parse-evidence-flow";
-import { riskPillClass, riskColorVar, riskLabel, recommendation } from "@/lib/risk-ui";
+import { riskPillClass, riskColorVar, riskLabel, recommendation, riskSortRank } from "@/lib/risk-ui";
 import { RiskBadge, KriCard, EntityCard } from "./ScreeningResult";
 import type { KytScreenResult } from "@/lib/width-api";
 
@@ -70,7 +70,10 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
   const r = (job.result ?? {}) as unknown as KytScreenResult;
   const req = (job.request as Record<string, unknown>) || {};
   const hits = r.hits || [];
-  const alerts = r.alerts || [];
+  // Severity-desc — API order is unsorted; worst findings must lead the table
+  const alerts = (r.alerts || []).slice().sort(
+    (a, b) => riskSortRank(b.alertLevel) - riskSortRank(a.alertLevel),
+  );
   const entities = hitsToEntities(hits);
   const target = { address: r.transaction, chain: r.chain, tags: [] };
   const rec = recommendation(hits.map((h) => h.action));

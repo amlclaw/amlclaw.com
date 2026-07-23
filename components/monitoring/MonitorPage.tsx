@@ -5,7 +5,7 @@ import PageGuide from "@/components/shared/PageGuide";
 import { showToast, shortenAddr, formatTime } from "@/lib/utils";
 import { detectChainFromAddress, detectChainFromTxId } from "@/lib/chain-detect";
 import { explorerTxUrl, explorerAddressUrl } from "@/lib/explorers";
-import { riskColorVar, riskLabel } from "@/lib/risk-ui";
+import { riskColorVar, riskLabel, riskSortRank } from "@/lib/risk-ui";
 import type { MonitorTask, MonitorRun } from "@/lib/types";
 
 const SCHEDULES = [
@@ -650,7 +650,12 @@ function TxRow({ tx, monitorAddress, chain }: { tx: LedgerTx; monitorAddress: st
     <span style={{ color: "var(--danger)" }} title={tx.error}>Failed</span>
   );
 
-  const alerts = ((detail?.result as Record<string, unknown> | undefined)?.alerts as Record<string, unknown>[] | undefined) ?? [];
+  // Sort by severity desc — the API returns alerts unsorted, and the top-10
+  // slice must show the worst findings first (a hidden critical looked like
+  // an all-medium result before this).
+  const alerts = (((detail?.result as Record<string, unknown> | undefined)?.alerts as Record<string, unknown>[] | undefined) ?? [])
+    .slice()
+    .sort((a, b) => riskSortRank(String(b.alertLevel)) - riskSortRank(String(a.alertLevel)));
 
   return (
     <>

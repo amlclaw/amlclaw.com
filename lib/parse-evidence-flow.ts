@@ -115,7 +115,17 @@ export function hitsToEntities(hits: WidthHit[]): LegacyEntity[] {
     }
   }
 
-  return Array.from(byOpponent.values());
+  // Worst-first: highest rule severity, then closest hop
+  const order = ["critical", "severe", "high", "medium", "low"];
+  const sev = (e: LegacyEntity) => {
+    const idx = e.matched_rules_detail
+      .map((r) => order.indexOf(String(r.risk_level).toLowerCase()))
+      .filter((i) => i !== -1);
+    return idx.length ? Math.min(...idx) : order.length;
+  };
+  return Array.from(byOpponent.values()).sort(
+    (a, b) => sev(a) - sev(b) || a.min_deep - b.min_deep,
+  );
 }
 
 export interface FlowStep {

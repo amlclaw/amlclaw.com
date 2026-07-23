@@ -28,6 +28,12 @@ export function riskLabel(risk: string): string {
   return r.charAt(0).toUpperCase() + r.slice(1);
 }
 
+/** Sort rank: higher = riskier (critical 3 … low 0). Client-safe. */
+export function riskSortRank(risk: string): number {
+  const map: Record<string, number> = { critical: 3, severe: 3, high: 2, medium: 1, low: 0 };
+  return map[String(risk || "low").toLowerCase()] ?? 0;
+}
+
 /** Recommendation from rule actions: block → Reject, review → Review, else Pass. */
 export function recommendation(actions: string[]): "Reject" | "Review" | "Pass" {
   const set = new Set(actions.map((a) => a.toLowerCase()));
