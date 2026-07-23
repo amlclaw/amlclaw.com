@@ -387,11 +387,32 @@ interface LedgerTx {
   error?: string;
 }
 
+const TIME_PRESETS = [
+  { value: "all", label: "All time" },
+  { value: "1h", label: "Last 1h" },
+  { value: "24h", label: "Last 24h" },
+  { value: "7d", label: "Last 7 days" },
+  { value: "custom", label: "Custom…" },
+] as const;
+
+const RISK_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "flagged", label: "Flagged" },
+  { value: "critical", label: "Critical" },
+  { value: "high", label: "High" },
+  { value: "clean", label: "Clean" },
+  { value: "queued", label: "Queued" },
+] as const;
+
 function TxLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: () => void }) {
   const [tab, setTab] = useState<"txs" | "runs">("txs");
   const [txs, setTxs] = useState<LedgerTx[]>([]);
   const [stats, setStats] = useState<{ total: number; pending: number; screened: number; failed: number } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [riskFilter, setRiskFilter] = useState<(typeof RISK_FILTERS)[number]["value"]>("all");
+  const [timePreset, setTimePreset] = useState<(typeof TIME_PRESETS)[number]["value"]>("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
   const load = useCallback(() => {
     fetch(`/api/monitors/${monitor.id}/txs`)
@@ -405,6 +426,43 @@ function TxLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: ()
   }, [monitor.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ── Time-range filter ──
+  const now = Date.now();
+  const rangeStart =
+    timePreset === "1h" ? now - 3_600_000
+    : timePreset === "24h" ? now - 86_400_000
+    : timePreset === "7d" ? now - 7 * 86_400_000
+    : timePreset === "custom" && customFrom ? new Date(customFrom).getTime()
+    : 0;
+  const rangeEnd = timePreset === "custom" && customTo ? new Date(customTo).getTime() : now + 60_000;
+  const inRange = txs.filter((t) => t.timestamp >= rangeStart && t.timestamp <= rangeEnd);
+
+  // ── Period analysis (over the time-filtered set, before risk filter) ──
+  const byRisk = { critical: 0, high: 0, medium: 0, low: 0 };
+  let screenedCount = 0, queuedCount = 0, failedCount = 0, inCount = 0, outCount = 0, volume = 0;
+  for (const t of inRange) {
+    volume += t.amount;
+    if (t.direction === "in") inCount++; else outCount++;
+    if (t.kyt_status === "screened") {
+      screenedCount++;
+      const r = (t.risk_level || "low") as keyof typeof byRisk;
+      if (r in byRisk) byRisk[r]++;
+    } else if (t.kyt_status === "failed") failedCount++;
+    else queuedCount++;
+  }
+
+  // ── Risk filter ──
+  const filtered = inRange.filter((t) => {
+    switch (riskFilter) {
+      case "flagged": return t.kyt_status === "screened" && ["critical", "high"].includes(t.risk_level || "");
+      case "critical": return t.kyt_status === "screened" && t.risk_level === "critical";
+      case "high": return t.kyt_status === "screened" && t.risk_level === "high";
+      case "clean": return t.kyt_status === "screened" && ["low", "medium"].includes(t.risk_level || "low");
+      case "queued": return t.kyt_status !== "screened";
+      default: return true;
+    }
+  });
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -430,19 +488,66 @@ function TxLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: ()
 
         {tab === "txs" ? (
           <div style={{ overflowY: "auto", padding: "var(--sp-3) var(--sp-4)" }}>
-            {stats && (
-              <div style={{ display: "flex", gap: "var(--sp-3)", fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginBottom: "var(--sp-2)" }}>
-                <span>{stats.total} captured</span>
-                <span style={{ color: "var(--success)" }}>{stats.screened} screened</span>
-                {stats.pending > 0 && <span style={{ color: "var(--warning)" }}>{stats.pending} queued (next runs)</span>}
-                {stats.failed > 0 && <span style={{ color: "var(--danger)" }}>{stats.failed} failed</span>}
+            {/* ── Filters ── */}
+            <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "center", flexWrap: "wrap", marginBottom: "var(--sp-3)" }}>
+              <div className="tab-bar" style={{ width: "auto" }}>
+                {RISK_FILTERS.map((f) => (
+                  <button
+                    key={f.value}
+                    className={`tab-btn ${riskFilter === f.value ? "active" : ""}`}
+                    onClick={() => setRiskFilter(f.value)}
+                  >
+                    {f.label}
+                  </button>
+                ))}
               </div>
-            )}
+              <select
+                className="input input-sm"
+                style={{ width: "auto" }}
+                value={timePreset}
+                onChange={(e) => setTimePreset(e.target.value as (typeof TIME_PRESETS)[number]["value"])}
+              >
+                {TIME_PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+              {timePreset === "custom" && (
+                <>
+                  <input type="datetime-local" className="input input-sm" style={{ width: "auto" }} value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+                  <span style={{ color: "var(--text-tertiary)", fontSize: "var(--text-xs)" }}>→</span>
+                  <input type="datetime-local" className="input input-sm" style={{ width: "auto" }} value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+                </>
+              )}
+            </div>
+
+            {/* ── Period analysis ── */}
+            <div className="card" style={{ padding: "var(--sp-2) var(--sp-3)", marginBottom: "var(--sp-3)", background: "var(--surface-2)" }}>
+              <div style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", display: "flex", gap: "var(--sp-3)", flexWrap: "wrap", alignItems: "center" }}>
+                <span>
+                  <strong>{inRange.length}</strong> tx{inRange.length !== 1 ? "s" : ""} in period
+                </span>
+                <span style={{ color: "var(--text-tertiary)" }}>
+                  ⬇ {inCount} in · ⬆ {outCount} out · {volume.toLocaleString(undefined, { maximumFractionDigits: 2 })} total
+                </span>
+                <span style={{ color: "var(--text-tertiary)" }}>|</span>
+                <span style={{ color: "var(--success)" }}>{screenedCount} screened</span>
+                {byRisk.critical > 0 && <span style={{ color: "var(--risk-severe)", fontWeight: 700 }}>{byRisk.critical} critical</span>}
+                {byRisk.high > 0 && <span style={{ color: "var(--risk-high)", fontWeight: 700 }}>{byRisk.high} high</span>}
+                {byRisk.medium > 0 && <span style={{ color: "var(--risk-medium)" }}>{byRisk.medium} medium</span>}
+                {(byRisk.low > 0) && <span style={{ color: "var(--risk-low)" }}>{byRisk.low} clean/low</span>}
+                {queuedCount > 0 && <span style={{ color: "var(--warning)" }}>{queuedCount} queued</span>}
+                {failedCount > 0 && <span style={{ color: "var(--danger)" }}>{failedCount} failed</span>}
+                {stats && stats.total > txs.length && (
+                  <span style={{ color: "var(--text-tertiary)" }}>(showing latest {txs.length} of {stats.total})</span>
+                )}
+              </div>
+            </div>
+
             {loading ? (
               <div className="spinner spinner-lg" style={{ margin: "var(--sp-8) auto" }} />
-            ) : txs.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <div style={{ textAlign: "center", color: "var(--text-tertiary)", fontSize: "var(--text-sm)", padding: "var(--sp-8)" }}>
-                No transactions captured yet — new transfers appear here after the next run.
+                {txs.length === 0
+                  ? "No transactions captured yet — new transfers appear here after the next run."
+                  : "No transactions match the current filters."}
               </div>
             ) : (
               <table className="data-table" style={{ fontSize: "var(--text-xs)" }}>
@@ -460,7 +565,7 @@ function TxLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: ()
                   </tr>
                 </thead>
                 <tbody>
-                  {txs.map((tx) => (
+                  {filtered.map((tx) => (
                     <TxRow key={tx.tx_id} tx={tx} monitorAddress={monitor.address} />
                   ))}
                 </tbody>
