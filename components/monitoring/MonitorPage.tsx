@@ -50,8 +50,8 @@ export default function MonitorPage({ type }: MonitorPageProps) {
           title={isAddress ? "Address Monitoring" : "KYT Monitoring"}
           description={
             isAddress
-              ? "Watch an address's FUTURE transactions. Every new USDT/USDC transfer above the minimum amount is KYT-screened — receiving = in, sending = out."
-              : "Watch the from/to counterparty of a transaction. Each cycle runs a KYA screen of that address and alerts when its risk level escalates."
+              ? "Watch an address's FUTURE transactions. Every new USDT/USDC transfer above the minimum amount is KYT-screened (receiving = in, sending = out) — promptly surfacing fund flows with high-risk counterparties."
+              : "Continuously watch a tx's from/to address for its OWN label changes via periodic KYA — the moment it gets tagged Sanctions / Freeze or its risk escalates, you're alerted."
           }
           tips={
             isAddress

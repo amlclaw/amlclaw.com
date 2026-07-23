@@ -24,6 +24,35 @@ export default function ApiDocsPage() {
         )}
       </p>
 
+      {/* ── 关于 AMLClaw ── */}
+      <Section title={tr("关于 AMLClaw", "About AMLClaw")}>
+        <P>
+          {tr(
+            "AMLClaw 是 Width DAIA 团队开源的加密货币 AML 合规工具。底层使用 Width.info 的 KYA（地址筛查）与 KYT（交易筛查）API，在此之上包装成符合支付行业业务形态的产品能力：入金/出金筛查、持续性监控、风险告警、交易台账与证据链报告。",
+            "AMLClaw is an open-source crypto AML compliance tool by the Width DAIA team. It builds on Width.info's KYA (address screening) and KYT (transaction screening) APIs, packaging them into payment-industry workflows: deposit/withdrawal screening, continuous monitoring, risk alerting, transaction ledgers and evidence-chain reports."
+          )}
+        </P>
+        <P>
+          {tr(
+            "两类持续性监控的业务含义：",
+            "What the two kinds of continuous monitoring mean in business terms:"
+          )}
+        </P>
+        <Table
+          head={[tr("模块", "Module"), tr("业务语义", "Business semantics")]}
+          rows={[
+            [tr("地址监控（KYA 对象的持续监控）", "Address Monitoring (continuous KYA subject)"), tr(
+              "监控该地址后续发生的所有交易，对每一笔新交易做 KYT 查询 —— 及时发现该地址与高风险地址之间的资金往来（收款 = in 方向，付款 = out 方向）。",
+              "Watch every future transaction of the address and run a KYT query per tx — promptly surfacing fund flows between this address and high-risk counterparties (receiving = in, sending = out)."
+            )],
+            [tr("KYT 监控（交易对手的持续监控）", "KYT Monitoring (continuous counterparty watch)"), tr(
+              "持续监控某笔交易 from 或 to 地址自身的标签变化（周期性 KYA 复筛）—— 一旦对手方地址被打上 Sanctions（制裁）、Freeze（冻结）等高风险标签，第一时间告警。",
+              "Continuously watch the from/to address's OWN label changes (periodic KYA re-screens) — the moment the counterparty gets tagged Sanctions, Freeze or similar, you're alerted immediately."
+            )],
+          ]}
+        />
+      </Section>
+
       {/* ── 认证 ── */}
       <Section title={tr("认证", "Authentication")}>
         <P>
@@ -150,8 +179,8 @@ export default function ApiDocsPage() {
       <Section title={tr("监控", "Monitoring")}>
         <P>
           {tr(
-            "两种监控类型都只看未来动作：address 监控地址新增转账并逐笔 KYT（收款 = in，付款 = out）；kyt 监控某笔交易的 from/to 对手方，周期性 KYA 并在风险升级时告警。",
-            "Both monitor types watch FUTURE activity: 'address' KYT-screens the address's new transfers (receive = in, send = out); 'kyt' periodically KYA-screens a tx's from/to counterparty and alerts on risk escalation."
+            "两种监控类型都只看未来动作：address 监控地址后续所有新增转账并逐笔 KYT（收款 = in，付款 = out），及时发现与高风险地址的资金往来；kyt 持续监控某笔交易 from/to 对手方地址自身的标签变化（周期性 KYA），涉及 Sanctions / Freeze 等高风险标签或风险升级时第一时间告警。",
+            "Both monitor types watch FUTURE activity: 'address' KYT-screens every new transfer of the address (receive = in, send = out), surfacing fund flows with high-risk counterparties; 'kyt' continuously watches a tx's from/to address for label changes (periodic KYA) and alerts immediately on Sanctions / Freeze tags or risk escalation."
           )}
         </P>
         <P>

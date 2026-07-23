@@ -8,7 +8,9 @@
 
 # AMLClaw
 
-> Open-source crypto AML screening desk — KYA address screening, KYT transaction screening, and 24/7 monitoring, powered by the [width.info](https://width.info) V3 compliance API.
+> Open-source crypto AML screening desk by the **Width DAIA team** — KYA address screening, KYT transaction screening, and 24/7 monitoring, powered by the [width.info](https://width.info) V3 compliance API.
+
+AMLClaw packages the underlying KYA/KYT APIs into payment-industry workflows: deposit/withdrawal screening, continuous monitoring (per-tx KYT on an address's future transfers; counterparty label-change watch that alerts the moment an address gets tagged Sanctions/Freeze), risk alerting and evidence-chain reports.
 
 **One API key, professional server-side rulesets, full path evidence.**
 

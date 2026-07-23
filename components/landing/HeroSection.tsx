@@ -77,7 +77,9 @@ export default function HeroSection() {
         </p>
 
         <p className="landing-hero-sub-en">
-          No database. No complex setup. No vendor lock-in. Full data sovereignty under MIT License.
+          Open-sourced by the Width DAIA team, built on the Width.info KYA/KYT API.
+          <br />
+          No database. No complex setup. No vendor lock-in. MIT License.
         </p>
 
         <div className="landing-hero-actions">

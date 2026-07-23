@@ -21,13 +21,14 @@ export function t(key: TranslationKey, locale: Locale = "en"): string {
 }
 
 export function getLocale(): Locale {
-  if (typeof window === "undefined") return "en";
+  // The platform primarily serves Chinese users — default to zh.
+  if (typeof window === "undefined") return "zh";
   const stored = localStorage.getItem("locale");
   if (stored === "zh" || stored === "en") return stored;
-  // Auto-detect from browser
+  // English browsers get en; everyone else defaults to zh
   const lang = navigator.language?.toLowerCase();
-  if (lang?.startsWith("zh")) return "zh";
-  return "en";
+  if (lang?.startsWith("en")) return "en";
+  return "zh";
 }
 
 export function setLocale(locale: Locale) {
