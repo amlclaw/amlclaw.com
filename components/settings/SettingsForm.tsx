@@ -255,8 +255,8 @@ export default function SettingsForm() {
           <Field label="Max Txs Screened / Run" hint="Excess txs are marked skipped" style={{ flex: 1, minWidth: 140 }}>
             <input className="input" type="number" min={1} max={100} value={settings.monitoring.maxTxPerRun} onChange={(e) => set("monitoring", "maxTxPerRun", parseInt(e.target.value) || 20)} />
           </Field>
-          <Field label="Default Min Amount" hint="Token units, e.g. 1 USDT" style={{ flex: 1, minWidth: 140 }}>
-            <input className="input" type="number" min={0} step="any" value={settings.monitoring.defaultMinAmount} onChange={(e) => set("monitoring", "defaultMinAmount", parseFloat(e.target.value) || 1)} />
+          <Field label="Default Min Amount" hint="Token units, e.g. 10 USDT" style={{ flex: 1, minWidth: 140 }}>
+            <input className="input" type="number" min={0} step="any" value={settings.monitoring.defaultMinAmount} onChange={(e) => set("monitoring", "defaultMinAmount", parseFloat(e.target.value) || 10)} />
           </Field>
         </div>
       </Section>

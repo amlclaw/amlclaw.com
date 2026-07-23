@@ -76,7 +76,7 @@ export const DEFAULT_SETTINGS: Settings = {
     defaultOutflowHops: 3,
     maxNodesPerHop: 200,
     maxOpponentPaths: 50,
-    minAmount: 1,
+    minAmount: 10,
     defaultScenario: "all",
     defaultKyaRulesetId: 0,
     defaultKytInRulesetId: 0,
@@ -86,7 +86,7 @@ export const DEFAULT_SETTINGS: Settings = {
   monitoring: {
     defaultSchedule: "every_4h",
     maxTxPerRun: 20,
-    defaultMinAmount: 1,
+    defaultMinAmount: 10,
   },
   notifications: {
     webhookUrl: "",

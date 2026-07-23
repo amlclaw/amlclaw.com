@@ -73,7 +73,7 @@ export default function ApiDocsPage() {
             ["outflow_hops", "number", "3", tr("出金追溯层数 0–5", "Outflow tracing depth 0–5")],
             ["max_nodes", "number", "200", tr("每层最大扩展节点数", "Max nodes expanded per hop")],
             ["max_opponent_paths", "number", "50", tr("最大对手方路径数", "Max opponent paths to evaluate")],
-            ["min_amount", "number", "1", tr("最小转账金额（代币单位）", "Minimum transfer amount (token units)")],
+            ["min_amount", "number", "10", tr("最小转账金额（代币单位）", "Minimum transfer amount (token units)")],
             ["is_penetrate_contract", "boolean", "false", tr("是否穿透合约地址", "Trace through contract addresses")],
             ["min_timestamp", "number", "0", tr("起始时间（Unix 毫秒），0 = 不限", "Start time (Unix ms), 0 = no limit")],
             ["max_timestamp", "number", tr("当前时间", "now"), tr("结束时间（Unix 毫秒）", "End time (Unix ms)")],

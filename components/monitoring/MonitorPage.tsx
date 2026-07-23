@@ -163,7 +163,7 @@ function MonitorCard({ monitor: m, onChanged, onOpen }: { monitor: MonitorTask; 
             {m.type === "address" && m.tokens && (
               <>
                 <span>&middot;</span>
-                <span>{m.tokens.join("+")} ≥ {m.min_amount ?? 1}</span>
+                <span>{m.tokens.join("+")} ≥ {m.min_amount ?? 10}</span>
               </>
             )}
             {m.type === "kyt" && m.watch_side && m.origin_tx_id && (
@@ -222,7 +222,7 @@ function CreateModal({ type, onClose, onCreated }: { type: "address" | "kyt"; on
   const [address, setAddress] = useState("");
   const [txId, setTxId] = useState("");
   const [watchSide, setWatchSide] = useState<"from" | "to">("from");
-  const [minAmount, setMinAmount] = useState("1");
+  const [minAmount, setMinAmount] = useState("10");
   const [schedule, setSchedule] = useState("every_4h");
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);

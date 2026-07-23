@@ -22,7 +22,7 @@ export default function ScreeningForm({ onJobStarted, onLoading, initialAddress,
   const [inflowHops, setInflowHops] = useState("3");
   const [outflowHops, setOutflowHops] = useState("3");
   const [maxNodes, setMaxNodes] = useState("200");
-  const [minAmount, setMinAmount] = useState("1");
+  const [minAmount, setMinAmount] = useState("10");
   const [maxOpponentPaths, setMaxOpponentPaths] = useState("50");
   const [penetrateContract, setPenetrateContract] = useState(false);
   const [timeFrom, setTimeFrom] = useState(""); // datetime-local, empty = no limit
