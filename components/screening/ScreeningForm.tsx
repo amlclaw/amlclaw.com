@@ -7,11 +7,16 @@ import { detectChainFromAddress } from "@/lib/chain-detect";
 interface ScreeningFormProps {
   onJobStarted: (jobId: string) => void;
   onLoading: (loading: boolean) => void;
+  /** Prefill from ?address=&chain= deep links (e.g. monitoring shortcuts). */
+  initialAddress?: string;
+  initialChain?: string;
 }
 
-export default function ScreeningForm({ onJobStarted, onLoading }: ScreeningFormProps) {
-  const [chain, setChain] = useState("Tron");
-  const [address, setAddress] = useState("");
+export default function ScreeningForm({ onJobStarted, onLoading, initialAddress, initialChain }: ScreeningFormProps) {
+  const [chain, setChain] = useState(
+    () => initialChain || (initialAddress ? detectChainFromAddress(initialAddress) : null) || "Tron",
+  );
+  const [address, setAddress] = useState(initialAddress ?? "");
   const [token, setToken] = useState("usdt");
   const [rulesetId, setRulesetId] = useState("0");
   const [inflowHops, setInflowHops] = useState("3");

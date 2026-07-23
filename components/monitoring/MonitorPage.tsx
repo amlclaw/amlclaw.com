@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import PageGuide from "@/components/shared/PageGuide";
 import { showToast, shortenAddr, formatTime } from "@/lib/utils";
 import { detectChainFromAddress, detectChainFromTxId } from "@/lib/chain-detect";
+import { explorerTxUrl, explorerAddressUrl } from "@/lib/explorers";
 import { riskColorVar, riskLabel } from "@/lib/risk-ui";
 import type { MonitorTask, MonitorRun } from "@/lib/types";
 
@@ -156,17 +157,19 @@ function MonitorCard({ monitor: m, onChanged, onOpen }: { monitor: MonitorTask; 
           <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginTop: 2, display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
             <span>{m.chain}</span>
             <span>&middot;</span>
-            <span style={{ fontFamily: "var(--mono)" }}>{shortenAddr(m.address)}</span>
+            <span style={{ fontFamily: "var(--mono)" }}>
+              <ChainLink kind="address" chain={m.chain} value={m.address} />
+            </span>
             {m.type === "address" && m.tokens && (
               <>
                 <span>&middot;</span>
                 <span>{m.tokens.join("+")} ≥ {m.min_amount ?? 1}</span>
               </>
             )}
-            {m.type === "kyt" && m.watch_side && (
+            {m.type === "kyt" && m.watch_side && m.origin_tx_id && (
               <>
                 <span>&middot;</span>
-                <span>watching {m.watch_side} of {shortenAddr(m.origin_tx_id || "")}</span>
+                <span>watching {m.watch_side} of <ChainLink kind="tx" chain={m.chain} value={m.origin_tx_id} /></span>
               </>
             )}
             <span>&middot;</span>
@@ -566,7 +569,7 @@ function TxLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: ()
                 </thead>
                 <tbody>
                   {filtered.map((tx) => (
-                    <TxRow key={tx.tx_id} tx={tx} monitorAddress={monitor.address} />
+                    <TxRow key={tx.tx_id} tx={tx} monitorAddress={monitor.address} chain={monitor.chain} />
                   ))}
                 </tbody>
               </table>
@@ -582,8 +585,42 @@ function TxLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: ()
   );
 }
 
+/** External explorer link + in-app screening shortcut for a hash or address. */
+function ChainLink({
+  kind, chain, value, highlight,
+}: { kind: "tx" | "address"; chain: string; value: string; highlight?: boolean }) {
+  const explorerUrl = kind === "tx" ? explorerTxUrl(chain, value) : explorerAddressUrl(chain, value);
+  const screenUrl = kind === "tx"
+    ? `/kyt?tx=${encodeURIComponent(value)}&chain=${chain}`
+    : `/screening?address=${encodeURIComponent(value)}&chain=${chain}`;
+  return (
+    <span style={{ whiteSpace: "nowrap" }}>
+      <a
+        href={explorerUrl}
+        target="_blank"
+        rel="noopener"
+        onClick={(e) => e.stopPropagation()}
+        title={`View on ${chain === "Tron" ? "Tronscan" : "Etherscan"}`}
+        style={{ color: highlight ? "var(--primary-500)" : "var(--text-secondary)", textDecoration: "none" }}
+        onMouseEnter={(e) => { e.currentTarget.style.textDecoration = "underline"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.textDecoration = "none"; }}
+      >
+        {shortenAddr(value)}
+      </a>
+      <a
+        href={screenUrl}
+        onClick={(e) => e.stopPropagation()}
+        title={kind === "tx" ? "Screen in Tx Screening (KYT)" : "Screen in Address Screening (KYA)"}
+        style={{ marginLeft: 4, textDecoration: "none", opacity: 0.7 }}
+      >
+        🔍
+      </a>
+    </span>
+  );
+}
+
 /** One ledger row + expandable KYT detail (alerts list from the linked job). */
-function TxRow({ tx, monitorAddress }: { tx: LedgerTx; monitorAddress: string }) {
+function TxRow({ tx, monitorAddress, chain }: { tx: LedgerTx; monitorAddress: string; chain: string }) {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -623,16 +660,18 @@ function TxRow({ tx, monitorAddress }: { tx: LedgerTx; monitorAddress: string })
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </td>
-        <td style={{ fontFamily: "var(--mono)" }}>{shortenAddr(tx.tx_id)}</td>
+        <td style={{ fontFamily: "var(--mono)" }}>
+          <ChainLink kind="tx" chain={chain} value={tx.tx_id} />
+        </td>
         <td style={{ whiteSpace: "nowrap" }} title={new Date(tx.timestamp).toLocaleString()}>{relTime(tx.timestamp)}</td>
         <td style={{ fontFamily: "var(--mono)" }}>
-          <span style={tx.from === monitorAddress ? { color: "var(--primary-500)" } : undefined}>{shortenAddr(tx.from)}</span>
+          <ChainLink kind="address" chain={chain} value={tx.from} highlight={tx.from === monitorAddress} />
         </td>
         <td style={{ color: tx.direction === "in" ? "var(--success)" : "var(--risk-high)", fontWeight: 700 }}>
           {tx.direction === "in" ? "⬇" : "⬆"}
         </td>
         <td style={{ fontFamily: "var(--mono)" }}>
-          <span style={tx.to === monitorAddress ? { color: "var(--primary-500)" } : undefined}>{shortenAddr(tx.to)}</span>
+          <ChainLink kind="address" chain={chain} value={tx.to} highlight={tx.to === monitorAddress} />
         </td>
         <td style={{ fontFamily: "var(--mono)", textAlign: "right" }}>{tx.amount.toLocaleString()}</td>
         <td>{tx.token}</td>
@@ -668,7 +707,9 @@ function TxRow({ tx, monitorAddress }: { tx: LedgerTx; monitorAddress: string })
                       <td>{String(a.exposureType ?? "")}{a.hops ? ` · ${a.hops}h` : ""}</td>
                       <td style={{ fontFamily: "var(--mono)" }}>{Number(a.alertAmount ?? 0).toLocaleString()}</td>
                       <td style={{ fontFamily: "var(--mono)" }}>{String(a.categoryId ?? "")}</td>
-                      <td style={{ fontFamily: "var(--mono)" }}>{shortenAddr(String(a.opponentAddress ?? ""))}</td>
+                      <td style={{ fontFamily: "var(--mono)" }}>
+                        {a.opponentAddress ? <ChainLink kind="address" chain={chain} value={String(a.opponentAddress)} /> : "-"}
+                      </td>
                       <td>{String(a.action ?? "")}</td>
                     </tr>
                   ))}
@@ -762,7 +803,7 @@ function RunsList({ monitor }: { monitor: MonitorTask }) {
                       <>
                         <span>{res.direction === "in" ? "⬇ in" : "⬆ out"}</span>
                         <span>{res.amount} {res.token}</span>
-                        <span>{shortenAddr(res.tx_id || "")}</span>
+                        {res.tx_id && <ChainLink kind="tx" chain={monitor.chain} value={res.tx_id} />}
                         <span style={{ color: riskColorVar(res.risk_level || "low"), fontWeight: 700 }}>
                           {riskLabel(res.risk_level || "low")}
                         </span>
@@ -772,10 +813,14 @@ function RunsList({ monitor }: { monitor: MonitorTask }) {
                       </>
                     ) : (
                       <>
-                        <span>KYA {shortenAddr(res.address || "")}</span>
+                        <span>KYA</span>
+                        {res.address && <ChainLink kind="address" chain={monitor.chain} value={res.address} />}
                         <span style={{ color: riskColorVar(res.risk_level || "low"), fontWeight: 700 }}>
                           {riskLabel(res.risk_level || "low")}
                         </span>
+                        {res.job_id && (
+                          <a href={`/screening?job=${res.job_id}`} style={{ color: "var(--primary-500)" }}>view</a>
+                        )}
                         {res.escalated && <span style={{ color: "var(--danger)" }}>▲ escalated from {res.previous_risk_level}</span>}
                       </>
                     )}

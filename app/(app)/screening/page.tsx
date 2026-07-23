@@ -138,7 +138,12 @@ function ScreeningPageInner() {
             "Use 'Go on Monitoring' on a result to watch the address's future txs",
           ]}
         />
-        <ScreeningForm onJobStarted={handleJobStarted} onLoading={setLoading} />
+        <ScreeningForm
+          onJobStarted={handleJobStarted}
+          onLoading={setLoading}
+          initialAddress={searchParams.get("address") ?? undefined}
+          initialChain={searchParams.get("chain") ?? undefined}
+        />
         <div style={{ marginTop: "var(--sp-3)" }}>
           <ScreeningResult job={jobData} jobId={jobId} loading={loading} progress={progress} />
         </div>

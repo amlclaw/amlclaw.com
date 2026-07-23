@@ -7,6 +7,9 @@ import { detectChainFromTxId } from "@/lib/chain-detect";
 interface KytFormProps {
   onJobStarted: (jobId: string) => void;
   onLoading: (loading: boolean) => void;
+  /** Prefill from ?tx=&chain= deep links (e.g. monitoring shortcuts). */
+  initialTxId?: string;
+  initialChain?: string;
 }
 
 const DIRECTIONS = [
@@ -15,9 +18,11 @@ const DIRECTIONS = [
   { value: "out", label: "Out", desc: "Destination (KYT-OUT)" },
 ];
 
-export default function KytForm({ onJobStarted, onLoading }: KytFormProps) {
-  const [chain, setChain] = useState("Tron");
-  const [txId, setTxId] = useState("");
+export default function KytForm({ onJobStarted, onLoading, initialTxId, initialChain }: KytFormProps) {
+  const [chain, setChain] = useState(
+    () => initialChain || (initialTxId ? detectChainFromTxId(initialTxId) : null) || "Tron",
+  );
+  const [txId, setTxId] = useState(initialTxId ?? "");
   const [token, setToken] = useState("usdt");
   const [direction, setDirection] = useState("both");
   const [inRulesetId, setInRulesetId] = useState("0");

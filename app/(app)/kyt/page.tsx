@@ -138,7 +138,12 @@ function KytPageInner() {
             "Use 'Monitor from/to address' on a result to track the counterparty with periodic KYA",
           ]}
         />
-        <KytForm onJobStarted={handleJobStarted} onLoading={setLoading} />
+        <KytForm
+          onJobStarted={handleJobStarted}
+          onLoading={setLoading}
+          initialTxId={searchParams.get("tx") ?? undefined}
+          initialChain={searchParams.get("chain") ?? undefined}
+        />
         <div style={{ marginTop: "var(--sp-3)" }}>
           <KytResult job={jobData} jobId={jobId} loading={loading} progress={progress} />
         </div>
