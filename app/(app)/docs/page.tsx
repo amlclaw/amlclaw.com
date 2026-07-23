@@ -251,17 +251,6 @@ export default function ApiDocsPage() {
   }'
 # → { "code": 0, "data": { "risk": "critical", "hits": [...], ... } }`}</Code>
 
-        <P style={{ fontWeight: 600 }}>{tr("其他端点（AMLClaw 未封装，可直接调用）", "Other endpoints (not wrapped by AMLClaw — call directly)")}</P>
-        <Table
-          head={[tr("端点", "Endpoint"), tr("说明", "Description")]}
-          rows={[
-            ["POST /api/v2/detect/kya_detect_v2", tr("KYA 地址检测（v2 响应格式：compliance_detect_result + rules_summary 全量规则通过/命中清单）", "KYA detection (v2 response: compliance_detect_result + full rules_summary pass/hit list)")],
-            ["POST /api/v2/detect/kyt_detect_v2", tr("KYT 交易检测（v2 响应格式，按 from/to 两端分析）", "KYT detection (v2 response, analyzes both from/to endpoints)")],
-            ["POST /api/v2/investigate/submit_task", tr("提交资金流调查任务 → task_id（原始图数据，不跑规则）", "Submit a fund-flow investigation → task_id (raw graph, no rules)")],
-            ["POST /api/v2/investigate/get_status", tr("轮询调查任务状态", "Poll investigation status")],
-            ["POST /api/v2/investigate/get_result", tr("按 token 取 inflow/outflow 路径与标签", "Fetch inflow/outflow paths and tags per token")],
-          ]}
-        />
         <P>
           {tr(
             "词汇对齐：风险等级 low/medium/high/critical；处置动作 block/review/alert/monitor；hits[].pathNodes 为完整路径节点（含标签与金额），deep=0 是风险实体。",
