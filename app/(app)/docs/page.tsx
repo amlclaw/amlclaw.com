@@ -218,6 +218,58 @@ export default function ApiDocsPage() {
         />
       </Section>
 
+      {/* ── 上游 API：Width.info ── */}
+      <Section title={tr("上游引擎：Width.info API", "Upstream Engine: Width.info API")}>
+        <P>
+          {tr(
+            "AMLClaw 的所有筛查能力由 Width.info（TrustIn AML 合规平台）提供。你也可以绕过 AMLClaw 直接调用它的 API —— 参数与本页的筛查接口一一对应。",
+            "All of AMLClaw's screening power comes from Width.info (the TrustIn AML compliance platform). You can also call its API directly, bypassing AMLClaw — parameters map 1:1 to the screening endpoints on this page."
+          )}
+        </P>
+        <Table
+          head={[tr("项", "Item"), tr("值", "Value")]}
+          rows={[
+            [tr("文档 / 平台", "Docs / Platform"), <a key="d" href="https://width.info/api-reference" target="_blank" rel="noopener" style={{ color: "var(--primary-500)" }}>width.info/api-reference</a>],
+            ["API Base URL", <code key="b" style={{ fontFamily: "var(--mono)" }}>https://api.trustin.bond</code>],
+            [tr("鉴权", "Auth"), tr("URL 参数 ?apikey=<key>，或 Authorization: Bearer <JWT>。免费 key 在 width.info/api-keys 获取", "Query param ?apikey=<key>, or Authorization: Bearer <JWT>. Free key at width.info/api-keys")],
+            [tr("规则集管理", "Ruleset management"), tr("width.info 平台 → Compliance → Rulesets：查看/创建/编辑规则集，列表中的 ID 即接口的 ruleset_id。内置默认（0）覆盖面宽，生产建议自建规则集并引用其 ID", "width.info → Compliance → Rulesets: view/create/edit rulesets; the listed ID is the API's ruleset_id. Builtin (0) is broad — create your own for production")],
+          ]}
+        />
+
+        <P style={{ fontWeight: 600 }}>{tr("V3 筛查（AMLClaw 使用的核心端点）", "V3 Screening (the endpoints AMLClaw uses)")}</P>
+        <Endpoint method="POST" path="https://api.trustin.bond/api/v3/screen/kya" desc={tr("地址筛查（Chainalysis 对齐 + 扩展）。sync 模式直接返回完整结果；async 返回 job_id。AMLClaw 的 /api/screening 就是它的封装。", "Address screening (Chainalysis-aligned + extensions). sync returns the full result; async returns a job_id. AMLClaw's /api/screening wraps this.")} />
+        <Endpoint method="POST" path="https://api.trustin.bond/api/v3/screen/kyt" desc={tr("交易筛查。screen_direction 选 in（资金来源）/ out（资金去向）/ both；in_ruleset_id / out_ruleset_id 每方向独立规则集。AMLClaw 的 /api/kyt 就是它的封装。", "Transaction screening. screen_direction in / out / both; per-direction in_ruleset_id / out_ruleset_id. AMLClaw's /api/kyt wraps this.")} />
+        <Endpoint method="GET" path="https://api.trustin.bond/api/v3/screen/result/{jobId}" desc={tr("async 模式的轮询接口（需带 type=kya|kyt 及原始参数）。AMLClaw 使用 sync 模式，不经过此接口。", "Polling endpoint for async mode (pass type=kya|kyt plus the original params). AMLClaw uses sync mode and skips this.")} />
+        <Code>{`curl -X POST 'https://api.trustin.bond/api/v3/screen/kya?apikey=<KEY>' \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+    "chain_name": "Tron", "address": "T...", "token": "usdt",
+    "inflow_hops": 3, "outflow_hops": 3,
+    "max_nodes_per_hop": 200, "max_opponent_paths": 50,
+    "min_amount": 10, "ruleset_id": 0, "scenario": "all",
+    "mode": "sync"
+  }'
+# → { "code": 0, "data": { "risk": "critical", "hits": [...], ... } }`}</Code>
+
+        <P style={{ fontWeight: 600 }}>{tr("其他端点（AMLClaw 未封装，可直接调用）", "Other endpoints (not wrapped by AMLClaw — call directly)")}</P>
+        <Table
+          head={[tr("端点", "Endpoint"), tr("说明", "Description")]}
+          rows={[
+            ["POST /api/v2/detect/kya_detect_v2", tr("KYA 地址检测（v2 响应格式：compliance_detect_result + rules_summary 全量规则通过/命中清单）", "KYA detection (v2 response: compliance_detect_result + full rules_summary pass/hit list)")],
+            ["POST /api/v2/detect/kyt_detect_v2", tr("KYT 交易检测（v2 响应格式，按 from/to 两端分析）", "KYT detection (v2 response, analyzes both from/to endpoints)")],
+            ["POST /api/v2/investigate/submit_task", tr("提交资金流调查任务 → task_id（原始图数据，不跑规则）", "Submit a fund-flow investigation → task_id (raw graph, no rules)")],
+            ["POST /api/v2/investigate/get_status", tr("轮询调查任务状态", "Poll investigation status")],
+            ["POST /api/v2/investigate/get_result", tr("按 token 取 inflow/outflow 路径与标签", "Fetch inflow/outflow paths and tags per token")],
+          ]}
+        />
+        <P>
+          {tr(
+            "词汇对齐：风险等级 low/medium/high/critical；处置动作 block/review/alert/monitor；hits[].pathNodes 为完整路径节点（含标签与金额），deep=0 是风险实体。",
+            "Vocabulary: risk levels low/medium/high/critical; actions block/review/alert/monitor; hits[].pathNodes are full path nodes (with tags & amounts), deep=0 = the risk entity."
+          )}
+        </P>
+      </Section>
+
       <div style={{ color: "var(--text-tertiary)", fontSize: "var(--text-xs)", marginTop: "var(--sp-6)", paddingTop: "var(--sp-4)", borderTop: "1px solid var(--border-subtle)" }}>
         {tr(
           "上游引擎参数与本页一一对应，上游文档见 ",
@@ -257,8 +309,8 @@ function Endpoint({ method, path, desc }: { method: string; path: string; desc: 
   );
 }
 
-function P({ children }: { children: React.ReactNode }) {
-  return <p style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "var(--sp-2) 0" }}>{children}</p>;
+function P({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return <p style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", margin: "var(--sp-2) 0", ...style }}>{children}</p>;
 }
 
 function Code({ children }: { children: string }) {
