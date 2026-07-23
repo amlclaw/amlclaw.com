@@ -42,18 +42,32 @@ export const SCHEDULE_PRESETS: Record<string, { cron: string; label: string }> =
 };
 
 // ---------------------------------------------------------------------------
-// Singleton state
+// Singleton state — MUST live on globalThis. In Next.js dev, every HMR reload
+// and every route bundle instantiates this module again; module-level state
+// would register duplicate cron jobs whose concurrent runs race on the tx
+// ledger and cursor (observed: 4 simultaneous runs clobbering the ledger).
 // ---------------------------------------------------------------------------
-const activeCronJobs = new Map<string, ScheduledTask>();
-const runningTasks = new Set<string>();
-let initialized = false;
+interface SchedulerState {
+  activeCronJobs: Map<string, ScheduledTask>;
+  runningTasks: Set<string>;
+  initialized: boolean;
+}
+
+const g = globalThis as unknown as { __amlclawScheduler?: SchedulerState };
+const sched: SchedulerState = (g.__amlclawScheduler ??= {
+  activeCronJobs: new Map(),
+  runningTasks: new Set(),
+  initialized: false,
+});
+const activeCronJobs = sched.activeCronJobs;
+const runningTasks = sched.runningTasks;
 
 // ---------------------------------------------------------------------------
 // Initialization
 // ---------------------------------------------------------------------------
 export function ensureSchedulerInitialized() {
-  if (initialized) return;
-  initialized = true;
+  if (sched.initialized) return;
+  sched.initialized = true;
 
   const tasks = loadMonitorIndex();
   for (const task of tasks) {
@@ -428,7 +442,7 @@ export function isTaskRunning(taskId: string): boolean {
 
 export function getSchedulerStatus() {
   return {
-    initialized,
+    initialized: sched.initialized,
     active_jobs: activeCronJobs.size,
     running_tasks: Array.from(runningTasks),
   };
