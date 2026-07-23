@@ -154,6 +154,12 @@ export default function ApiDocsPage() {
             "Both monitor types watch FUTURE activity: 'address' KYT-screens the address's new transfers (receive = in, send = out); 'kyt' periodically KYA-screens a tx's from/to counterparty and alerts on risk escalation."
           )}
         </P>
+        <P>
+          {tr(
+            "请求节奏：所有监控任务共享一条全局串行队列 —— 同一时刻只有一个任务在执行；任务内部逐笔筛查也是严格顺序的（等上一笔返回 → 间隔 2 秒 → 下一笔），不会并发挤占筛查 API。",
+            "Request pacing: all monitor runs share one global sequential lane — only one task executes at a time; within a run each tx is screened strictly in order (await previous response → 2s pause → next), never hammering the screening API concurrently."
+          )}
+        </P>
 
         <Endpoint method="GET" path="/api/monitors?type=address|kyt" desc={tr("列出监控任务。", "List monitors.")} />
         <Endpoint method="POST" path="/api/monitors" desc={tr("创建监控任务。", "Create a monitor.")} />

@@ -51,6 +51,14 @@ interface SchedulerState {
   activeCronJobs: Map<string, ScheduledTask>;
   runningTasks: Set<string>;
   initialized: boolean;
+  /**
+   * Global single-lane queue for monitor runs. The width API has limited
+   * concurrency, so runs execute strictly one after another — when several
+   * cron jobs fire at the same tick (e.g. all every_1h monitors at :00),
+   * they line up here instead of screening in parallel. Within a run each
+   * tx is also screened sequentially (await response, pause, next).
+   */
+  runChain: Promise<void>;
 }
 
 const g = globalThis as unknown as { __amlclawScheduler?: SchedulerState };
@@ -58,6 +66,7 @@ const sched: SchedulerState = (g.__amlclawScheduler ??= {
   activeCronJobs: new Map(),
   runningTasks: new Set(),
   initialized: false,
+  runChain: Promise.resolve(),
 });
 const activeCronJobs = sched.activeCronJobs;
 const runningTasks = sched.runningTasks;
@@ -117,17 +126,30 @@ export function unregisterCronJob(taskId: string) {
 // ---------------------------------------------------------------------------
 // Task Execution
 // ---------------------------------------------------------------------------
-export async function executeMonitorTask(
+export function executeMonitorTask(
   taskId: string,
   trigger: "scheduled" | "manual"
 ): Promise<MonitorRun | null> {
-  // Prevent concurrent runs
-  if (runningTasks.has(taskId)) return null;
+  // Dedupe: task already queued or running → skip this trigger
+  if (runningTasks.has(taskId)) return Promise.resolve(null);
+  runningTasks.add(taskId);
 
+  // Enqueue on the global single-lane queue — strictly one run at a time
+  const result = sched.runChain.then(() => runMonitorTaskNow(taskId, trigger));
+  sched.runChain = result.then(
+    () => undefined,
+    (e) => { console.error(`[Scheduler] Run failed for ${taskId}:`, e); },
+  );
+  return result.finally(() => runningTasks.delete(taskId));
+}
+
+async function runMonitorTaskNow(
+  taskId: string,
+  trigger: "scheduled" | "manual"
+): Promise<MonitorRun | null> {
   const task = loadMonitor(taskId);
   if (!task) return null;
 
-  runningTasks.add(taskId);
   updateMonitor(taskId, { running: true });
 
   const runId = `run_${Date.now()}_${crypto.randomUUID().slice(0, 6)}`;
@@ -170,8 +192,7 @@ export async function executeMonitorTask(
   };
   saveMonitorRun(taskId, completedRun);
 
-  // Update task
-  runningTasks.delete(taskId);
+  // Update task (runningTasks cleanup happens in the queue wrapper)
   const nextRun = computeNextRun(task.schedule);
   updateMonitor(taskId, {
     running: false,

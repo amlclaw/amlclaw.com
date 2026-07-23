@@ -24,6 +24,7 @@ interface MonitorPageProps {
 export default function MonitorPage({ type }: MonitorPageProps) {
   const [monitors, setMonitors] = useState<MonitorTask[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<MonitorTask | null>(null);
   const [selected, setSelected] = useState<MonitorTask | null>(null);
 
   const load = useCallback(() => {
@@ -79,12 +80,17 @@ export default function MonitorPage({ type }: MonitorPageProps) {
           </div>
         )}
         {monitors.map((m) => (
-          <MonitorCard key={m.id} monitor={m} onChanged={load} onOpen={() => setSelected(m)} />
+          <MonitorCard key={m.id} monitor={m} onChanged={load} onOpen={() => setSelected(m)} onEdit={() => setEditTarget(m)} />
         ))}
       </div>
 
-      {createOpen && (
-        <CreateModal type={type} onClose={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); load(); }} />
+      {(createOpen || editTarget) && (
+        <CreateModal
+          type={type}
+          editing={editTarget}
+          onClose={() => { setCreateOpen(false); setEditTarget(null); }}
+          onCreated={() => { setCreateOpen(false); setEditTarget(null); load(); }}
+        />
       )}
       {selected && (
         selected.type === "address"
@@ -97,7 +103,7 @@ export default function MonitorPage({ type }: MonitorPageProps) {
 
 /* ── Monitor Card ── */
 
-function MonitorCard({ monitor: m, onChanged, onOpen }: { monitor: MonitorTask; onChanged: () => void; onOpen: () => void }) {
+function MonitorCard({ monitor: m, onChanged, onOpen, onEdit }: { monitor: MonitorTask; onChanged: () => void; onOpen: () => void; onEdit: () => void }) {
   const [busy, setBusy] = useState(false);
   const summary = m.last_result_summary;
 
@@ -164,6 +170,16 @@ function MonitorCard({ monitor: m, onChanged, onOpen }: { monitor: MonitorTask; 
               <>
                 <span>&middot;</span>
                 <span>{m.tokens.join("+")} ≥ {m.min_amount ?? 10}</span>
+                <span>&middot;</span>
+                <span title="Server-side ruleset ids (0 = builtin default)">
+                  rules in#{m.in_ruleset_id ?? 0} out#{m.out_ruleset_id ?? 0}
+                </span>
+              </>
+            )}
+            {m.type === "kyt" && (
+              <>
+                <span>&middot;</span>
+                <span title="Server-side KYA ruleset id (0 = builtin default)">rules #{m.kya_ruleset_id ?? 0}</span>
               </>
             )}
             {m.type === "kyt" && m.watch_side && m.origin_tx_id && (
@@ -203,6 +219,9 @@ function MonitorCard({ monitor: m, onChanged, onOpen }: { monitor: MonitorTask; 
           <button className="btn btn-sm btn-secondary" onClick={runNow} disabled={busy || m.running}>
             Run now
           </button>
+          <button className="btn btn-sm btn-secondary" onClick={onEdit} disabled={busy}>
+            Edit
+          </button>
           <button className="btn btn-sm btn-secondary" onClick={toggle} disabled={busy}>
             {m.enabled ? "Pause" : "Resume"}
           </button>
@@ -217,45 +236,94 @@ function MonitorCard({ monitor: m, onChanged, onOpen }: { monitor: MonitorTask; 
 
 /* ── Create Modal ── */
 
-function CreateModal({ type, onClose, onCreated }: { type: "address" | "kyt"; onClose: () => void; onCreated: () => void }) {
-  const [chain, setChain] = useState("Tron");
-  const [address, setAddress] = useState("");
-  const [txId, setTxId] = useState("");
-  const [watchSide, setWatchSide] = useState<"from" | "to">("from");
-  const [minAmount, setMinAmount] = useState("10");
-  const [schedule, setSchedule] = useState("every_4h");
-  const [name, setName] = useState("");
+function CreateModal({ type, editing, onClose, onCreated }: { type: "address" | "kyt"; editing?: MonitorTask | null; onClose: () => void; onCreated: () => void }) {
+  const isEdit = !!editing;
+  const [chain, setChain] = useState(editing?.chain ?? "Tron");
+  const [address, setAddress] = useState(editing?.address ?? "");
+  const [txId, setTxId] = useState(editing?.origin_tx_id ?? "");
+  const [watchSide, setWatchSide] = useState<"from" | "to">(editing?.watch_side ?? "from");
+  const [minAmount, setMinAmount] = useState(String(editing?.min_amount ?? 10));
+  const [schedule, setSchedule] = useState(editing?.schedule_preset ?? "every_4h");
+  const [name, setName] = useState(editing?.name ?? "");
+  // Server-side ruleset ids (0 = builtin default — usually too broad; teams
+  // create their own rulesets on width.info and reference the id here)
+  const [inRulesetId, setInRulesetId] = useState(String(editing?.in_ruleset_id ?? 0));
+  const [outRulesetId, setOutRulesetId] = useState(String(editing?.out_ruleset_id ?? 0));
+  const [kyaRulesetId, setKyaRulesetId] = useState(String(editing?.kya_ruleset_id ?? 0));
   const [saving, setSaving] = useState(false);
 
   const isAddress = type === "address";
+
+  // New monitors default to the global ruleset ids from Settings
+  useEffect(() => {
+    if (isEdit) return;
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((s) => {
+        if (s?.screening) {
+          setInRulesetId(String(s.screening.defaultKytInRulesetId ?? 0));
+          setOutRulesetId(String(s.screening.defaultKytOutRulesetId ?? 0));
+          setKyaRulesetId(String(s.screening.defaultKyaRulesetId ?? 0));
+        }
+      })
+      .catch(() => {});
+  }, [isEdit]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      const body: Record<string, unknown> = {
-        type,
-        chain,
-        name: name.trim(),
-        schedule_preset: schedule,
-      };
-      if (isAddress) {
-        body.address = address.trim();
-        body.min_amount = parseFloat(minAmount) || 1;
+      if (isEdit && editing) {
+        // Editable subset: identity fields (chain/address/tx) stay fixed
+        const body: Record<string, unknown> = {
+          name: name.trim() || editing.name,
+          schedule_preset: schedule,
+        };
+        if (isAddress) {
+          body.min_amount = parseFloat(minAmount) || 10;
+          body.in_ruleset_id = parseInt(inRulesetId) || 0;
+          body.out_ruleset_id = parseInt(outRulesetId) || 0;
+        } else {
+          body.kya_ruleset_id = parseInt(kyaRulesetId) || 0;
+        }
+        const res = await fetch(`/api/monitors/${editing.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Failed to update monitor");
+        }
+        showToast("Monitor updated", "success");
       } else {
-        body.tx_id = txId.trim();
-        body.watch_side = watchSide;
+        const body: Record<string, unknown> = {
+          type,
+          chain,
+          name: name.trim(),
+          schedule_preset: schedule,
+        };
+        if (isAddress) {
+          body.address = address.trim();
+          body.min_amount = parseFloat(minAmount) || 10;
+          body.in_ruleset_id = parseInt(inRulesetId) || 0;
+          body.out_ruleset_id = parseInt(outRulesetId) || 0;
+        } else {
+          body.tx_id = txId.trim();
+          body.watch_side = watchSide;
+          body.kya_ruleset_id = parseInt(kyaRulesetId) || 0;
+        }
+        const res = await fetch("/api/monitors", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Failed to create monitor");
+        }
+        showToast("Monitor created", "success");
       }
-      const res = await fetch("/api/monitors", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to create monitor");
-      }
-      showToast("Monitor created", "success");
       onCreated();
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Error", "error");
@@ -267,14 +335,14 @@ function CreateModal({ type, onClose, onCreated }: { type: "address" | "kyt"; on
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <span>{isAddress ? "New Address Monitor" : "New KYT Monitor"}</span>
+          <span>{isEdit ? `Edit — ${editing?.name}` : isAddress ? "New Address Monitor" : "New KYT Monitor"}</span>
           <button className="btn-icon" onClick={onClose}>✕</button>
         </div>
         <form onSubmit={submit}>
           <div style={{ padding: "var(--sp-4)", display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
             <div>
               <label className="label">Chain</label>
-              <select className="input" value={chain} onChange={(e) => setChain(e.target.value)}>
+              <select className="input" value={chain} onChange={(e) => setChain(e.target.value)} disabled={isEdit}>
                 <option value="Tron">Tron (USDT)</option>
                 <option value="Ethereum">Ethereum (USDT + USDC)</option>
               </select>
@@ -295,6 +363,7 @@ function CreateModal({ type, onClose, onCreated }: { type: "address" | "kyt"; on
                     }}
                     placeholder="Blockchain address"
                     required
+                    disabled={isEdit}
                   />
                 </div>
                 <div>
@@ -303,6 +372,21 @@ function CreateModal({ type, onClose, onCreated }: { type: "address" | "kyt"; on
                   <div style={{ fontSize: "0.65rem", color: "var(--text-tertiary)", marginTop: 2 }}>
                     Only transfers ≥ this amount are screened. Screening starts from NOW — history is not scanned.
                   </div>
+                </div>
+                <div style={{ display: "flex", gap: "var(--sp-3)" }}>
+                  <div style={{ flex: 1 }}>
+                    <label className="label">KYT-IN Ruleset ID</label>
+                    <input className="input" type="number" min={0} value={inRulesetId} onChange={(e) => setInRulesetId(e.target.value)} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className="label">KYT-OUT Ruleset ID</label>
+                    <input className="input" type="number" min={0} value={outRulesetId} onChange={(e) => setOutRulesetId(e.target.value)} />
+                  </div>
+                </div>
+                <div style={{ fontSize: "0.65rem", color: "var(--text-tertiary)", marginTop: -6 }}>
+                  0 = builtin default (broad). Use your own ruleset IDs from{" "}
+                  <a href="https://width.info" target="_blank" rel="noopener" style={{ color: "var(--primary-500)" }}>width.info</a>
+                  {" "}→ Compliance → Rulesets. Incoming txs use IN, outgoing use OUT.
                 </div>
               </>
             ) : (
@@ -320,16 +404,24 @@ function CreateModal({ type, onClose, onCreated }: { type: "address" | "kyt"; on
                     }}
                     placeholder="Tx hash"
                     required
+                    disabled={isEdit}
                   />
                 </div>
                 <div>
                   <label className="label">Watch side</label>
-                  <select className="input" value={watchSide} onChange={(e) => setWatchSide(e.target.value as "from" | "to")}>
+                  <select className="input" value={watchSide} onChange={(e) => setWatchSide(e.target.value as "from" | "to")} disabled={isEdit}>
                     <option value="from">from — the sender address</option>
                     <option value="to">to — the recipient address</option>
                   </select>
                   <div style={{ fontSize: "0.65rem", color: "var(--text-tertiary)", marginTop: 2 }}>
                     The selected side is resolved from the tx and KYA-screened on every cycle.
+                  </div>
+                </div>
+                <div>
+                  <label className="label">KYA Ruleset ID</label>
+                  <input className="input" type="number" min={0} value={kyaRulesetId} onChange={(e) => setKyaRulesetId(e.target.value)} />
+                  <div style={{ fontSize: "0.65rem", color: "var(--text-tertiary)", marginTop: 2 }}>
+                    0 = builtin default (broad). Use your own ruleset ID from width.info → Compliance → Rulesets.
                   </div>
                 </div>
               </>
