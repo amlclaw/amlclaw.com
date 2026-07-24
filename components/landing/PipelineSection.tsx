@@ -42,7 +42,7 @@ const steps = [
         <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
       </svg>
     ),
-    title: "KYT 监控（持续）",
+    title: "TX 监控（持续）",
     desc: "持续监控交易对手方地址自身的标签变化",
     detail: "从任意 KYT 结果一键把交易的 from 或 to 地址加入监控。AMLClaw 按你设定的周期（每小时至每天）对该地址重新执行 KYA 复筛，跟踪风险趋势 —— 一旦对手方涉及 Sanctions（制裁）、Freeze（冻结）等高风险标签或风险等级升级，第一时间告警。",
   },

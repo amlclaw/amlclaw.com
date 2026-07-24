@@ -4,7 +4,7 @@ const productLinks = [
   { label: "地址筛查 KYA", href: "/screening" },
   { label: "交易筛查 KYT", href: "/kyt" },
   { label: "地址监控", href: "/monitoring" },
-  { label: "KYT 监控", href: "/kyt-monitoring" },
+  { label: "TX 监控", href: "/tx-monitoring" },
   { label: "API 文档", href: "/docs" },
 ];
 

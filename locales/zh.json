@@ -120,6 +120,6 @@
   "risk.medium": "中",
   "risk.low": "低",
   "nav.kyt": "交易筛查",
-  "nav.kytMonitoring": "KYT 监控",
+  "nav.kytMonitoring": "TX 监控",
   "nav.apiDocs": "API 文档"
 }

@@ -45,7 +45,7 @@ export default function ApiDocsPage() {
               "监控该地址后续发生的所有交易，对每一笔新交易做 KYT 查询 —— 及时发现该地址与高风险地址之间的资金往来（收款 = in 方向，付款 = out 方向）。",
               "Watch every future transaction of the address and run a KYT query per tx — promptly surfacing fund flows between this address and high-risk counterparties (receiving = in, sending = out)."
             )],
-            [tr("KYT 监控（交易对手的持续监控）", "KYT Monitoring (continuous counterparty watch)"), tr(
+            [tr("TX 监控（交易对手的持续监控）", "TX Monitoring (continuous counterparty watch)"), tr(
               "持续监控某笔交易 from 或 to 地址自身的标签变化（周期性 KYA 复筛）—— 一旦对手方地址被打上 Sanctions（制裁）、Freeze（冻结）等高风险标签，第一时间告警。",
               "Continuously watch the from/to address's OWN label changes (periodic KYA re-screens) — the moment the counterparty gets tagged Sanctions, Freeze or similar, you're alerted immediately."
             )],
@@ -209,7 +209,7 @@ export default function ApiDocsPage() {
   "address": "T...", "min_amount": 1,
   "schedule_preset": "every_4h" }
 // ${zh ? "游标自创建时刻起 — 不扫描历史交易" : "cursor starts at creation time — history is never scanned"}`}</Code>
-        <P>{tr("KYT 监控（type = kyt）：", "KYT monitor (type = kyt):")}</P>
+        <P>{tr("TX 监控（type = kyt）：", "TX monitor (type = kyt):")}</P>
         <Code>{`{ "type": "kyt", "chain": "Tron",
   "tx_id": "398dd973...", "watch_side": "from",
   "schedule_preset": "every_24h" }
@@ -221,7 +221,7 @@ export default function ApiDocsPage() {
             ["tokens", tr("地址监控代币过滤，默认 ETH = USDT+USDC，Tron = USDT", "Address-monitor token filter; defaults ETH = USDT+USDC, Tron = USDT")],
             ["min_amount", tr("地址监控：小于该金额的转账不筛查", "Address monitor: transfers below this amount are skipped")],
             ["in_ruleset_id / out_ruleset_id", tr("地址监控逐笔 KYT 的方向规则集", "Per-direction rulesets for the address monitor's KYT screens")],
-            ["kya_ruleset_id", tr("KYT 监控周期 KYA 的规则集", "Ruleset for the KYT monitor's periodic KYA")],
+            ["kya_ruleset_id", tr("TX 监控周期 KYA 的规则集", "Ruleset for the TX monitor's periodic KYA")],
           ]}
         />
         <Endpoint method="PUT" path="/api/monitors/{id}" desc={tr("更新（启停 enabled、调度、阈值等）。", "Update (enabled, schedule, thresholds…).")} />

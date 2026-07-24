@@ -62,7 +62,7 @@ export default function Sidebar() {
     {
       href: "/kyt",
       label: t("nav.kyt"),
-      active: pathname.startsWith("/kyt") && !pathname.startsWith("/kyt-monitoring"),
+      active: pathname.startsWith("/kyt"),
       icon: (
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
           <line x1="7" y1="17" x2="17" y2="7" />
@@ -82,9 +82,9 @@ export default function Sidebar() {
       ),
     },
     {
-      href: "/kyt-monitoring",
+      href: "/tx-monitoring",
       label: t("nav.kytMonitoring"),
-      active: pathname.startsWith("/kyt-monitoring"),
+      active: pathname.startsWith("/tx-monitoring"),
       icon: (
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M22 12h-4l-3 9L9 3l-3 9H2" />

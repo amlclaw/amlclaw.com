@@ -211,7 +211,7 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
   );
 }
 
-/** Add the tx's from/to counterparty to KYT Monitoring (periodic KYA). */
+/** Add the tx's from/to counterparty to TX Monitoring (periodic KYA). */
 function MonitorSideButton({ chain, txId, side }: { chain: string; txId: string; side: "from" | "to" }) {
   const [state, setState] = useState<"idle" | "saving" | "done">("idle");
 

@@ -117,7 +117,7 @@ export async function POST(req: Request) {
     task = {
       id,
       type,
-      name: (body.name || "").trim() || `${chain} KYT 监控 · ${watchSide === "from" ? "发送方" : "接收方"}`,
+      name: (body.name || "").trim() || `${chain} TX 监控 · ${watchSide === "from" ? "发送方" : "接收方"}`,
       chain,
       address,
       origin_tx_id: txId,

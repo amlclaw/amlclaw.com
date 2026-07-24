@@ -47,7 +47,7 @@ export default function MonitorPage({ type }: MonitorPageProps) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "var(--sp-2)" }}>
         <PageGuide
           pageKey={isAddress ? "monitoring-address" : "monitoring-kyt"}
-          title={isAddress ? "Address Monitoring" : "KYT Monitoring"}
+          title={isAddress ? "Address Monitoring" : "TX Monitoring"}
           description={
             isAddress
               ? "Watch an address's FUTURE transactions. Every new USDT/USDC transfer above the minimum amount is KYT-screened (receiving = in, sending = out) — promptly surfacing fund flows with high-risk counterparties."

@@ -51,7 +51,7 @@ export default function AboutSection() {
         </div>
         <div className="landing-about-card landing-about-card-accent">
           <div className="landing-about-tag">持续监控</div>
-          <h3 className="landing-about-title">KYT 监控</h3>
+          <h3 className="landing-about-title">TX 监控</h3>
           <p className="landing-about-text">
             持续监控某笔交易 <strong>from 或 to 地址本身的标签变化</strong>（周期性 KYA 复筛）——
             一旦对手方地址涉及 <strong style={{ color: "var(--landing-accent)" }}>Sanctions（制裁）</strong> 或{" "}

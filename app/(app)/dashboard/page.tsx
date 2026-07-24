@@ -89,7 +89,7 @@ export default function DashboardPage() {
         <StatCard value={stats.kya_count} label="KYA (Address)" href="/screening" />
         <StatCard value={stats.kyt_count} label="KYT (Tx)" href="/kyt" />
         <StatCard value={`${stats.address_monitors_active}/${stats.address_monitors_total}`} label="Address Monitors" href="/monitoring" />
-        <StatCard value={`${stats.kyt_monitors_active}/${stats.kyt_monitors_total}`} label="KYT Monitors" href="/kyt-monitoring" />
+        <StatCard value={`${stats.kyt_monitors_active}/${stats.kyt_monitors_total}`} label="TX Monitors" href="/tx-monitoring" />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "var(--sp-4)", alignItems: "start" }}>
