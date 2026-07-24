@@ -3,9 +3,9 @@
 import { useEffect, useRef } from "react";
 
 const stats = [
-  { label: "MIT", sublabel: "Open Source" },
-  { label: "40+", sublabel: "Regulations" },
-  { label: "5 min", sublabel: "Setup" },
+  { label: "MIT", sublabel: "开源协议" },
+  { label: "KYA + KYT", sublabel: "双筛查引擎" },
+  { label: "5 分钟", sublabel: "自主部署" },
 ];
 
 export default function HeroSection() {
@@ -63,28 +63,28 @@ export default function HeroSection() {
 
       <div className="landing-hero-content">
         <h1>
-          Your AI Compliance Team
+          加密货币 AML 合规工作台
           <br />
-          <span className="landing-hero-gold">Open Source. Self-Hosted. Ready in 5 Minutes.</span>
+          <span className="landing-hero-gold">开源 · 自主部署 · 5 分钟上手</span>
         </h1>
 
         <p className="landing-hero-sub">
-          AMLClaw screens addresses (KYA) and transactions (KYT)
+          AMLClaw 用专业合规规则集筛查<strong>地址（KYA）</strong>与<strong>交易（KYT）</strong>，
           <br />
-          against professional server-side compliance rulesets — and keeps
+          并以<strong>地址监控</strong>和<strong>对手方监控</strong>持续盯防 ——
           <br />
-          watching with 24/7 address &amp; counterparty monitoring.
+          高风险资金往来与制裁 / 冻结标签变化，第一时间告警。
         </p>
 
         <p className="landing-hero-sub-en">
-          Open-sourced by the Width DAIA team, built on the Width.info KYA/KYT API.
+          由 Width DAIA 团队开源，底层基于 Width.info KYA / KYT API。
           <br />
-          No database. No complex setup. No vendor lock-in. MIT License.
+          无需数据库、无需复杂配置、无厂商锁定，数据不出你的服务器（MIT 协议）。
         </p>
 
         <div className="landing-hero-actions">
           <a href="/screening" className="landing-hero-btn-primary">
-            Get Started
+            立即开始
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14" /><path d="M12 5l7 7-7 7" />
             </svg>
@@ -98,7 +98,7 @@ export default function HeroSection() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z" />
             </svg>
-            View Source
+            查看源码
           </a>
         </div>
       </div>

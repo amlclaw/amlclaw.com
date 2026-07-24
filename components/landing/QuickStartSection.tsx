@@ -5,21 +5,21 @@ import { useScrollReveal } from "./useScrollReveal";
 const steps = [
   {
     num: "01",
-    title: "Clone & Run",
+    title: "克隆并运行",
     code: "git clone https://github.com/amlclaw/amlclaw.com.git\ncd amlclaw.com && npm install && npm run dev",
-    desc: "One command to get it running locally.",
+    desc: "一条命令本地跑起来。",
   },
   {
     num: "02",
-    title: "Add Your Width.info Key",
-    code: "Settings → API Keys → paste your width.info API key → done",
-    desc: "Free key at width.info — powers KYA/KYT screening with server-side rulesets.",
+    title: "填入 Width.info 密钥",
+    code: "设置 → API Keys → 粘贴 width.info 密钥 → 完成",
+    desc: "在 width.info 免费申请，驱动 KYA / KYT 筛查与服务端规则集。",
   },
   {
     num: "03",
-    title: "Start Screening",
-    code: "Screen an address (KYA) → Screen a tx (KYT) → Go on Monitoring",
-    desc: "Your compliance screening desk is live.",
+    title: "开始筛查",
+    code: "筛查地址（KYA） → 筛查交易（KYT） → 加入持续监控",
+    desc: "你的合规筛查工作台已就绪。",
   },
 ];
 
@@ -30,10 +30,10 @@ export default function QuickStartSection() {
     <section className="landing-section" id="quick-start" ref={ref}>
       <div className="landing-scroll-reveal" style={{ textAlign: "center" }}>
         <h2 className="landing-section-title" style={{ margin: "0 auto 16px" }}>
-          Up and Running in 3 Steps
+          三步即可上手
         </h2>
         <p className="landing-section-desc" style={{ margin: "0 auto 0" }}>
-          No database. No complex configuration. Just your width.info API key.
+          无需数据库、无需复杂配置，只要一个 width.info API 密钥。
         </p>
       </div>
 

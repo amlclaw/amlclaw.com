@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 
 const lines = [
-  { time: "09:00", text: "Submit Tron address → KYA screening (server-side ruleset)", status: "" },
-  { time: "09:01", text: "Critical: exposure to sanctioned address — action: block", status: "warn" },
-  { time: "09:02", text: "Screen incoming tx hash → KYT-IN ruleset", status: "done" },
-  { time: "09:03", text: "2 alerts: Sanctions (DIRECT), Cybercrime (INDIRECT)", status: "warn" },
-  { time: "09:04", text: "Address added to monitoring — new txs auto-screened", status: "done" },
-  { time: "09:05", text: "Counterparty under KYA watch — alert on risk escalation", status: "done" },
+  { time: "09:00", text: "提交 Tron 地址 → KYA 筛查（服务端规则集）", status: "" },
+  { time: "09:01", text: "Critical：与制裁地址存在资金敞口 —— 建议拦截", status: "warn" },
+  { time: "09:02", text: "筛查入金交易哈希 → 使用 KYT-IN 规则集", status: "done" },
+  { time: "09:03", text: "2 条告警：制裁（直接）、网络犯罪（间接）", status: "warn" },
+  { time: "09:04", text: "地址加入持续监控 —— 后续新交易自动筛查", status: "done" },
+  { time: "09:05", text: "对手方纳入 KYA 盯防 —— 标签变化立即告警", status: "done" },
 ];
 
 export default function ScreenDemo() {

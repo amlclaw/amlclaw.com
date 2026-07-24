@@ -508,8 +508,11 @@ function TxLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: ()
   const [timePreset, setTimePreset] = useState<(typeof TIME_PRESETS)[number]["value"]>("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  // Clock snapshot — refreshed on load/refresh, never read during render
+  const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(() => {
+    setNow(Date.now());
     fetch(`/api/monitors/${monitor.id}/txs`)
       .then((r) => r.json())
       .then((data) => {
@@ -523,7 +526,6 @@ function TxLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: ()
   useEffect(() => { load(); }, [load]);
 
   // ── Time-range filter ──
-  const now = Date.now();
   const rangeStart =
     timePreset === "1h" ? now - 3_600_000
     : timePreset === "24h" ? now - 86_400_000

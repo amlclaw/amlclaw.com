@@ -4,10 +4,10 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 
 const navLinks = [
-  { href: "#pipeline", label: "How It Works" },
-  { href: "#quick-start", label: "Quick Start" },
-  { href: "#comparison", label: "Compare" },
-  { href: "#jurisdictions", label: "Coverage" },
+  { href: "#about", label: "平台简介" },
+  { href: "#pipeline", label: "核心能力" },
+  { href: "#quick-start", label: "快速开始" },
+  { href: "#jurisdictions", label: "合规覆盖" },
 ];
 
 export default function LandingNav() {
@@ -48,7 +48,7 @@ export default function LandingNav() {
           GitHub
         </a>
         <a href="/screening" className="landing-nav-cta">
-          Launch App
+          进入平台
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 12h14" /><path d="M12 5l7 7-7 7" />
           </svg>
@@ -107,7 +107,7 @@ export default function LandingNav() {
             GitHub
           </a>
           <a href="/screening" className="landing-nav-cta" style={{ justifyContent: "center", marginTop: 4 }}>
-            Launch App →
+            进入平台 →
           </a>
         </div>
       )}

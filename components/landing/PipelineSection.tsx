@@ -10,9 +10,9 @@ const steps = [
         <line x1="21" y1="21" x2="16.65" y2="16.65" />
       </svg>
     ),
-    title: "KYA Address Screening",
-    desc: "Multi-hop fund tracing with a server-side compliance ruleset engine",
-    detail: "Screen any Ethereum or Tron address against professional compliance rulesets — Sanctions, Terrorism Financing, Cybercrime, Gambling and more. Rulesets run server-side on width.info; you get risk scores, exposure breakdowns, rule hits, and full path evidence with an interactive fund-flow graph.",
+    title: "KYA 地址筛查",
+    desc: "多跳资金追溯 + 服务端合规规则引擎",
+    detail: "对任意以太坊 / Tron 地址执行专业合规规则筛查 —— 制裁、恐怖融资、网络犯罪、赌博等类别。规则集在 Width.info 服务端运行，返回风险等级、分类敞口金额、命中规则明细，以及可交互的资金流向图与完整路径证据。用于开户准入与大额入金前置审查。",
   },
   {
     icon: (
@@ -21,9 +21,9 @@ const steps = [
         <polyline points="7 7 17 7 17 17" />
       </svg>
     ),
-    title: "KYT Transaction Screening",
-    desc: "Chainalysis-aligned tx screening — in, out, or both directions",
-    detail: "Paste a transaction hash and screen its source of funds (in), destination (out), or both. Each direction uses its own dedicated KYT ruleset. Results include Chainalysis-compatible alerts, per-rule hit evidence, and recommended actions: block, review, alert, or monitor.",
+    title: "KYT 交易筛查",
+    desc: "交易级筛查 —— 可分别筛资金来源与去向",
+    detail: "输入交易哈希，可筛查资金来源（in）、资金去向（out）或两端；每个方向使用各自独立的 KYT 规则集。结果包含 Chainalysis 风格告警、逐条规则命中证据，以及处置建议：拦截 / 人工复核 / 告警 / 持续观察。",
   },
   {
     icon: (
@@ -32,9 +32,9 @@ const steps = [
         <polyline points="12 6 12 12 16 14" />
       </svg>
     ),
-    title: "Address Monitoring",
-    desc: "Watch future transactions — every new transfer is KYT-screened",
-    detail: "Add an address and AMLClaw watches its FUTURE stablecoin transfers via Etherscan and TronGrid. Every new USDT/USDC transfer above your threshold is automatically KYT-screened — incoming funds as 'in', outgoing as 'out'. High-risk hits fire webhook alerts instantly.",
+    title: "地址监控（持续）",
+    desc: "监控该地址后续所有交易，逐笔做 KYT 查询",
+    detail: "添加地址后，AMLClaw 通过 Etherscan / TronGrid 持续捕获它未来发生的每一笔稳定币转账。超过设定金额的新交易自动做 KYT 查询 —— 收款按 in 方向、付款按 out 方向 —— 及时发现该地址与高风险地址之间的资金往来。全量交易入台账一笔不漏，高风险命中立即触发 Webhook 告警。",
   },
   {
     icon: (
@@ -42,9 +42,9 @@ const steps = [
         <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
       </svg>
     ),
-    title: "KYT Counterparty Monitoring",
-    desc: "Track a tx's from/to address with periodic KYA re-screening",
-    detail: "From any KYT result, put the transaction's from or to address under monitoring. AMLClaw re-runs a KYA screen on your schedule (hourly to daily), tracks the risk trend, and alerts the moment the counterparty's risk level escalates.",
+    title: "KYT 监控（持续）",
+    desc: "持续监控交易对手方地址自身的标签变化",
+    detail: "从任意 KYT 结果一键把交易的 from 或 to 地址加入监控。AMLClaw 按你设定的周期（每小时至每天）对该地址重新执行 KYA 复筛，跟踪风险趋势 —— 一旦对手方涉及 Sanctions（制裁）、Freeze（冻结）等高风险标签或风险等级升级，第一时间告警。",
   },
 ];
 
@@ -80,10 +80,10 @@ export default function PipelineSection() {
     <section className="landing-section" id="pipeline">
       <div className="landing-scroll-reveal" style={{ textAlign: "center" }}>
         <h2 className="landing-section-title" style={{ margin: "0 auto 16px" }}>
-          Five AI Agents. One Compliance Team.
+          四大核心能力
         </h2>
         <p className="landing-section-desc" style={{ margin: "0 auto 0" }}>
-          Each agent handles a distinct role. Fully automated, every step auditable.
+          单次筛查 + 持续监控，覆盖准入、交易、事后盯防全流程。点击卡片查看详情。
         </p>
       </div>
 
