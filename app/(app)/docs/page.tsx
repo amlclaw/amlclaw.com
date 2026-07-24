@@ -195,6 +195,12 @@ export default function ApiDocsPage() {
             "Trace depth: monitoring KYT / KYA calls are fixed at 1 hop (inflow_hops = outflow_hops = 1) — monitoring cares about the subject's own labels and direct counterparties; 1 hop returns in seconds and costs less. Use the single-screening pages when you need a deeper trace. Scheduled cycles missed while the app was down are caught up once on startup."
           )}
         </P>
+        <P>
+          {tr(
+            "时间窗（滚动）：监控筛查使用 [上次检测时间 → 当前时间] 作为时间范围（min_timestamp / max_timestamp），首次运行从「加入监控的时刻」起算 —— 只追溯上次扫描以来的新活动。留空 min_timestamp 会让引擎从创世块追溯、越跑越慢；滚动窗让每轮保持快速稳定。",
+            "Rolling time window: monitoring screens use [last run → now] as the range (min_timestamp / max_timestamp); the first run starts from when the monitor was added — tracing only activity since the previous scan. Leaving min_timestamp empty would trace from genesis and grow slower each cycle; the rolling window keeps every run fast and steady."
+          )}
+        </P>
 
         <Endpoint method="GET" path="/api/monitors?type=address|kyt" desc={tr("列出监控任务。", "List monitors.")} />
         <Endpoint method="POST" path="/api/monitors" desc={tr("创建监控任务。", "Create a monitor.")} />

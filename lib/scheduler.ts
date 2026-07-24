@@ -228,6 +228,19 @@ const SCREEN_INTERVAL_MS = 2_000;
  */
 const MONITOR_HOPS = 1;
 
+/**
+ * Rolling screen window lower bound for a monitor: only trace fund flows since
+ * the last run (first run = when the monitor was created). Leaving min_timestamp
+ * at 0 makes the width API trace from genesis every cycle — slow and it grows
+ * unbounded. A [last_run, now] window keeps each cycle small and fast while
+ * still catching any NEW risk since the previous scan.
+ */
+function monitorWindowStart(task: MonitorTask): number {
+  const anchor = task.last_run_at || task.created_at;
+  const ms = anchor ? new Date(anchor).getTime() : 0;
+  return Number.isFinite(ms) && ms > 0 ? ms : 0;
+}
+
 async function runAddressMonitor(
   task: MonitorTask,
   runId: string,
@@ -236,6 +249,8 @@ async function runAddressMonitor(
   const maxTxPerRun = settings.monitoring.maxTxPerRun || 20;
   const minAmount = task.min_amount ?? settings.monitoring.defaultMinAmount ?? 1;
   const watchedTokens = task.tokens?.length ? task.tokens : ["USDT", "USDC"];
+  const windowStart = monitorWindowStart(task);
+  const nowMs = Date.now();
 
   // 1. Pull new transfers since cursor; advance cursor on CAPTURE — screening
   //    state lives in the ledger, so nothing is lost if screening fails.
@@ -280,6 +295,9 @@ async function runAddressMonitor(
         maxNodesPerHop: settings.screening.maxNodesPerHop,
         maxOpponentPaths: settings.screening.maxOpponentPaths,
         minAmount: settings.screening.minAmount,
+        // Rolling window; never later than the tx itself (retries can predate last_run)
+        minTimestamp: Math.min(windowStart, tx.timestamp),
+        maxTimestamp: nowMs,
       });
 
       // Save as screening history (cross-link)
@@ -396,6 +414,8 @@ async function runKytMonitor(
 
   // Monitoring watches the address's OWN labels (sanctions/freeze) and its
   // direct counterparties — 1 hop is enough and keeps each cycle fast/cheap.
+  // Rolling window [last_run, now] (first run = creation) so we only trace
+  // activity since the previous scan, not the full history every cycle.
   const result = await kyaScreen({
     chain: task.chain,
     address: task.address,
@@ -406,6 +426,8 @@ async function runKytMonitor(
     maxNodesPerHop: settings.screening.maxNodesPerHop,
     maxOpponentPaths: settings.screening.maxOpponentPaths,
     minAmount: settings.screening.minAmount,
+    minTimestamp: monitorWindowStart(task),
+    maxTimestamp: Date.now(),
   });
 
   const escalated = riskRank(result.risk) > riskRank(previousRisk);
