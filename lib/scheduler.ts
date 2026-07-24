@@ -79,9 +79,17 @@ export function ensureSchedulerInitialized() {
   sched.initialized = true;
 
   const tasks = loadMonitorIndex();
+  const now = Date.now();
   for (const task of tasks) {
-    if (task.enabled) {
-      registerCronJob(task);
+    if (!task.enabled) continue;
+    registerCronJob(task);
+    // Catch-up: cron only fires while the process is alive, so a monitor whose
+    // scheduled slot passed during downtime would silently skip a cycle.
+    // Queue one run now (the global lane keeps them sequential).
+    if (task.next_run_at && new Date(task.next_run_at).getTime() < now) {
+      executeMonitorTask(task.id, "scheduled").catch((e) => {
+        console.error(`[Scheduler] Catch-up run failed for ${task.id}:`, e);
+      });
     }
   }
 }
@@ -211,6 +219,13 @@ async function runMonitorTaskNow(
 
 /** Pause between consecutive KYT screens to avoid hammering the width API. */
 const SCREEN_INTERVAL_MS = 2_000;
+
+/**
+ * Trace depth for KYT-monitor KYA re-screens. Monitoring cares about the
+ * watched address's own labels (sanctions / freeze) and its direct
+ * counterparties — 1 hop answers that quickly instead of a deep 3-hop trace.
+ */
+const KYT_MONITOR_HOPS = 1;
 
 async function runAddressMonitor(
   task: MonitorTask,
@@ -378,13 +393,15 @@ async function runKytMonitor(
   const settings = getSettings();
   const previousRisk = normalizeRisk(task.last_risk_level ?? "low");
 
+  // Monitoring watches the address's OWN labels (sanctions/freeze) and its
+  // direct counterparties — 1 hop is enough and keeps each cycle fast/cheap.
   const result = await kyaScreen({
     chain: task.chain,
     address: task.address,
     rulesetId: task.kya_ruleset_id ?? 0,
     scenario: "all",
-    inflowHops: settings.screening.defaultInflowHops,
-    outflowHops: settings.screening.defaultOutflowHops,
+    inflowHops: KYT_MONITOR_HOPS,
+    outflowHops: KYT_MONITOR_HOPS,
     maxNodesPerHop: settings.screening.maxNodesPerHop,
     maxOpponentPaths: settings.screening.maxOpponentPaths,
     minAmount: settings.screening.minAmount,
