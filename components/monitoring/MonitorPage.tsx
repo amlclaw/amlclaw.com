@@ -95,7 +95,7 @@ export default function MonitorPage({ type }: MonitorPageProps) {
       {selected && (
         selected.type === "address"
           ? <TxLedgerModal monitor={selected} onClose={() => setSelected(null)} />
-          : <RunsModal monitor={selected} onClose={() => setSelected(null)} />
+          : <KyaLedgerModal monitor={selected} onClose={() => setSelected(null)} />
       )}
     </div>
   );
@@ -512,10 +512,10 @@ function TxLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: ()
   const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(() => {
-    setNow(Date.now());
     fetch(`/api/monitors/${monitor.id}/txs`)
       .then((r) => r.json())
       .then((data) => {
+        setNow(Date.now());
         setTxs(Array.isArray(data.txs) ? data.txs : []);
         setStats(data.stats ?? null);
       })
@@ -827,21 +827,323 @@ function TxRow({ tx, monitorAddress, chain }: { tx: LedgerTx; monitorAddress: st
   );
 }
 
-/* ── Runs Modal (kyt monitors) ── */
+/* ── KYA Ledger Modal (kyt monitors) — same shape as the address ledger ── */
 
-function RunsModal({ monitor, onClose }: { monitor: MonitorTask; onClose: () => void }) {
+interface KyaScan {
+  /** run completion time (ms) */
+  timestamp: number;
+  address: string;
+  risk_level: string;
+  previous_risk_level?: string;
+  escalated?: boolean;
+  job_id?: string;
+  status: "completed" | "error" | "skipped";
+  error?: string;
+  trigger: string;
+}
+
+function KyaLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: () => void }) {
+  const [tab, setTab] = useState<"scans" | "runs">("scans");
+  const [scans, setScans] = useState<KyaScan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [riskFilter, setRiskFilter] = useState<(typeof RISK_FILTERS)[number]["value"]>("all");
+  const [timePreset, setTimePreset] = useState<(typeof TIME_PRESETS)[number]["value"]>("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+
+  const load = useCallback(() => {
+    fetch(`/api/monitors/${monitor.id}/history`)
+      .then((r) => r.json())
+      .then((runs: MonitorRun[]) => {
+        setNow(Date.now());
+        const rows: KyaScan[] = [];
+        for (const run of Array.isArray(runs) ? runs : []) {
+          const ts = new Date(run.completed_at || run.started_at).getTime();
+          for (const res of run.results || []) {
+            rows.push({
+              timestamp: ts,
+              address: res.address || monitor.address,
+              risk_level: res.risk_level || "low",
+              previous_risk_level: res.previous_risk_level,
+              escalated: res.escalated,
+              job_id: res.job_id,
+              status: res.status,
+              error: res.error,
+              trigger: run.trigger,
+            });
+          }
+        }
+        rows.sort((a, b) => b.timestamp - a.timestamp);
+        setScans(rows);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [monitor.id, monitor.address]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // ── Time-range filter ──
+  const rangeStart =
+    timePreset === "1h" ? now - 3_600_000
+    : timePreset === "24h" ? now - 86_400_000
+    : timePreset === "7d" ? now - 7 * 86_400_000
+    : timePreset === "custom" && customFrom ? new Date(customFrom).getTime()
+    : 0;
+  const rangeEnd = timePreset === "custom" && customTo ? new Date(customTo).getTime() : now + 60_000;
+  const inRange = scans.filter((s) => s.timestamp >= rangeStart && s.timestamp <= rangeEnd);
+
+  // ── Period analysis ──
+  const byRisk = { critical: 0, high: 0, medium: 0, low: 0 };
+  let okCount = 0, errCount = 0, escalations = 0;
+  for (const s of inRange) {
+    if (s.status === "completed") {
+      okCount++;
+      const r = (s.risk_level || "low") as keyof typeof byRisk;
+      if (r in byRisk) byRisk[r]++;
+      if (s.escalated) escalations++;
+    } else errCount++;
+  }
+
+  // ── Risk filter ──
+  const filtered = inRange.filter((s) => {
+    switch (riskFilter) {
+      case "flagged": return s.status === "completed" && ["critical", "high"].includes(s.risk_level);
+      case "critical": return s.status === "completed" && s.risk_level === "critical";
+      case "high": return s.status === "completed" && s.risk_level === "high";
+      case "clean": return s.status === "completed" && ["low", "medium"].includes(s.risk_level);
+      case "queued": return s.status !== "completed";
+      default: return true;
+    }
+  });
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 720, maxHeight: "80vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 980, width: "94vw", maxHeight: "84vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <span>Run History — {monitor.name}</span>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", minWidth: 0 }}>
+            <span className="truncate">{monitor.name}</span>
+            <div className="tab-bar" style={{ width: "auto", flexShrink: 0 }}>
+              <button className={`tab-btn ${tab === "scans" ? "active" : ""}`} onClick={() => setTab("scans")}>KYA Scans</button>
+              <button className={`tab-btn ${tab === "runs" ? "active" : ""}`} onClick={() => setTab("runs")}>Runs</button>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "var(--sp-2)", alignItems: "center" }}>
+            <button className="btn-icon" onClick={load} title="Refresh">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+            </button>
+            <button className="btn-icon" onClick={onClose}>✕</button>
+          </div>
         </div>
-        <div style={{ padding: "var(--sp-4)", overflowY: "auto" }}>
-          <RunsList monitor={monitor} />
-        </div>
+
+        {tab === "scans" ? (
+          <div style={{ overflowY: "auto", padding: "var(--sp-3) var(--sp-4)" }}>
+            {/* 被监控对象 */}
+            <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginBottom: "var(--sp-2)", display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", alignItems: "center" }}>
+              <span>Watching {monitor.watch_side} of</span>
+              {monitor.origin_tx_id && <ChainLink kind="tx" chain={monitor.chain} value={monitor.origin_tx_id} />}
+              <span>→</span>
+              <ChainLink kind="address" chain={monitor.chain} value={monitor.address} highlight />
+              <span>&middot; rules #{monitor.kya_ruleset_id ?? 0}</span>
+            </div>
+
+            {/* Filters */}
+            <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "center", flexWrap: "wrap", marginBottom: "var(--sp-3)" }}>
+              <div className="tab-bar" style={{ width: "auto" }}>
+                {RISK_FILTERS.map((f) => (
+                  <button
+                    key={f.value}
+                    className={`tab-btn ${riskFilter === f.value ? "active" : ""}`}
+                    onClick={() => setRiskFilter(f.value)}
+                  >
+                    {f.value === "queued" ? "Errors" : f.label}
+                  </button>
+                ))}
+              </div>
+              <select
+                className="input input-sm"
+                style={{ width: "auto" }}
+                value={timePreset}
+                onChange={(e) => setTimePreset(e.target.value as (typeof TIME_PRESETS)[number]["value"])}
+              >
+                {TIME_PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+              {timePreset === "custom" && (
+                <>
+                  <input type="datetime-local" className="input input-sm" style={{ width: "auto" }} value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+                  <span style={{ color: "var(--text-tertiary)", fontSize: "var(--text-xs)" }}>→</span>
+                  <input type="datetime-local" className="input input-sm" style={{ width: "auto" }} value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+                </>
+              )}
+            </div>
+
+            {/* Period analysis */}
+            <div className="card" style={{ padding: "var(--sp-2) var(--sp-3)", marginBottom: "var(--sp-3)", background: "var(--surface-2)" }}>
+              <div style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", display: "flex", gap: "var(--sp-3)", flexWrap: "wrap", alignItems: "center" }}>
+                <span><strong>{inRange.length}</strong> scan{inRange.length !== 1 ? "s" : ""} in period</span>
+                <span style={{ color: "var(--text-tertiary)" }}>|</span>
+                <span style={{ color: "var(--success)" }}>{okCount} completed</span>
+                {byRisk.critical > 0 && <span style={{ color: "var(--risk-severe)", fontWeight: 700 }}>{byRisk.critical} critical</span>}
+                {byRisk.high > 0 && <span style={{ color: "var(--risk-high)", fontWeight: 700 }}>{byRisk.high} high</span>}
+                {byRisk.medium > 0 && <span style={{ color: "var(--risk-medium)" }}>{byRisk.medium} medium</span>}
+                {byRisk.low > 0 && <span style={{ color: "var(--risk-low)" }}>{byRisk.low} clean/low</span>}
+                {escalations > 0 && <span style={{ color: "var(--danger)", fontWeight: 700 }}>▲ {escalations} escalation{escalations !== 1 ? "s" : ""}</span>}
+                {errCount > 0 && <span style={{ color: "var(--danger)" }}>{errCount} error</span>}
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="spinner spinner-lg" style={{ margin: "var(--sp-8) auto" }} />
+            ) : filtered.length === 0 ? (
+              <div style={{ textAlign: "center", color: "var(--text-tertiary)", fontSize: "var(--text-sm)", padding: "var(--sp-8)" }}>
+                {scans.length === 0
+                  ? "No KYA scans yet — the watched address is re-screened on each scheduled run."
+                  : "No scans match the current filters."}
+              </div>
+            ) : (
+              <table className="data-table" style={{ fontSize: "var(--text-xs)" }}>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Address</th>
+                    <th>Age</th>
+                    <th>Trigger</th>
+                    <th>Previous</th>
+                    <th></th>
+                    <th>KYA Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((scan, i) => (
+                    <KyaScanRow key={`${scan.timestamp}-${scan.job_id ?? i}`} scan={scan} chain={monitor.chain} />
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ) : (
+          <div style={{ padding: "var(--sp-4)", overflowY: "auto" }}>
+            <RunsList monitor={monitor} />
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+/** One KYA scan row + expandable hit detail from the linked screening job. */
+function KyaScanRow({ scan, chain }: { scan: KyaScan; chain: string }) {
+  const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && scan.job_id && !detail) {
+      setDetailLoading(true);
+      fetch(`/api/screening/${scan.job_id}`)
+        .then((r) => r.json())
+        .then(setDetail)
+        .catch(() => {})
+        .finally(() => setDetailLoading(false));
+    }
+  };
+
+  const result = (detail?.result as Record<string, unknown> | undefined) ?? {};
+  const hits = ((result.hits as Record<string, unknown>[] | undefined) ?? [])
+    .slice()
+    .sort((a, b) => riskSortRank(String(b.riskLevel)) - riskSortRank(String(a.riskLevel)));
+  const identifications = (result.addressIdentifications as Record<string, unknown>[] | undefined) ?? [];
+
+  return (
+    <>
+      <tr onClick={toggle} style={{ cursor: "pointer" }}>
+        <td style={{ width: 20 }}>
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" style={{ transition: "transform 0.2s", transform: open ? "rotate(90deg)" : "" }}>
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </td>
+        <td style={{ fontFamily: "var(--mono)" }}>
+          <ChainLink kind="address" chain={chain} value={scan.address} highlight />
+        </td>
+        <td style={{ whiteSpace: "nowrap" }} title={new Date(scan.timestamp).toLocaleString()}>{relTime(scan.timestamp)}</td>
+        <td style={{ color: "var(--text-tertiary)" }}>{scan.trigger}</td>
+        <td style={{ color: "var(--text-tertiary)", textTransform: "uppercase" }}>
+          {scan.previous_risk_level ? riskLabel(scan.previous_risk_level) : "-"}
+        </td>
+        <td>
+          {scan.escalated
+            ? <span style={{ color: "var(--danger)", fontWeight: 700 }} title="Risk level escalated">▲</span>
+            : <span style={{ color: "var(--text-tertiary)" }}>→</span>}
+        </td>
+        <td>
+          {scan.status === "completed" ? (
+            <span style={{ color: riskColorVar(scan.risk_level), fontWeight: 700, textTransform: "uppercase" }}>
+              {riskLabel(scan.risk_level)}
+            </span>
+          ) : (
+            <span style={{ color: "var(--danger)" }} title={scan.error}>Error</span>
+          )}
+        </td>
+      </tr>
+      {open && (
+        <tr>
+          <td colSpan={7} style={{ background: "var(--surface-1)", padding: "var(--sp-3)" }}>
+            {scan.status !== "completed" ? (
+              <div style={{ fontSize: "var(--text-xs)", color: "var(--danger)" }}>{scan.error || "Screening failed"}</div>
+            ) : detailLoading ? (
+              <div className="spinner" style={{ margin: "var(--sp-2) auto" }} />
+            ) : (
+              <>
+                {identifications.length > 0 && (
+                  <div style={{ fontSize: "var(--text-xs)", color: "var(--danger)", marginBottom: "var(--sp-2)" }}>
+                    ⚠ Address identified as: {identifications.map((id) => String(id.category)).join(", ")}
+                  </div>
+                )}
+                {hits.length === 0 ? (
+                  <div style={{ fontSize: "var(--text-xs)", color: "var(--success)" }}>
+                    ✓ No rule hits — address clean under the applied KYA ruleset.
+                  </div>
+                ) : (
+                  <table className="data-table" style={{ fontSize: "0.65rem" }}>
+                    <thead>
+                      <tr>
+                        <th>Level</th><th>Category</th><th>Rule</th><th>Flow</th><th>Hops</th><th>Amount</th><th>Counterparty</th><th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {hits.slice(0, 10).map((h, i) => (
+                        <tr key={i}>
+                          <td><span style={{ color: riskColorVar(String(h.riskLevel)), fontWeight: 700, textTransform: "uppercase" }}>{riskLabel(String(h.riskLevel))}</span></td>
+                          <td>{String(h.category ?? "")}</td>
+                          <td style={{ fontFamily: "var(--mono)" }}>{String(h.ruleCode ?? "")}</td>
+                          <td>{String(h.pathFlow ?? "")}</td>
+                          <td>{String(h.hops ?? "")}</td>
+                          <td style={{ fontFamily: "var(--mono)" }}>{Number(h.maxAmount ?? 0).toLocaleString()}</td>
+                          <td style={{ fontFamily: "var(--mono)" }}>
+                            {h.opponentAddress ? <ChainLink kind="address" chain={chain} value={String(h.opponentAddress)} /> : "-"}
+                          </td>
+                          <td>{String(h.action ?? "")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {hits.length > 10 && (
+                  <div style={{ fontSize: "0.65rem", color: "var(--text-tertiary)", marginTop: 4 }}>
+                    Showing first 10 of {hits.length} hits — open the full report from Address Screening history (job {scan.job_id}).
+                  </div>
+                )}
+              </>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
