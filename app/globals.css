@@ -603,6 +603,8 @@
     border-radius: 18px;
     cursor: pointer;
     transition: all var(--transition);
+    /* labels always stay on one line */
+    white-space: nowrap;
   }
   .tab-btn:hover { color: var(--text-secondary); }
   .tab-btn.active {
