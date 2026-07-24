@@ -77,7 +77,7 @@ export async function POST(req: Request) {
     task = {
       id,
       type,
-      name: (body.name || "").trim() || `${chain} ${address.slice(0, 8)}… txs`,
+      name: (body.name || "").trim() || `${chain} 地址监控`,
       chain,
       address,
       tokens,
@@ -117,7 +117,7 @@ export async function POST(req: Request) {
     task = {
       id,
       type,
-      name: (body.name || "").trim() || `KYA ${watchSide} of ${txId.slice(0, 10)}…`,
+      name: (body.name || "").trim() || `${chain} KYT 监控 · ${watchSide === "from" ? "发送方" : "接收方"}`,
       chain,
       address,
       origin_tx_id: txId,

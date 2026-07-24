@@ -163,8 +163,25 @@ function MonitorCard({ monitor: m, onChanged, onOpen, onEdit }: { monitor: Monit
           <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginTop: 2, display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
             <span>{m.chain}</span>
             <span>&middot;</span>
-            <span style={{ fontFamily: "var(--mono)" }}>
-              <ChainLink kind="address" chain={m.chain} value={m.address} />
+            <span style={{ fontFamily: "var(--mono)", minWidth: 0 }}>
+              <a
+                href={explorerAddressUrl(m.chain, m.address)}
+                target="_blank"
+                rel="noopener"
+                onClick={(e) => e.stopPropagation()}
+                title={`在 ${m.chain === "Tron" ? "Tronscan" : "Etherscan"} 查看`}
+                style={{ color: "var(--text-secondary)", textDecoration: "none", wordBreak: "break-all" }}
+              >
+                {m.address}
+              </a>
+              <a
+                href={`/screening?address=${encodeURIComponent(m.address)}&chain=${m.chain}`}
+                onClick={(e) => e.stopPropagation()}
+                title="在地址筛查中打开"
+                style={{ marginLeft: 4, textDecoration: "none", opacity: 0.7 }}
+              >
+                🔍
+              </a>
             </span>
             {m.type === "address" && m.tokens && (
               <>
@@ -188,7 +205,27 @@ function MonitorCard({ monitor: m, onChanged, onOpen, onEdit }: { monitor: Monit
                 >
                   {m.watch_side === "from" ? "FROM" : "TO"}
                 </span>
-                <span>of <ChainLink kind="tx" chain={m.chain} value={m.origin_tx_id} /></span>
+                <span style={{ minWidth: 0 }}>
+                  of{" "}
+                  <a
+                    href={explorerTxUrl(m.chain, m.origin_tx_id)}
+                    target="_blank"
+                    rel="noopener"
+                    onClick={(e) => e.stopPropagation()}
+                    title={`在 ${m.chain === "Tron" ? "Tronscan" : "Etherscan"} 查看`}
+                    style={{ fontFamily: "var(--mono)", color: "var(--text-secondary)", textDecoration: "none", wordBreak: "break-all" }}
+                  >
+                    {m.origin_tx_id}
+                  </a>
+                  <a
+                    href={`/kyt?tx=${encodeURIComponent(m.origin_tx_id)}&chain=${m.chain}`}
+                    onClick={(e) => e.stopPropagation()}
+                    title="在交易筛查中打开"
+                    style={{ marginLeft: 4, textDecoration: "none", opacity: 0.7 }}
+                  >
+                    🔍
+                  </a>
+                </span>
                 <span>&middot;</span>
                 <span title="Server-side KYA ruleset id (0 = builtin default)">rules #{m.kya_ruleset_id ?? 0}</span>
               </>
