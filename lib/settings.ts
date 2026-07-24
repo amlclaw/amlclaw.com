@@ -50,18 +50,6 @@ export interface Settings {
     webhookEnabled: boolean;
     alertOnHighRisk: boolean;
   };
-
-  // Security
-  security: {
-    apiToken: string; // empty = open access (no auth required)
-  };
-
-  // Application
-  app: {
-    name: string;
-    reportHeader: string;
-    themeDefault: "dark" | "light";
-  };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -93,14 +81,6 @@ export const DEFAULT_SETTINGS: Settings = {
     webhookEnabled: false,
     alertOnHighRisk: true,
   },
-  security: {
-    apiToken: "",
-  },
-  app: {
-    name: "AMLClaw",
-    reportHeader: "",
-    themeDefault: "dark",
-  },
 };
 
 function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
@@ -126,7 +106,7 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
 }
 
 /** Sections that belong to the current settings shape. */
-const VALID_SECTIONS = new Set(["api", "screening", "monitoring", "notifications", "security", "app"]);
+const VALID_SECTIONS = new Set(["api", "screening", "monitoring", "notifications"]);
 
 export function getSettings(): Settings {
   try {
@@ -215,8 +195,6 @@ function migrateSettingsIfNeeded(): void {
           ((saved.monitoring as Record<string, unknown>)?.defaultSchedule as string) || "every_4h",
       },
       notifications: saved.notifications ?? structuredClone(DEFAULT_SETTINGS.notifications),
-      security: saved.security ?? structuredClone(DEFAULT_SETTINGS.security),
-      app: saved.app ?? structuredClone(DEFAULT_SETTINGS.app),
     };
     fs.writeFileSync(SETTINGS_PATH, JSON.stringify(migrated, null, 2));
     console.log("[settings] Migrated legacy settings to v3 (width.info) format");

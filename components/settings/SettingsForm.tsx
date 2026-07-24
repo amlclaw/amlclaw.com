@@ -32,14 +32,6 @@ interface Settings {
     webhookEnabled: boolean;
     alertOnHighRisk: boolean;
   };
-  security: {
-    apiToken: string;
-  };
-  app: {
-    name: string;
-    reportHeader: string;
-    themeDefault: "dark" | "light";
-  };
 }
 
 export default function SettingsForm() {
@@ -270,28 +262,6 @@ export default function SettingsForm() {
           <input type="checkbox" checked={settings.notifications.webhookEnabled} onChange={(e) => set("notifications", "webhookEnabled", e.target.checked)} />
           Enable webhook notifications
         </label>
-      </Section>
-
-      {/* ── Security ── */}
-      <Section title="Security" description="When set, all API endpoints require Authorization: Bearer <token>. Empty = open access.">
-        <Field label="API Token">
-          <input className="input" type="password" value={settings.security.apiToken} onChange={(e) => set("security", "apiToken", e.target.value)} placeholder="Empty = no auth" />
-        </Field>
-      </Section>
-
-      {/* ── Application ── */}
-      <Section title="Application">
-        <div style={{ display: "flex", gap: "var(--sp-3)" }}>
-          <Field label="App Name" style={{ flex: 1 }}>
-            <input className="input" value={settings.app.name} onChange={(e) => set("app", "name", e.target.value)} />
-          </Field>
-          <Field label="Default Theme" style={{ flex: 1 }}>
-            <select className="input" value={settings.app.themeDefault} onChange={(e) => set("app", "themeDefault", e.target.value)}>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-            </select>
-          </Field>
-        </div>
       </Section>
 
       {/* ── Save ── */}

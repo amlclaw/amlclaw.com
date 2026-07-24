@@ -38,7 +38,6 @@ describe("settings", () => {
       expect(s.screening.defaultInflowHops).toBe(3);
       expect(s.screening.defaultKyaRulesetId).toBe(0);
       expect(s.monitoring.maxTxPerRun).toBe(20);
-      expect(s.security.apiToken).toBe("");
     });
 
     it("merges saved settings with defaults", () => {

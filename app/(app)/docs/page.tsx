@@ -53,19 +53,12 @@ export default function ApiDocsPage() {
         />
       </Section>
 
-      {/* ── 认证 ── */}
-      <Section title={tr("认证", "Authentication")}>
+      {/* ── 接入 ── */}
+      <Section title={tr("接入", "Access")}>
         <P>
           {tr(
-            "默认开放访问。在 设置 → Security 配置 API Token 后，所有接口需携带请求头：",
-            "Open access by default. Once an API token is set in Settings → Security, every endpoint requires the header:"
-          )}
-        </P>
-        <Code>{`Authorization: Bearer <your-token>`}</Code>
-        <P>
-          {tr(
-            "Base URL 即你的部署地址，例如 http://localhost:3000。",
-            "The base URL is your deployment address, e.g. http://localhost:3000."
+            "AMLClaw 是开源自托管的 Width API 应用 Demo，本地 REST 接口默认开放访问、不做鉴权 —— 部署在你自己的服务器上，按需自行加网关或反向代理保护。Base URL 即你的部署地址，例如 http://localhost:3000。真正需要密钥的是底层的 Width.info API（见下方「上游引擎」一节）。",
+            "AMLClaw is an open-source, self-hosted demo app for the Width API. Its local REST endpoints are open by default — deploy it on your own server and add a gateway / reverse proxy if you need access control. The base URL is your deployment address, e.g. http://localhost:3000. The key that actually matters is the upstream Width.info API key (see the 'Upstream Engine' section below)."
           )}
         </P>
       </Section>
@@ -254,7 +247,7 @@ export default function ApiDocsPage() {
             ["api", tr("widthApiKey（必填）、widthBaseUrl、etherscanApiKey、trongridApiKey", "widthApiKey (required), widthBaseUrl, etherscanApiKey, trongridApiKey")],
             ["screening", tr("追溯默认值：hops、max_nodes(200)、max_opponent_paths(50)、min_amount、默认规则集 ID", "Tracing defaults: hops, max_nodes (200), max_opponent_paths (50), min_amount, default ruleset ids")],
             ["monitoring", tr("默认调度、单轮筛查上限（maxTxPerRun）、默认最小金额", "Default schedule, per-run screening cap (maxTxPerRun), default min amount")],
-            ["notifications / security / app", tr("Webhook、Bearer Token、品牌与主题", "Webhook, Bearer token, branding & theme")],
+            ["notifications", tr("高风险告警 Webhook URL 与开关", "High-risk alert webhook URL and toggle")],
           ]}
         />
       </Section>
