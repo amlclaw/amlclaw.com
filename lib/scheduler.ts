@@ -221,11 +221,12 @@ async function runMonitorTaskNow(
 const SCREEN_INTERVAL_MS = 2_000;
 
 /**
- * Trace depth for KYT-monitor KYA re-screens. Monitoring cares about the
- * watched address's own labels (sanctions / freeze) and its direct
- * counterparties — 1 hop answers that quickly instead of a deep 3-hop trace.
+ * Trace depth for all monitoring screens (address-monitor KYT per tx and
+ * KYT-monitor KYA re-screens). Monitoring cares about the subject's own
+ * labels (sanctions / freeze) and its direct counterparties — 1 hop answers
+ * that in seconds instead of a deep 3-hop trace, and keeps API cost low.
  */
-const KYT_MONITOR_HOPS = 1;
+const MONITOR_HOPS = 1;
 
 async function runAddressMonitor(
   task: MonitorTask,
@@ -274,8 +275,8 @@ async function runAddressMonitor(
         screenDirection: tx.direction,
         inRulesetId: task.in_ruleset_id ?? 0,
         outRulesetId: task.out_ruleset_id ?? 0,
-        inflowHops: settings.screening.defaultInflowHops,
-        outflowHops: settings.screening.defaultOutflowHops,
+        inflowHops: MONITOR_HOPS,
+        outflowHops: MONITOR_HOPS,
         maxNodesPerHop: settings.screening.maxNodesPerHop,
         maxOpponentPaths: settings.screening.maxOpponentPaths,
         minAmount: settings.screening.minAmount,
@@ -400,8 +401,8 @@ async function runKytMonitor(
     address: task.address,
     rulesetId: task.kya_ruleset_id ?? 0,
     scenario: "all",
-    inflowHops: KYT_MONITOR_HOPS,
-    outflowHops: KYT_MONITOR_HOPS,
+    inflowHops: MONITOR_HOPS,
+    outflowHops: MONITOR_HOPS,
     maxNodesPerHop: settings.screening.maxNodesPerHop,
     maxOpponentPaths: settings.screening.maxOpponentPaths,
     minAmount: settings.screening.minAmount,

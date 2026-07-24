@@ -189,6 +189,12 @@ export default function ApiDocsPage() {
             "Request pacing: all monitor runs share one global sequential lane — only one task executes at a time; within a run each tx is screened strictly in order (await previous response → 2s pause → next), never hammering the screening API concurrently."
           )}
         </P>
+        <P>
+          {tr(
+            "追溯深度：监控场景的 KYT / KYA 调用固定使用 1 跳（inflow_hops = outflow_hops = 1）—— 监控关心的是对象自身标签与直接对手方，1 跳几秒出结果，也更省配额；需要深度追溯时在单次筛查页手动调大跳数。服务重启后，错过的定时轮次会在启动时自动补跑一次。",
+            "Trace depth: monitoring KYT / KYA calls are fixed at 1 hop (inflow_hops = outflow_hops = 1) — monitoring cares about the subject's own labels and direct counterparties; 1 hop returns in seconds and costs less. Use the single-screening pages when you need a deeper trace. Scheduled cycles missed while the app was down are caught up once on startup."
+          )}
+        </P>
 
         <Endpoint method="GET" path="/api/monitors?type=address|kyt" desc={tr("列出监控任务。", "List monitors.")} />
         <Endpoint method="POST" path="/api/monitors" desc={tr("创建监控任务。", "Create a monitor.")} />

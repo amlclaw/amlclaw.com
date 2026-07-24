@@ -627,6 +627,43 @@ function TxLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: ()
 
         {tab === "txs" ? (
           <div style={{ overflowY: "auto", padding: "var(--sp-3) var(--sp-4)" }}>
+            {/* ── 被监控地址 ── */}
+            <div className="card" style={{ padding: "var(--sp-3)", marginBottom: "var(--sp-3)", background: "var(--surface-2)" }}>
+              <div style={{ fontSize: "0.6rem", color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>
+                监控地址 Watched Address
+              </div>
+              <div style={{ fontFamily: "var(--mono)", fontSize: "var(--text-xs)", wordBreak: "break-all", color: "var(--primary-500)" }}>
+                <a href={explorerAddressUrl(monitor.chain, monitor.address)} target="_blank" rel="noopener" style={{ color: "inherit", textDecoration: "none" }}>
+                  {monitor.address}
+                </a>
+                <a href={`/screening?address=${encodeURIComponent(monitor.address)}&chain=${monitor.chain}`} style={{ marginLeft: 6, textDecoration: "none" }} title="在地址筛查中打开">🔍</a>
+              </div>
+              <div style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap", marginTop: "var(--sp-2)", paddingTop: "var(--sp-2)", borderTop: "1px solid var(--border-subtle)", fontSize: "var(--text-xs)", color: "var(--text-tertiary)" }}>
+                <span>{monitor.chain}</span>
+                <span>&middot;</span>
+                <span>{(monitor.tokens ?? []).join("+")} ≥ {monitor.min_amount ?? 10}</span>
+                <span>&middot;</span>
+                <span>周期：{SCHEDULES.find((s) => s.value === monitor.schedule_preset)?.label || monitor.schedule}</span>
+                <span>&middot;</span>
+                <span>KYT 规则集 in#{monitor.in_ruleset_id ?? 0} out#{monitor.out_ruleset_id ?? 0}</span>
+                <span>&middot;</span>
+                <span>追溯 1 跳</span>
+                {monitor.last_run_at && (
+                  <>
+                    <span>&middot;</span>
+                    <span>上次 {formatTime(monitor.last_run_at)}</span>
+                  </>
+                )}
+                {monitor.next_run_at && (
+                  <>
+                    <span>&middot;</span>
+                    <span>下次 {formatTime(monitor.next_run_at)}</span>
+                  </>
+                )}
+                {!monitor.enabled && <span style={{ color: "var(--warning)" }}>· 已暂停</span>}
+              </div>
+            </div>
+
             {/* ── Filters ── */}
             <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "center", flexWrap: "wrap", marginBottom: "var(--sp-3)" }}>
               <div className="tab-bar" style={{ width: "auto" }}>
