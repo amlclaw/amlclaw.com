@@ -47,23 +47,23 @@ export default function MonitorPage({ type }: MonitorPageProps) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "var(--sp-2)" }}>
         <PageGuide
           pageKey={isAddress ? "monitoring-address" : "monitoring-kyt"}
-          title={isAddress ? "Address Monitoring" : "TX Monitoring"}
+          title={isAddress ? "地址监控 Address Monitoring" : "TX 监控 TX Monitoring"}
           description={
             isAddress
-              ? "Watch an address's FUTURE transactions. Every new USDT/USDC transfer above the minimum amount is KYT-screened (receiving = in, sending = out) — promptly surfacing fund flows with high-risk counterparties."
-              : "Continuously watch a tx's from/to address for its OWN label changes via periodic KYA — the moment it gets tagged Sanctions / Freeze or its risk escalates, you're alerted."
+              ? "盯防一个地址「加入监控之后」发生的每一笔交易 —— 添加后按你设定的周期，从 Etherscan / TronGrid 拉取该地址的新增稳定币转账，对每一笔（金额达标的）自动做 KYT 查询：收款按 in 方向、付款按 out 方向，及时发现它与高风险地址之间的资金往来。"
+              : "盯防一笔交易的对手方地址「本身的风险标签变化」—— 从交易解析出 from 或 to 地址，按你设定的周期对它反复做 KYA 复筛，跟踪风险等级走势；一旦该地址被打上 Sanctions（制裁）/ Freeze（冻结）等标签、或风险等级升高，第一时间告警。"
           }
           tips={
             isAddress
               ? [
-                  "Ethereum monitors USDT + USDC; Tron monitors USDT only",
-                  "New transactions are pulled from Etherscan / TronGrid on your schedule",
-                  "High/critical results trigger webhook alerts",
+                  "① 捕获：每周期从 Etherscan（ETH：USDT+USDC）/ TronGrid（Tron：仅 USDT）拉取新交易，游标从「加入监控的时刻」起算，只看未来、不扫历史",
+                  "② 筛查：金额 ≥ 阈值的新交易逐笔 KYT（追溯 1 跳、串行执行），全量入台账一笔不漏，失败自动重试",
+                  "③ 告警：命中 high / critical 触发 Webhook；可按风险等级、时间区间筛选与统计",
                 ]
               : [
-                  "Create from a KYT result ('Monitor from/to address') or by pasting a tx hash here",
-                  "Each run re-screens the address with KYA and tracks risk trend",
-                  "Escalation (risk level rises) always triggers an alert",
+                  "① 来源：从「交易筛查」结果一键「监控 from / to 地址」，或在此直接粘贴交易哈希并选监控侧",
+                  "② 复筛：每周期对该地址做一次 KYA（滚动时间窗，只看上次检测以来的活动），几秒出结果",
+                  "③ 告警：风险等级升高（如 low→critical）或涉及制裁 / 冻结标签立即告警，历史趋势可回溯",
                 ]
           }
         />
