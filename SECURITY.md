@@ -20,20 +20,17 @@ If you discover a security vulnerability in AMLClaw, please report it responsibl
 
 We take the following especially seriously given the compliance nature of this product:
 
-- API authentication bypass
-- Data exfiltration from `data/` directory
-- Audit log tampering
-- Settings/API key exposure
+- Data exfiltration from the `data/` directory
+- Settings / API key exposure
 - Cross-site scripting (XSS) in rendered content
-- Server-side request forgery (SSRF) via AI provider or webhook URLs
+- Server-side request forgery (SSRF) via webhook URLs
 
 ## Security Architecture
 
-- **Self-hosted**: All data stays on your server — nothing is sent externally except to configured AI and blockchain API providers
-- **API auth**: Bearer token authentication on all API endpoints (configurable in Settings)
-- **Audit trail**: Append-only JSONL log of all operations
+- **Self-hosted**: All data stays on your server — nothing is sent externally except to the configured Width.info, Etherscan and TronGrid API endpoints
+- **Open by default**: AMLClaw is an open-source demo for the Width API; its local REST endpoints have no built-in auth — put it behind your own gateway / reverse proxy if you expose it
 - **No database**: File-based storage eliminates SQL injection vectors
-- **API keys**: Stored in `data/settings.json` (server-side only, masked in API responses)
+- **API keys**: Stored in `data/settings.json` (gitignored, server-side only, masked in API responses)
 
 ## Disclosure Policy
 

@@ -8,6 +8,8 @@ services:
       - ./data:/app/data
     environment:
       - NODE_ENV=production
-      # Optional: set via environment instead of Settings UI
-      # - TRUSTIN_API_KEY=your_trustin_api_key
+      # Optional: set keys here instead of the Settings UI (see .env.example)
+      # - WIDTH_API_KEY=your_width_api_key
+      # - ETHERSCAN_API_KEY=your_etherscan_api_key
+      # - TRONGRID_API_KEY=your_trongrid_api_key
     restart: unless-stopped
