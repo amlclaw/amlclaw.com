@@ -91,13 +91,15 @@ export default function QuickStartSection() {
           color: "var(--landing-text-secondary)",
           lineHeight: 1.7,
         }}>
-          <strong style={{ color: "var(--landing-accent)" }}>Want full blockchain data?</strong>
+          <strong style={{ color: "var(--landing-accent)" }}>需要哪些密钥？</strong>
           <br />
-          Add a free TrustIn API key in Settings → Address Data. Without it, screening works with desensitized (masked) data.
+          <strong>Width.info API Key</strong>（必填）—— 驱动 KYA / KYT 筛查与服务端规则集；
+          <strong> Etherscan / TronGrid Key</strong>（选填）—— 供地址监控拉取新交易，不填则走共享默认额度、可能限流。
+          三个密钥都可在设置页一键 Test 验证连通性。
           <br />
-          Get your free key at{" "}
-          <a href="https://trustin.info" target="_blank" rel="noopener" style={{ color: "var(--landing-accent)", textDecoration: "underline" }}>
-            trustin.info
+          免费申请：{" "}
+          <a href="https://width.info/api-keys" target="_blank" rel="noopener" style={{ color: "var(--landing-accent)", textDecoration: "underline" }}>
+            width.info/api-keys
           </a>
         </div>
       </div>

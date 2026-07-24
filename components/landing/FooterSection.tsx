@@ -1,31 +1,25 @@
 import Image from "next/image";
 
 const productLinks = [
-  { label: "Documents", href: "/documents" },
-  { label: "Policies", href: "/policies" },
-  { label: "Rules", href: "/rules" },
-  { label: "Screening", href: "/screening" },
-  { label: "Monitoring", href: "/monitoring" },
+  { label: "地址筛查 KYA", href: "/screening" },
+  { label: "交易筛查 KYT", href: "/kyt" },
+  { label: "地址监控", href: "/monitoring" },
+  { label: "KYT 监控", href: "/kyt-monitoring" },
+  { label: "API 文档", href: "/docs" },
 ];
 
-const resourceLinks = [
-  { label: "GitHub Repository", href: "https://github.com/amlclaw/amlclaw.com" },
-  { label: "FATF Guidelines", href: "#" },
-  { label: "TrustIn API", href: "https://trustin.info" },
-  { label: "Documentation", href: "/tech-docs" },
+const engineLinks = [
+  { label: "Width DAIA", href: "https://npc7.github.io/daia-site/" },
+  { label: "Width.info 平台", href: "https://width.info" },
+  { label: "Width.info API 文档", href: "https://width.info/api-reference" },
+  { label: "申请 API Key", href: "https://width.info/api-keys" },
 ];
 
 const communityLinks = [
-  { label: "GitHub", href: "https://github.com/amlclaw/amlclaw.com" },
-  { label: "Contributing Guide", href: "https://github.com/amlclaw/amlclaw.com/blob/main/CONTRIBUTING.md" },
-  { label: "Report Issues", href: "https://github.com/amlclaw/amlclaw.com/issues" },
-  { label: "Changelog", href: "https://github.com/amlclaw/amlclaw.com/blob/main/CHANGELOG.md" },
-];
-
-const legalLinks = [
-  { label: "Privacy Policy", href: "#" },
-  { label: "Terms of Service", href: "#" },
-  { label: "Compliance Notice", href: "#" },
+  { label: "GitHub 仓库", href: "https://github.com/amlclaw/amlclaw.com" },
+  { label: "贡献指南", href: "https://github.com/amlclaw/amlclaw.com/blob/main/CONTRIBUTING.md" },
+  { label: "问题反馈", href: "https://github.com/amlclaw/amlclaw.com/issues" },
+  { label: "更新日志", href: "https://github.com/amlclaw/amlclaw.com/blob/main/CHANGELOG.md" },
 ];
 
 export default function FooterSection() {
@@ -38,12 +32,12 @@ export default function FooterSection() {
             AML<span style={{ color: "var(--landing-accent)" }}>Claw</span>
           </div>
           <div className="landing-footer-tagline">
-            Your AI compliance team. Open source, self-hosted, fully automated — from regulatory interpretation to 24/7 on-chain monitoring.
+            由 Width DAIA 团队开源的加密货币 AML 合规工作台 —— 地址与交易筛查、持续监控、风险告警，自主部署，数据不出你的服务器。
           </div>
         </div>
 
         <div>
-          <div className="landing-footer-heading">Platform</div>
+          <div className="landing-footer-heading">产品</div>
           {productLinks.map((l) => (
             <a key={l.label} href={l.href} className="landing-footer-link">
               {l.label}
@@ -52,17 +46,8 @@ export default function FooterSection() {
         </div>
 
         <div>
-          <div className="landing-footer-heading">Resources</div>
-          {resourceLinks.map((l) => (
-            <a key={l.label} href={l.href} className="landing-footer-link" target={l.href.startsWith("http") ? "_blank" : undefined} rel={l.href.startsWith("http") ? "noopener" : undefined}>
-              {l.label}
-            </a>
-          ))}
-        </div>
-
-        <div>
-          <div className="landing-footer-heading">Community</div>
-          {communityLinks.map((l) => (
+          <div className="landing-footer-heading">底层引擎</div>
+          {engineLinks.map((l) => (
             <a key={l.label} href={l.href} className="landing-footer-link" target="_blank" rel="noopener">
               {l.label}
             </a>
@@ -70,9 +55,9 @@ export default function FooterSection() {
         </div>
 
         <div>
-          <div className="landing-footer-heading">Legal</div>
-          {legalLinks.map((l) => (
-            <a key={l.label} href={l.href} className="landing-footer-link">
+          <div className="landing-footer-heading">开源社区</div>
+          {communityLinks.map((l) => (
+            <a key={l.label} href={l.href} className="landing-footer-link" target="_blank" rel="noopener">
               {l.label}
             </a>
           ))}
@@ -80,15 +65,13 @@ export default function FooterSection() {
       </div>
 
       <div className="landing-footer-bottom">
-        <span>&copy; {new Date().getFullYear()} AMLClaw. All rights reserved.</span>
-        <span>Open Source · Self-Hosted · MIT License</span>
+        <span>&copy; {new Date().getFullYear()} AMLClaw · MIT 协议 · 由 Width DAIA 团队开源</span>
+        <span>筛查能力由 Width.info KYA / KYT API 驱动</span>
       </div>
 
       <div className="landing-footer-legal">
-        AMLClaw is an open-source compliance automation tool. It does not constitute legal advice
-        and should not be relied upon as a substitute for professional compliance counsel.
-        Users are responsible for ensuring their compliance programs meet applicable regulatory
-        requirements in their respective jurisdictions.
+        AMLClaw 是开源的合规工具，不构成法律意见，也不能替代专业合规顾问。
+        使用者需自行确保其合规方案满足所在司法辖区的监管要求。
       </div>
     </footer>
   );

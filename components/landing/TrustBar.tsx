@@ -10,7 +10,7 @@ export default function TrustBar() {
       <div className="landing-trustbar-inner landing-scroll-reveal">
         <p className="landing-trustbar-title">开源 · 自主部署 · 数据主权 · 社区驱动 · MIT 协议</p>
         <div className="landing-trustbar-badges">
-          {["FATF", "MAS", "SFC", "VARA", "OFAC", "UN Sanctions"].map((f) => (
+          {["制裁名单", "恐怖融资", "网络犯罪", "暗网", "混币器", "赌博", "冻结/执法"].map((f) => (
             <span key={f} className="landing-trustbar-badge">{f}</span>
           ))}
         </div>
