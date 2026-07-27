@@ -15,7 +15,7 @@ AMLClaw packages the underlying KYA/KYT APIs into payment-industry workflows: de
 **One API key, professional server-side rulesets, full path evidence.**
 
 ```
-KYA Screening  ·  KYT Screening  ·  Address Monitoring  ·  KYT Monitoring
+KYA Screening  ·  KYT Screening  ·  Address Monitoring  ·  TX Monitoring
 ```
 
 ---
@@ -45,11 +45,11 @@ Open `http://localhost:3000`, go to **Settings → API Keys**, paste your width.
 
 Screen any Ethereum or Tron address against professional compliance rulesets — Sanctions, Terrorism Financing, Cybercrime, Gambling, Public Freezing Actions, and more. Multi-hop fund tracing (0–5 hops each direction) with:
 
-- Risk level (`low / medium / high / critical`) + 0–100 risk score
+- Risk level (`low / medium / high / critical`) — decided by your ruleset, not a fixed score
 - Address identity checks (is the address itself sanctioned?)
 - Exposure breakdown by category and direction
 - Per-rule hits with full path evidence and an interactive fund-flow graph
-- Scenario filtering: deposit / withdrawal / CDD / monitoring / screening / full scan
+- Advanced settings: hops, node/path caps, min amount, time window, contract penetration
 
 ### 2. Transaction Screening (KYT)
 
@@ -59,20 +59,20 @@ Paste a transaction hash and screen its **source of funds (in)**, **destination 
 
 Add an address and AMLClaw watches its **future** stablecoin transfers (Ethereum: USDT + USDC; Tron: USDT) via Etherscan/TronGrid on your schedule (hourly to daily). Every new transfer above your minimum amount is automatically KYT-screened — receiving = `in`, sending = `out`. High-risk hits fire webhook alerts.
 
-### 4. KYT Monitoring — watch a counterparty
+### 4. TX Monitoring — watch a counterparty
 
-From any KYT result, put the transaction's `from` or `to` address under watch. Each cycle re-runs a KYA screen, tracks the risk trend, and alerts the moment the counterparty's risk level **escalates**.
+From any KYT result, put the transaction's `from` or `to` address under watch. Each cycle re-runs a KYA screen (1-hop, rolling time window since the last run), tracks the risk trend, and alerts the moment the counterparty is tagged Sanctions/Freeze or its risk level **escalates**.
 
 ---
 
 ## Features
 
-- **Server-side rulesets** — no local rule maintenance; `ruleset_id 0` = builtin defaults, or manage custom rulesets on width.info
+- **Server-side rulesets** — no local rule maintenance; `ruleset_id 0` = builtin defaults, or reference your own rulesets by id from width.info → Compliance → Rulesets
+- **Explorer-style ledgers** — every monitored transaction / scan in a filterable table (by risk level, time range) with per-row evidence; failed screens auto-retry
 - **Evidence graph** — interactive fund-flow visualization (React Flow + dagre), cluster aggregation for same-tag risk sources
 - **Webhook alerts** — real-time notifications on high/critical results and risk escalations
 - **Screening history** — typed KYA/KYT history with one-click recall
-- **API authentication** — optional Bearer token protection on all endpoints
-- **Bilingual** (English / Chinese) with dark/light theme
+- **Bilingual** (Chinese default / English) with dark/light theme
 - **No database** — file-based storage, backup-friendly, deploy anywhere
 - **Self-hosted** — your data never leaves your server (MIT license)
 
@@ -81,15 +81,16 @@ From any KYT result, put the transaction's `from` or `to` address under watch. E
 ## Project Structure
 
 ```
-app/(app)/        # Product pages: dashboard, screening (KYA), kyt, monitoring, kyt-monitoring, settings
+app/(app)/        # Product pages: dashboard, screening (KYA), kyt, monitoring, tx-monitoring, docs, settings
 app/api/          # API routes: screening, kyt, monitors, dashboard, settings
 components/       # React components by domain (screening, monitoring, settings, landing, shared)
 lib/              # Core logic:
                   #   width-api.ts   — width.info V3 client (KYA/KYT sync screening)
                   #   chain-txs.ts   — Etherscan/TronGrid tx feeds + cursor management
-                  #   scheduler.ts   — node-cron monitor execution (both monitor types)
+                  #   scheduler.ts   — node-cron monitor execution (global sequential queue)
+                  #   monitor-txs.ts — per-monitor tx ledger (capture / screen / retry)
                   #   storage.ts     — file-based history + monitors
-                  #   settings.ts    — settings with key masking + legacy migration
+                  #   settings.ts    — settings with key masking
 data/             # Runtime data (gitignored: settings.json with API keys, history, monitors)
 tests/            # Unit (vitest) + integration tests
 ```
@@ -119,19 +120,18 @@ Open http://localhost:3000. Data is persisted in the `./data` directory via volu
 ### Production Tips
 
 - Mount `./data` to a persistent volume for data durability
-- Use a reverse proxy (nginx/Caddy) for HTTPS
-- Set `security.apiToken` in Settings for API authentication
+- Use a reverse proxy (nginx/Caddy) for HTTPS — the app's local endpoints are open by default, so put it behind your own gateway/auth if exposed
 - Add your own Etherscan/TronGrid keys to avoid shared rate limits on monitoring
 
 ---
 
 ## Translation / i18n
 
-English and Chinese out of the box. Translation files in [`locales/`](locales/):
+Chinese (default) and English out of the box, toggled from the sidebar. Translation files in [`locales/`](locales/):
 
 ```
-locales/en.json   # English (default)
-locales/zh.json   # Chinese
+locales/zh.json   # Chinese (default)
+locales/en.json   # English
 ```
 
 ---
@@ -140,7 +140,7 @@ locales/zh.json   # Chinese
 
 - **More chains** — as supported by the width.info API
 - **Batch screening** — multi-address KYA submissions
-- **Report export** — Markdown & PDF with custom branding
+- **Report export** — Markdown & PDF
 - **Analytics** — trend analysis, risk heatmaps, compliance KPIs
 - **Case workflow** — investigation and disposition on top of screening history
 
