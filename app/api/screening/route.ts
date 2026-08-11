@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { saveHistoryEntry } from "@/lib/storage";
-import { kyaScreen, type KyaScreenResult } from "@/lib/width-api";
+import { kyaScreen, screenStatusLabel, type KyaScreenResult } from "@/lib/width-api";
 import { getSettings } from "@/lib/settings";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
 import crypto from "crypto";
@@ -101,23 +101,31 @@ async function runKyaScreening(
   },
 ) {
   try {
-    screeningJobs[jobId].progress = "Screening in progress (server-side ruleset engine, 30-90s)...";
+    screeningJobs[jobId].progress = "Submitting async screen to width.info...";
 
-    const result: KyaScreenResult = await kyaScreen({
-      chain: p.chain,
-      address: p.address,
-      token: p.token,
-      inflowHops: p.inflowHops,
-      outflowHops: p.outflowHops,
-      maxNodesPerHop: p.maxNodes,
-      maxOpponentPaths: p.maxOpponentPaths,
-      minAmount: p.minAmount,
-      isPenetrateContract: p.isPenetrateContract,
-      minTimestamp: p.minTimestamp,
-      maxTimestamp: p.maxTimestamp,
-      rulesetId: p.rulesetId,
-      scenario: p.scenario,
-    });
+    const result: KyaScreenResult = await kyaScreen(
+      {
+        chain: p.chain,
+        address: p.address,
+        token: p.token,
+        inflowHops: p.inflowHops,
+        outflowHops: p.outflowHops,
+        maxNodesPerHop: p.maxNodes,
+        maxOpponentPaths: p.maxOpponentPaths,
+        minAmount: p.minAmount,
+        isPenetrateContract: p.isPenetrateContract,
+        minTimestamp: p.minTimestamp,
+        maxTimestamp: p.maxTimestamp,
+        rulesetId: p.rulesetId,
+        scenario: p.scenario,
+      },
+      {
+        onStatus: (s) => {
+          const job = screeningJobs[jobId];
+          if (job && job.status === "running") job.progress = screenStatusLabel(s);
+        },
+      },
+    );
 
     const jobData: Record<string, unknown> = {
       status: "completed",

@@ -6,9 +6,13 @@
  *           actual requests go to api.trustin.bond)
  * Auth:     ?apikey=<key> query parameter.
  *
- * Two sync endpoints (Chainalysis-aligned responses + TrustIn extensions):
- *   POST /api/v3/screen/kya  — address screening, server-side ruleset engine
- *   POST /api/v3/screen/kyt  — transaction screening, per-direction rulesets
+ * Screening endpoints (Chainalysis-aligned responses + TrustIn extensions):
+ *   POST /api/v3/screen/kya            — address screening, server-side rulesets
+ *   POST /api/v3/screen/kyt            — transaction screening, per-direction
+ *   GET  /api/v3/screen/result/{jobId} — poll an async job (PENDING/PROCESSING/
+ *                                        COMPLETE); result under `result`
+ *
+ * We submit with mode:"async" and poll the result endpoint — see submitAndPoll.
  *
  * Rulesets live server-side: ruleset_id 0 = builtin default (KYA builtin, or
  * KYT-IN / KYT-OUT builtins per direction).
@@ -163,9 +167,18 @@ function assertChain(chain: string) {
   }
 }
 
+/** Envelope check + unwrap of the standard {code,msg,data} response. */
+function unwrap(json: Record<string, unknown>): Record<string, unknown> {
+  if (json.code !== 0) {
+    throw new Error(`Width API error: ${String(json.msg ?? "unknown error")}`);
+  }
+  return (json.data ?? {}) as Record<string, unknown>;
+}
+
 async function postV3(
   endpoint: string,
   body: Record<string, unknown>,
+  timeoutMs = 60_000,
 ): Promise<Record<string, unknown>> {
   const apiKey = getWidthApiKey();
   if (!apiKey) {
@@ -180,66 +193,190 @@ async function postV3(
       "User-Agent": "amlclaw-web/2.0",
     },
     body: JSON.stringify(body),
-    // Sync screening can take a while on deep traces.
-    signal: AbortSignal.timeout(180_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!res.ok) {
     throw new Error(`Width API HTTP error: ${res.status} ${res.statusText}`);
   }
-  const json = (await res.json()) as Record<string, unknown>;
-  if (json.code !== 0) {
-    throw new Error(`Width API error: ${String(json.msg ?? "unknown error")}`);
+  return unwrap((await res.json()) as Record<string, unknown>);
+}
+
+async function getV3(
+  endpoint: string,
+  timeoutMs = 30_000,
+): Promise<Record<string, unknown>> {
+  const apiKey = getWidthApiKey();
+  if (!apiKey) {
+    throw new Error("Width.info API key not configured. Set it in Settings → API Keys.");
   }
-  return json.data as Record<string, unknown>;
+  const url = `${getWidthBaseUrl()}${endpoint}?apikey=${encodeURIComponent(apiKey)}`;
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { "User-Agent": "amlclaw-web/2.0" },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Width API HTTP error: ${res.status} ${res.statusText}`);
+  }
+  return unwrap((await res.json()) as Record<string, unknown>);
+}
+
+// ---------------------------------------------------------------------------
+// Async submit + poll
+//
+// Screening runs asynchronously: POST /screen/{kya,kyt} with mode:"async"
+// returns a job_id; poll GET /screen/result/{jobId} every few seconds until
+// status is COMPLETE, then read `result` (same shape as the sync endpoints).
+//
+// Why async over a single long sync request: deep traces take 5–40s+ (longer
+// for large addresses). One HTTP connection held that long is fragile — a
+// proxy / load balancer / serverless function will drop or kill it and lose
+// the whole screen. Short poll requests survive that, allow re-polling on a
+// dropped connection, and surface PENDING/PROCESSING as live progress.
+// Detection runs once per job+params, so polling costs nothing extra.
+// ---------------------------------------------------------------------------
+
+const POLL_INTERVAL_MS = 3_000;
+const POLL_TIMEOUT_MS = 300_000; // overall cap across all polls (large addresses)
+const RESULT_MARKERS = ["risk", "address", "transaction"]; // sync-shaped result keys
+
+/** Optional hook to observe upstream job status (PENDING | PROCESSING | COMPLETE). */
+export interface ScreenProgress {
+  onStatus?: (status: string) => void;
+}
+
+/** Human-readable progress label for an upstream job status. */
+export function screenStatusLabel(status: string): string {
+  switch (status.toUpperCase()) {
+    case "PENDING":
+      return "Queued — upstream investigation starting (PENDING)…";
+    case "PROCESSING":
+      return "Tracing & detecting against ruleset (PROCESSING)…";
+    case "COMPLETE":
+      return "Complete — building result…";
+    default:
+      return `Screening… (${status})`;
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function looksLikeResult(data: Record<string, unknown>): boolean {
+  return RESULT_MARKERS.some((k) => k in data);
+}
+
+/**
+ * Submit a screen in async mode and poll until it completes. `submitBody` must
+ * NOT include `mode` — it is forced to "async" here. Returns the raw result
+ * object (sync-endpoint shape), ready for normalizeKya / normalizeKyt.
+ */
+async function submitAndPoll(
+  endpoint: string,
+  submitBody: Record<string, unknown>,
+  progress?: ScreenProgress,
+): Promise<Record<string, unknown>> {
+  const submit = await postV3(endpoint, { ...submitBody, mode: "async" });
+
+  // Defensive: a server that ignored async and returned the full result inline.
+  if (looksLikeResult(submit)) return submit;
+
+  const jobId = Number(submit.job_id ?? submit.jobId ?? submit.id);
+  if (!Number.isFinite(jobId) || jobId <= 0) {
+    throw new Error(`Async submit returned no job_id: ${JSON.stringify(submit)}`);
+  }
+
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  let lastStatus = "";
+  for (;;) {
+    const job = await getV3(`/api/v3/screen/result/${jobId}`);
+    const status = String(job.status ?? "").toUpperCase();
+    if (status && status !== lastStatus) {
+      lastStatus = status;
+      progress?.onStatus?.(status);
+    }
+    if (status === "COMPLETE") {
+      const result = job.result as Record<string, unknown> | undefined;
+      if (!result) {
+        throw new Error(`Screen job ${jobId} is COMPLETE but the result payload is missing`);
+      }
+      return result;
+    }
+    if (status === "FAILED" || status === "ERROR") {
+      throw new Error(`Screen job ${jobId} failed (status=${status})`);
+    }
+    if (Date.now() > deadline) {
+      throw new Error(
+        `Screen job ${jobId} did not complete within ${POLL_TIMEOUT_MS / 1000}s ` +
+          `(last status=${lastStatus || "unknown"})`,
+      );
+    }
+    await sleep(POLL_INTERVAL_MS);
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function kyaScreen(params: KyaScreenParams): Promise<KyaScreenResult> {
+export async function kyaScreen(
+  params: KyaScreenParams,
+  progress?: ScreenProgress,
+): Promise<KyaScreenResult> {
   assertChain(params.chain);
-  const data = await postV3("/api/v3/screen/kya", {
-    chain_name: params.chain,
-    address: params.address,
-    token: params.token ?? "usdt",
-    inflow_hops: params.inflowHops ?? 3,
-    outflow_hops: params.outflowHops ?? 3,
-    min_timestamp: params.minTimestamp ?? 0,
-    max_timestamp: params.maxTimestamp ?? Date.now(),
-    min_amount: params.minAmount ?? 10,
-    max_nodes_per_hop: params.maxNodesPerHop ?? 200,
-    max_opponent_paths: params.maxOpponentPaths ?? 50,
-    is_penetrate_contract: params.isPenetrateContract ?? false,
-    ruleset_id: params.rulesetId ?? 0,
-    scenario: params.scenario ?? "all",
-    mode: "sync",
-  });
+  const data = await submitAndPoll(
+    "/api/v3/screen/kya",
+    {
+      chain_name: params.chain,
+      address: params.address,
+      token: params.token ?? "usdt",
+      inflow_hops: params.inflowHops ?? 3,
+      outflow_hops: params.outflowHops ?? 3,
+      min_timestamp: params.minTimestamp ?? 0,
+      max_timestamp: params.maxTimestamp ?? Date.now(),
+      min_amount: params.minAmount ?? 10,
+      max_nodes_per_hop: params.maxNodesPerHop ?? 200,
+      max_opponent_paths: params.maxOpponentPaths ?? 50,
+      is_penetrate_contract: params.isPenetrateContract ?? false,
+      ruleset_id: params.rulesetId ?? 0,
+      scenario: params.scenario ?? "all",
+    },
+    progress,
+  );
   return normalizeKya(data);
 }
 
-export async function kytScreen(params: KytScreenParams): Promise<KytScreenResult> {
+export async function kytScreen(
+  params: KytScreenParams,
+  progress?: ScreenProgress,
+): Promise<KytScreenResult> {
   assertChain(params.chain);
-  const data = await postV3("/api/v3/screen/kyt", {
-    chain_name: params.chain,
-    token: params.token ?? "usdt",
-    tx_id: params.txId,
-    screen_direction: params.screenDirection ?? "both",
-    inflow_hops: params.inflowHops ?? 3,
-    outflow_hops: params.outflowHops ?? 3,
-    min_timestamp: params.minTimestamp ?? 0,
-    max_timestamp: params.maxTimestamp ?? Date.now(),
-    min_amount: params.minAmount ?? 10,
-    max_nodes_per_hop: params.maxNodesPerHop ?? 200,
-    max_opponent_paths: params.maxOpponentPaths ?? 50,
-    is_penetrate_contract: params.isPenetrateContract ?? false,
-    in_ruleset_id: params.inRulesetId ?? 0,
-    out_ruleset_id: params.outRulesetId ?? 0,
-    ruleset_id: 0,
-    scenario: params.scenario ?? "all",
-    mode: "sync",
-  });
+  const data = await submitAndPoll(
+    "/api/v3/screen/kyt",
+    {
+      chain_name: params.chain,
+      token: params.token ?? "usdt",
+      tx_id: params.txId,
+      screen_direction: params.screenDirection ?? "both",
+      inflow_hops: params.inflowHops ?? 3,
+      outflow_hops: params.outflowHops ?? 3,
+      min_timestamp: params.minTimestamp ?? 0,
+      max_timestamp: params.maxTimestamp ?? Date.now(),
+      min_amount: params.minAmount ?? 10,
+      max_nodes_per_hop: params.maxNodesPerHop ?? 200,
+      max_opponent_paths: params.maxOpponentPaths ?? 50,
+      is_penetrate_contract: params.isPenetrateContract ?? false,
+      in_ruleset_id: params.inRulesetId ?? 0,
+      out_ruleset_id: params.outRulesetId ?? 0,
+      ruleset_id: 0,
+      scenario: params.scenario ?? "all",
+    },
+    progress,
+  );
   return normalizeKyt(data);
 }
 

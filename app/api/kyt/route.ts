@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { saveHistoryEntry } from "@/lib/storage";
-import { kytScreen, type KytScreenResult, type KytDirection } from "@/lib/width-api";
+import { kytScreen, screenStatusLabel, type KytScreenResult, type KytDirection } from "@/lib/width-api";
 import { getSettings } from "@/lib/settings";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
 import crypto from "crypto";
@@ -105,24 +105,32 @@ async function runKytScreening(
   },
 ) {
   try {
-    kytJobs[jobId].progress = "Screening transaction (server-side ruleset engine, 30-90s)...";
+    kytJobs[jobId].progress = "Submitting async screen to width.info...";
 
-    const result: KytScreenResult = await kytScreen({
-      chain: p.chain,
-      txId: p.txId,
-      token: p.token,
-      screenDirection: p.direction,
-      inflowHops: p.inflowHops,
-      outflowHops: p.outflowHops,
-      maxNodesPerHop: p.maxNodes,
-      maxOpponentPaths: p.maxOpponentPaths,
-      minAmount: p.minAmount,
-      isPenetrateContract: p.isPenetrateContract,
-      minTimestamp: p.minTimestamp,
-      maxTimestamp: p.maxTimestamp,
-      inRulesetId: p.inRulesetId,
-      outRulesetId: p.outRulesetId,
-    });
+    const result: KytScreenResult = await kytScreen(
+      {
+        chain: p.chain,
+        txId: p.txId,
+        token: p.token,
+        screenDirection: p.direction,
+        inflowHops: p.inflowHops,
+        outflowHops: p.outflowHops,
+        maxNodesPerHop: p.maxNodes,
+        maxOpponentPaths: p.maxOpponentPaths,
+        minAmount: p.minAmount,
+        isPenetrateContract: p.isPenetrateContract,
+        minTimestamp: p.minTimestamp,
+        maxTimestamp: p.maxTimestamp,
+        inRulesetId: p.inRulesetId,
+        outRulesetId: p.outRulesetId,
+      },
+      {
+        onStatus: (s) => {
+          const job = kytJobs[jobId];
+          if (job && job.status === "running") job.progress = screenStatusLabel(s);
+        },
+      },
+    );
 
     const jobData: Record<string, unknown> = {
       status: "completed",
