@@ -136,14 +136,15 @@ export function unregisterCronJob(taskId: string) {
 // ---------------------------------------------------------------------------
 export function executeMonitorTask(
   taskId: string,
-  trigger: "scheduled" | "manual"
+  trigger: "scheduled" | "manual",
+  screenOnly = false,
 ): Promise<MonitorRun | null> {
   // Dedupe: task already queued or running → skip this trigger
   if (runningTasks.has(taskId)) return Promise.resolve(null);
   runningTasks.add(taskId);
 
   // Enqueue on the global single-lane queue — strictly one run at a time
-  const result = sched.runChain.then(() => runMonitorTaskNow(taskId, trigger));
+  const result = sched.runChain.then(() => runMonitorTaskNow(taskId, trigger, screenOnly));
   sched.runChain = result.then(
     () => undefined,
     (e) => { console.error(`[Scheduler] Run failed for ${taskId}:`, e); },
@@ -153,7 +154,8 @@ export function executeMonitorTask(
 
 async function runMonitorTaskNow(
   taskId: string,
-  trigger: "scheduled" | "manual"
+  trigger: "scheduled" | "manual",
+  screenOnly = false,
 ): Promise<MonitorRun | null> {
   const task = loadMonitor(taskId);
   if (!task) return null;
@@ -177,7 +179,7 @@ async function runMonitorTaskNow(
 
   try {
     if (task.type === "address") {
-      ({ results, summary } = await runAddressMonitor(task, runId));
+      ({ results, summary } = await runAddressMonitor(task, runId, screenOnly));
     } else {
       ({ results, summary } = await runKytMonitor(task, runId));
     }
@@ -244,6 +246,7 @@ function monitorWindowStart(task: MonitorTask): number {
 async function runAddressMonitor(
   task: MonitorTask,
   runId: string,
+  screenOnly = false,
 ): Promise<{ results: MonitorRunResult[]; summary: MonitorRunSummary }> {
   const settings = getSettings();
   const maxTxPerRun = settings.monitoring.maxTxPerRun || 20;
@@ -252,28 +255,34 @@ async function runAddressMonitor(
   const windowStart = monitorWindowStart(task);
   const nowMs = Date.now();
 
-  // 1. Pull new transfers since cursor; advance cursor on CAPTURE — screening
-  //    state lives in the ledger, so nothing is lost if screening fails.
-  const { txs, cursor } = await fetchNewTxs(task.chain, task.address, task.cursor ?? {});
-  updateMonitor(task.id, { cursor });
+  // 1 & 2. Capture: pull new transfers since cursor, filter token + amount, and
+  //    record as pending. Skipped in screenOnly (drain) mode so the pending
+  //    backlog can be worked down monotonically without pulling in more txs.
+  //    Cursor advances on CAPTURE — screening state lives in the ledger, so
+  //    nothing is lost if screening fails.
+  let capturedCount = 0;
+  if (!screenOnly) {
+    const { txs, cursor } = await fetchNewTxs(task.chain, task.address, task.cursor ?? {});
+    updateMonitor(task.id, { cursor });
 
-  // 2. Filter token + amount, record into the ledger as pending
-  const eligible = txs.filter(
-    (tx) => watchedTokens.includes(tx.token) && tx.amount >= minAmount,
-  );
-  appendMonitorTxs(
-    task.id,
-    eligible.map((tx) => ({
-      tx_id: tx.txId,
-      block_number: tx.blockNumber,
-      timestamp: tx.timestamp,
-      from: tx.from,
-      to: tx.to,
-      token: tx.token,
-      amount: tx.amount,
-      direction: tx.direction,
-    })),
-  );
+    const eligible = txs.filter(
+      (tx) => watchedTokens.includes(tx.token) && tx.amount >= minAmount,
+    );
+    appendMonitorTxs(
+      task.id,
+      eligible.map((tx) => ({
+        tx_id: tx.txId,
+        block_number: tx.blockNumber,
+        timestamp: tx.timestamp,
+        from: tx.from,
+        to: tx.to,
+        token: tx.token,
+        amount: tx.amount,
+        direction: tx.direction,
+      })),
+    );
+    capturedCount = eligible.length;
+  }
 
   // 3. Screen the due backlog (pending + retryable errors), oldest first
   const queue = txsDueForScreening(task.id, maxTxPerRun);
@@ -392,7 +401,7 @@ async function runAddressMonitor(
   return {
     results,
     summary: {
-      new_txs: eligible.length,
+      new_txs: capturedCount,
       screened: screened.length,
       // remaining backlog (will be picked up by the next run)
       skipped: stats.pending,

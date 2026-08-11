@@ -11,8 +11,9 @@ import path from "path";
 
 const MONITORS_DIR = path.join(process.cwd(), "data", "monitors");
 
-/** Max ledger entries kept per monitor (newest kept). */
-const LEDGER_CAP = 1000;
+/** Max ledger entries kept per monitor. Unscreened rows are never evicted
+ *  (see saveMonitorTxs) — the cap only bounds completed history. */
+const LEDGER_CAP = 5000;
 /** Screening attempts before a tx is marked failed permanently. */
 export const MAX_KYT_RETRIES = 3;
 
@@ -54,11 +55,27 @@ export function loadMonitorTxs(monitorId: string): MonitorTx[] {
 }
 
 function saveMonitorTxs(monitorId: string, txs: MonitorTx[]) {
-  // newest first, capped
-  const sorted = [...txs].sort((a, b) => b.timestamp - a.timestamp).slice(0, LEDGER_CAP);
+  // Newest first. When over cap, NEVER evict unscreened work (pending / error)
+  // — only completed rows (screened / failed) may be dropped. Otherwise a busy
+  // monitor silently loses txs before they are ever screened, and even already-
+  // screened evidence can vanish, breaking the "every tx checked" guarantee.
+  const sorted = [...txs].sort((a, b) => b.timestamp - a.timestamp);
+  let final = sorted;
+  if (sorted.length > LEDGER_CAP) {
+    const unscreened = sorted.filter(
+      (t) => t.kyt_status === "pending" || t.kyt_status === "error",
+    );
+    const done = sorted.filter(
+      (t) => t.kyt_status === "screened" || t.kyt_status === "failed",
+    );
+    const keepDone = Math.max(0, LEDGER_CAP - unscreened.length);
+    final = [...unscreened, ...done.slice(0, keepDone)].sort(
+      (a, b) => b.timestamp - a.timestamp,
+    );
+  }
   const dir = path.dirname(ledgerPath(monitorId));
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(ledgerPath(monitorId), JSON.stringify(sorted, null, 2));
+  fs.writeFileSync(ledgerPath(monitorId), JSON.stringify(final, null, 2));
 }
 
 /** Append newly captured txs (dedupe by tx_id). Returns count actually added. */
