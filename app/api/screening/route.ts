@@ -3,6 +3,8 @@ import { saveHistoryEntry } from "@/lib/storage";
 import { kyaScreen, screenStatusLabel, type KyaScreenResult } from "@/lib/width-api";
 import { getSettings } from "@/lib/settings";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
+import { fetchAddressStats, fetchTokenBalance, type AddressStats } from "@/lib/chain-txs";
+import { attributeFunds, computeFundScore, detectSelfHit } from "@/lib/risk-score";
 import crypto from "crypto";
 
 // In-memory job storage
@@ -127,12 +129,31 @@ async function runKyaScreening(
       },
     );
 
+    // Fund-attribution score: chain volume denominators + edge-level dedupe.
+    // Degrades gracefully — a failed chain fetch leaves score null, amounts kept.
+    screeningJobs[jobId].progress = "Computing fund-attribution score…";
+    let chainStats: (AddressStats & { balance: number | null }) | null = null;
+    try {
+      const stats = await fetchAddressStats(p.chain, p.address, p.token);
+      let balance: number | null = null;
+      try { balance = await fetchTokenBalance(p.chain, p.address, p.token); } catch { /* keep null */ }
+      chainStats = { ...stats, balance };
+    } catch { /* score degrades to null */ }
+    const attribution = attributeFunds(result.hits, detectSelfHit(result.hits, result.addressIdentifications));
+    const fundScore = computeFundScore(
+      attribution,
+      chainStats ? chainStats.inTotal : null,
+      chainStats ? chainStats.outTotal : null,
+    );
+
     const jobData: Record<string, unknown> = {
       status: "completed",
       type: "kya",
       completed_at: new Date().toISOString(),
       request: screeningJobs[jobId].request,
       result,
+      chain_stats: chainStats,
+      fund_score: fundScore,
     };
     screeningJobs[jobId] = jobData;
     saveHistoryEntry(jobId, jobData, {

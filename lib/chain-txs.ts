@@ -187,6 +187,150 @@ async function fetchTron(
 }
 
 // ---------------------------------------------------------------------------
+// Address volume stats — denominators for the fund-attribution risk score.
+// Full-history in/out counts and sums for one token, with a pagination cap
+// (busy addresses are truncated and flagged; a truncated denominator makes the
+// resulting ratio conservative, never understated).
+// ---------------------------------------------------------------------------
+
+export interface AddressStats {
+  token: string;
+  inCount: number;
+  inTotal: number;
+  outCount: number;
+  outTotal: number;
+  firstTs: number;
+  lastTs: number;
+  truncated: boolean;
+}
+
+const TRON_STATS_MAX_PAGES = 25; // 25 × 200 = 5000 transfers
+const ETH_STATS_MAX_ROWS = 10_000; // Etherscan page*offset cap
+
+export async function fetchAddressStats(
+  chain: string,
+  address: string,
+  token = "USDT",
+): Promise<AddressStats> {
+  const stats: AddressStats = {
+    token, inCount: 0, inTotal: 0, outCount: 0, outTotal: 0,
+    firstTs: 0, lastTs: 0, truncated: false,
+  };
+  const record = (from: string, amount: number, ts: number) => {
+    const isOut = from.toLowerCase() === address.toLowerCase();
+    if (isOut) { stats.outCount++; stats.outTotal += amount; }
+    else { stats.inCount++; stats.inTotal += amount; }
+    if (ts) {
+      if (!stats.firstTs || ts < stats.firstTs) stats.firstTs = ts;
+      if (ts > stats.lastTs) stats.lastTs = ts;
+    }
+  };
+
+  if (chain === "Tron") {
+    const apiKey = getTrongridApiKey();
+    const headers: Record<string, string> = {};
+    if (apiKey) headers["TRON-PRO-API-KEY"] = apiKey;
+    let fingerprint = "";
+    for (let page = 0; page < TRON_STATS_MAX_PAGES; page++) {
+      const url =
+        `https://api.trongrid.io/v1/accounts/${address}/transactions/trc20` +
+        `?only_confirmed=true&limit=200&contract_address=${TRON_USDT_CONTRACT}` +
+        (fingerprint ? `&fingerprint=${encodeURIComponent(fingerprint)}` : "");
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
+      if (!res.ok) throw new Error(`TronGrid HTTP ${res.status}`);
+      const json = (await res.json()) as {
+        data?: Record<string, unknown>[];
+        meta?: { fingerprint?: string };
+      };
+      const rows = Array.isArray(json.data) ? json.data : [];
+      for (const row of rows) {
+        if (String(row.type ?? "Transfer") !== "Transfer") continue;
+        const info = (row.token_info as Record<string, unknown>) || {};
+        const decimals = Number(info.decimals ?? 6);
+        record(
+          String(row.from ?? ""),
+          Number(row.value ?? "0") / 10 ** decimals,
+          Number(row.block_timestamp ?? 0),
+        );
+      }
+      fingerprint = json.meta?.fingerprint || "";
+      if (!fingerprint || rows.length === 0) return stats;
+    }
+    stats.truncated = true;
+    return stats;
+  }
+
+  if (chain === "Ethereum") {
+    const apiKey = getEtherscanApiKey() || "YourApiKeyToken";
+    const tokenDef = ETH_TOKENS[token.toUpperCase() as keyof typeof ETH_TOKENS];
+    if (!tokenDef) throw new Error(`Unsupported token for stats: ${token}`);
+    const url =
+      `https://api.etherscan.io/v2/api?chainid=1&module=account&action=tokentx` +
+      `&address=${address}&contractaddress=${tokenDef.contract}` +
+      `&startblock=0&endblock=latest&page=1&offset=${ETH_STATS_MAX_ROWS}` +
+      `&sort=asc&apikey=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) throw new Error(`Etherscan HTTP ${res.status}`);
+    const json = (await res.json()) as { status: string; message: string; result: unknown };
+    if (json.status !== "1") {
+      if (String(json.message).toLowerCase().includes("no transactions")) return stats;
+      throw new Error(`Etherscan error: ${json.message}`);
+    }
+    const rows = Array.isArray(json.result) ? (json.result as Record<string, string>[]) : [];
+    for (const row of rows) {
+      record(
+        String(row.from ?? ""),
+        Number(row.value ?? "0") / 10 ** tokenDef.decimals,
+        parseInt(row.timeStamp ?? "0", 10) * 1000,
+      );
+    }
+    if (rows.length >= ETH_STATS_MAX_ROWS) stats.truncated = true;
+    return stats;
+  }
+
+  throw new Error(`Unsupported chain for stats: ${chain}`);
+}
+
+/** Current token balance of an address (USDT on Tron; USDT/USDC on Ethereum). */
+export async function fetchTokenBalance(
+  chain: string,
+  address: string,
+  token = "USDT",
+): Promise<number> {
+  if (chain === "Tron") {
+    const apiKey = getTrongridApiKey();
+    const headers: Record<string, string> = {};
+    if (apiKey) headers["TRON-PRO-API-KEY"] = apiKey;
+    const res = await fetch(`https://api.trongrid.io/v1/accounts/${address}`, {
+      headers, signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) throw new Error(`TronGrid HTTP ${res.status}`);
+    const json = (await res.json()) as { data?: { trc20?: Record<string, string>[] }[] };
+    for (const acc of json.data || []) {
+      for (const entry of acc.trc20 || []) {
+        if (entry[TRON_USDT_CONTRACT]) return Number(entry[TRON_USDT_CONTRACT]) / 1e6;
+      }
+    }
+    return 0;
+  }
+  if (chain === "Ethereum") {
+    const apiKey = getEtherscanApiKey() || "YourApiKeyToken";
+    const tokenDef = ETH_TOKENS[token.toUpperCase() as keyof typeof ETH_TOKENS];
+    if (!tokenDef) throw new Error(`Unsupported token for balance: ${token}`);
+    const url =
+      `https://api.etherscan.io/v2/api?chainid=1&module=account&action=tokenbalance` +
+      `&contractaddress=${tokenDef.contract}&address=${address}&tag=latest` +
+      `&apikey=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) throw new Error(`Etherscan HTTP ${res.status}`);
+    const json = (await res.json()) as { status: string; result?: string };
+    if (json.status !== "1") return 0;
+    return Number(json.result ?? "0") / 10 ** tokenDef.decimals;
+  }
+  throw new Error(`Unsupported chain for balance: ${chain}`);
+}
+
+// ---------------------------------------------------------------------------
 // Single-tx lookup — used by KYT Monitoring to resolve from/to of a tx hash
 // ---------------------------------------------------------------------------
 

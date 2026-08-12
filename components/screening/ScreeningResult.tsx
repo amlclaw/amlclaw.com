@@ -5,6 +5,9 @@ import { formatTime, shortenAddr, showToast } from "@/lib/utils";
 import { hitsToEntities } from "@/lib/parse-evidence-flow";
 import { riskPillClass, riskColorVar, riskLabel, recommendation, formatUsd } from "@/lib/risk-ui";
 import type { KyaScreenResult, WidthHit } from "@/lib/width-api";
+import type { FundScore } from "@/lib/risk-score";
+import type { AddressStats } from "@/lib/chain-txs";
+import FundScoreCard from "./FundScoreCard";
 
 const FlowGraph = lazy(() => import("./FlowGraph"));
 
@@ -126,6 +129,15 @@ function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string 
           <div className={`report-alert ${["critical", "high"].includes(r.risk) ? "report-alert-danger" : "report-alert-success"}`} style={{ marginBottom: "var(--sp-4)" }}>
             {r.riskReason}
           </div>
+        )}
+
+        {/* Fund-attribution score (资金占比评分) */}
+        {job.fund_score != null && (
+          <FundScoreCard
+            fundScore={job.fund_score as FundScore}
+            chainStats={job.chain_stats as (AddressStats & { balance: number | null }) | null}
+            mode="kya"
+          />
         )}
 
         {/* ── 2. Subject Identification ── */}

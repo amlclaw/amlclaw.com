@@ -1,0 +1,154 @@
+"use client";
+
+/**
+ * Fund-attribution risk score card ("资金占比评分") — shown on KYA and KYT
+ * reports. Renders the score, the per-component breakdown (each line is
+ * amount / denominator × weight = points, individually verifiable), and the
+ * formula in plain language.
+ */
+import type { FundScore } from "@/lib/risk-score";
+import type { AddressStats } from "@/lib/chain-txs";
+
+const VERDICT_UI: Record<string, { label: string; zh: string; color: string }> = {
+  accept: { label: "Accept", zh: "放行", color: "var(--success)" },
+  review: { label: "Review", zh: "人工复核", color: "var(--risk-medium)" },
+  edd: { label: "Enhanced DD", zh: "加强尽调", color: "var(--risk-high)" },
+  block: { label: "Block", zh: "拒绝", color: "var(--danger)" },
+};
+
+const fmt = (n: number) =>
+  n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+const pct = (r: number) => `${(r * 100).toFixed(2)}%`;
+
+function ScoreBar({ ratio, color }: { ratio: number; color: string }) {
+  return (
+    <div style={{ flex: 1, height: 10, background: "var(--surface-2)", borderRadius: 5, overflow: "hidden", border: "1px solid var(--border-subtle)" }}>
+      <div style={{ width: `${Math.min(ratio * 100, 100)}%`, height: "100%", background: color, borderRadius: 5, transition: "width .4s" }} />
+    </div>
+  );
+}
+
+function ComponentRow({ label, amount, denom, ratio, weight, color }: {
+  label: string; amount: number; denom: number | null; ratio: number; weight: number; color: string;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", fontSize: "var(--text-xs)", padding: "5px 0" }}>
+      <span style={{ width: 190, color: "var(--text-secondary)", flexShrink: 0 }}>{label}</span>
+      <ScoreBar ratio={ratio} color={color} />
+      <span style={{ width: 250, textAlign: "right", fontFamily: "var(--mono)", color: "var(--text-secondary)", flexShrink: 0 }}>
+        {fmt(amount)} {denom != null ? `/ ${fmt(denom)}` : ""} · {pct(ratio)} × {weight} ={" "}
+        <b style={{ color: "var(--text-primary)" }}>{(ratio * weight).toFixed(1)}</b>
+      </span>
+    </div>
+  );
+}
+
+export default function FundScoreCard({ fundScore, chainStats, mode }: {
+  fundScore: FundScore;
+  chainStats?: (AddressStats & { balance: number | null }) | null;
+  mode: "kya" | "kyt";
+}) {
+  const fs = fundScore;
+  const v = fs.verdict ? VERDICT_UI[fs.verdict] : null;
+  const scoreColor = v?.color || "var(--text-tertiary)";
+
+  return (
+    <div className="report-section">
+      <div className="report-section-header">
+        Fund-Attribution Score · 资金占比评分
+      </div>
+      <div style={{ background: "var(--surface-1)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-md)", padding: "var(--sp-4)" }}>
+        {/* score headline */}
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-4)", marginBottom: "var(--sp-3)", flexWrap: "wrap" }}>
+          <div style={{ fontSize: "2rem", fontWeight: 800, color: scoreColor, lineHeight: 1 }}>
+            {fs.score != null ? fs.score : "—"}
+            <span style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", fontWeight: 400 }}> /100</span>
+          </div>
+          {v && (
+            <span className="badge" style={{ background: `color-mix(in srgb, ${v.color} 15%, transparent)`, color: v.color, border: `1px solid color-mix(in srgb, ${v.color} 40%, transparent)`, fontWeight: 700 }}>
+              {v.label} · {v.zh}
+            </span>
+          )}
+          {fs.selfHit && (
+            <span className="badge" style={{ background: "color-mix(in srgb, var(--danger) 15%, transparent)", color: "var(--danger)", fontWeight: 700 }}>
+              SELFHIT — subject itself sanctioned/frozen
+            </span>
+          )}
+          <span style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)" }}>
+            {fs.hitPaths} hit paths → {fs.riskyEdges} deduped edges
+          </span>
+        </div>
+
+        {fs.score == null && !fs.selfHit && (
+          <div className="report-alert" style={{ marginBottom: "var(--sp-3)", fontSize: "var(--text-xs)" }}>
+            链上总量数据不可用(Etherscan/TronGrid 拉取失败或未配置 Key),无法计算占比——下方仅展示去重后的风险金额。
+          </div>
+        )}
+
+        {/* component breakdown */}
+        {!fs.selfHit && (
+          <div style={{ marginBottom: "var(--sp-3)" }}>
+            <ComponentRow
+              label="r₁ Direct (≤1 hop) risky inflow"
+              amount={fs.directAmount} denom={fs.totalIn} ratio={fs.r1}
+              weight={fs.weights.direct} color="var(--danger)"
+            />
+            <ComponentRow
+              label="r₂ Indirect (2+ hop) risky inflow"
+              amount={fs.indirectAmount} denom={fs.totalIn} ratio={fs.r2}
+              weight={fs.weights.indirect} color="var(--risk-high)"
+            />
+            <ComponentRow
+              label="r_out Risky outflow"
+              amount={fs.outflowAmount} denom={fs.totalOut} ratio={fs.rOut}
+              weight={fs.weights.outflow} color="var(--risk-medium)"
+            />
+          </div>
+        )}
+
+        {/* chain stats context (KYA) */}
+        {mode === "kya" && chainStats && (
+          <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", borderTop: "1px dashed var(--border-subtle)", paddingTop: "var(--sp-2)", marginBottom: "var(--sp-2)", display: "flex", gap: "var(--sp-4)", flexWrap: "wrap" }}>
+            <span>In: <b style={{ color: "var(--text-secondary)" }}>{chainStats.inCount} txs / {fmt(chainStats.inTotal)} {chainStats.token}</b></span>
+            <span>Out: <b style={{ color: "var(--text-secondary)" }}>{chainStats.outCount} txs / {fmt(chainStats.outTotal)} {chainStats.token}</b></span>
+            {chainStats.balance != null && <span>Balance: <b style={{ color: "var(--text-secondary)" }}>{fmt(chainStats.balance)} {chainStats.token}</b></span>}
+            {chainStats.truncated && <span style={{ color: "var(--risk-medium)" }}>⚠ 总量按最近 {chainStats.inCount + chainStats.outCount} 笔截断,占比偏保守</span>}
+          </div>
+        )}
+        {mode === "kyt" && fs.totalIn != null && (
+          <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", borderTop: "1px dashed var(--border-subtle)", paddingTop: "var(--sp-2)", marginBottom: "var(--sp-2)" }}>
+            分母 = 本笔交易转账金额 <b style={{ color: "var(--text-secondary)" }}>{fmt(fs.totalIn)}</b>(KYT 路径即「本笔资金」的来源/去向)
+          </div>
+        )}
+
+        {/* formula, in plain language */}
+        <details>
+          <summary style={{ cursor: "pointer", fontSize: "var(--text-xs)", color: "var(--primary-500)", fontWeight: 600 }}>
+            评分公式说明(点击展开)
+          </summary>
+          <div style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", lineHeight: 1.8, paddingTop: "var(--sp-2)" }}>
+            <p style={{ marginBottom: 6 }}>
+              <b>原则:钱只算一次,路径不加分。</b>
+              多条风险路径命中同一笔资金只计一次(按「与目标相接的边」金额去重);
+              同一笔钱同时命中多类风险时,按 <b>SELFHIT &gt; 直接(≤1跳) &gt; 间接(2跳以上)</b> 的严重度优先只归入一个桶,各桶资金互不重叠。
+            </p>
+            <p style={{ marginBottom: 6 }}>
+              <b>公式:</b>SELFHIT(地址本身被制裁/冻结)命中 → 直接 <b>100 分</b>(覆盖);否则
+              <code style={{ margin: "0 4px" }}>score = 80 × r₁ + 40 × r₂ + 10 × r_out</code>
+              ,其中 r₁ = 直接风险入金 ÷ 总入金,r₂ = 间接风险入金 ÷ 总入金,r_out = 风险出金 ÷ 总出金
+              {mode === "kyt" && "(KYT 场景分母为本笔交易金额)"}。占比天然 ≤ 100%,路径再多也不会爆表。
+            </p>
+            <p style={{ margin: 0 }}>
+              <b>分数段:</b>
+              <span style={{ color: "var(--success)" }}> 0–20 放行</span> ·
+              <span style={{ color: "var(--risk-medium)" }}> 20–50 人工复核</span> ·
+              <span style={{ color: "var(--risk-high)" }}> 50–80 加强尽调</span> ·
+              <span style={{ color: "var(--danger)" }}> 80–100 拒绝</span>。
+              规则等级(旧口径)回答「有没有风险连接」,本评分(新口径)回答「有多少钱有问题」——两者互补,处置以本评分为主。
+            </p>
+          </div>
+        </details>
+      </div>
+    </div>
+  );
+}

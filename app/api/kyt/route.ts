@@ -3,6 +3,8 @@ import { saveHistoryEntry } from "@/lib/storage";
 import { kytScreen, screenStatusLabel, type KytScreenResult, type KytDirection } from "@/lib/width-api";
 import { getSettings } from "@/lib/settings";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
+import { resolveTxEndpoints, type TxEndpoints } from "@/lib/chain-txs";
+import { attributeFunds, computeFundScore, detectSelfHit } from "@/lib/risk-score";
 import crypto from "crypto";
 
 // In-memory job storage
@@ -132,12 +134,27 @@ async function runKytScreening(
       },
     );
 
+    // Fund-attribution score. For a transaction the denominator is the tx's own
+    // transfer amount (KYT paths are scoped to the funds behind this transfer).
+    kytJobs[jobId].progress = "Computing fund-attribution score…";
+    let txEndpoints: TxEndpoints | null = null;
+    try { txEndpoints = await resolveTxEndpoints(p.chain, p.txId); } catch { /* score degrades */ }
+    const attribution = attributeFunds(result.hits, detectSelfHit(result.hits));
+    const txAmount = txEndpoints ? txEndpoints.amount : null;
+    const fundScore = computeFundScore(
+      attribution,
+      p.direction !== "out" ? txAmount : null,
+      p.direction !== "in" ? txAmount : null,
+    );
+
     const jobData: Record<string, unknown> = {
       status: "completed",
       type: "kyt",
       completed_at: new Date().toISOString(),
       request: kytJobs[jobId].request,
       result,
+      tx_endpoints: txEndpoints,
+      fund_score: fundScore,
     };
     kytJobs[jobId] = jobData;
     saveHistoryEntry(jobId, jobData, {

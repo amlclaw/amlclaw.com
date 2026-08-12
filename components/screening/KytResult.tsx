@@ -6,6 +6,8 @@ import { hitsToEntities } from "@/lib/parse-evidence-flow";
 import { riskPillClass, riskColorVar, riskLabel, recommendation, riskSortRank } from "@/lib/risk-ui";
 import { RiskBadge, KriCard, EntityCard } from "./ScreeningResult";
 import type { KytScreenResult } from "@/lib/width-api";
+import type { FundScore } from "@/lib/risk-score";
+import FundScoreCard from "./FundScoreCard";
 
 const FlowGraph = lazy(() => import("./FlowGraph"));
 
@@ -109,6 +111,11 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
           <MonitorSideButton chain={r.chain} txId={r.transaction} side="from" />
           <MonitorSideButton chain={r.chain} txId={r.transaction} side="to" />
         </div>
+
+        {/* Fund-attribution score (资金占比评分) */}
+        {job.fund_score != null && (
+          <FundScoreCard fundScore={job.fund_score as FundScore} mode="kyt" />
+        )}
 
         {/* KRI */}
         <div className="report-section">
