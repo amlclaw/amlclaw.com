@@ -61,7 +61,9 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   screening: {
     defaultInflowHops: 3,
-    defaultOutflowHops: 3,
+    // Outflow default 1: inflow (source of funds) deserves depth; 1 hop of
+    // outflow answers "where did it go next" at a fraction of the trace time.
+    defaultOutflowHops: 1,
     maxNodesPerHop: 200,
     maxOpponentPaths: 50,
     minAmount: 100,

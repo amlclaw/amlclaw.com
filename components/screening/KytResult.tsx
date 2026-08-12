@@ -148,7 +148,6 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
                   <th>Amount</th>
                   <th>Rule</th>
                   <th>Counterparty</th>
-                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -162,11 +161,6 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
                     <td style={{ fontFamily: "var(--mono)" }}>{a.alertAmount.toLocaleString()}</td>
                     <td style={{ fontFamily: "var(--mono)", fontSize: "0.65rem" }}>{a.categoryId}</td>
                     <td style={{ fontFamily: "var(--mono)", fontSize: "0.65rem" }}>{shortenAddr(a.opponentAddress)}</td>
-                    <td>
-                      <span className="action-pill" style={{ background: "var(--surface-3)", border: "1px solid var(--border-default)" }}>
-                        {a.action}
-                      </span>
-                    </td>
                   </tr>
                 ))}
               </tbody>

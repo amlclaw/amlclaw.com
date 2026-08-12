@@ -20,7 +20,7 @@ export default function ScreeningForm({ onJobStarted, onLoading, initialAddress,
   const [token, setToken] = useState("usdt");
   const [rulesetId, setRulesetId] = useState("0");
   const [inflowHops, setInflowHops] = useState("3");
-  const [outflowHops, setOutflowHops] = useState("3");
+  const [outflowHops, setOutflowHops] = useState("1");
   const [maxNodes, setMaxNodes] = useState("200");
   const [minAmount, setMinAmount] = useState("10");
   const [maxOpponentPaths, setMaxOpponentPaths] = useState("50");

@@ -265,7 +265,6 @@ function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string 
                   <th>Rule Code</th>
                   <th>Risk</th>
                   <th>Name</th>
-                  <th>Action</th>
                   <th>Paths</th>
                 </tr>
               </thead>
@@ -279,11 +278,6 @@ function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string 
                       </span>
                     </td>
                     <td>{groupHits[0].ruleName}</td>
-                    <td>
-                      <span className="action-pill" style={{ background: "var(--surface-3)", border: "1px solid var(--border-default)" }}>
-                        {groupHits[0].action}
-                      </span>
-                    </td>
                     <td>{groupHits.length}</td>
                   </tr>
                 ))}
