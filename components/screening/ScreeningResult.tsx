@@ -7,7 +7,7 @@ import { riskPillClass, riskColorVar, riskLabel, recommendation, formatUsd } fro
 import type { KyaScreenResult, WidthHit } from "@/lib/width-api";
 import type { FundScore } from "@/lib/risk-score";
 import type { AddressStats } from "@/lib/chain-txs";
-import FundScoreCard from "./FundScoreCard";
+import FundScoreCard, { ScoreVerdictBadge, PathAnalysisDivider } from "./FundScoreCard";
 
 const FlowGraph = lazy(() => import("./FlowGraph"));
 
@@ -120,24 +120,34 @@ function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string 
           </div>
           <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "flex-start" }}>
             <GoMonitorButton chain={r.chain} address={r.address} />
-            <RiskBadge level={r.risk} score={r.riskScore} />
+            {job.fund_score != null ? (
+              <ScoreVerdictBadge fundScore={job.fund_score as FundScore} />
+            ) : (
+              <RiskBadge level={r.risk} score={r.riskScore} />
+            )}
           </div>
         </div>
 
-        {/* Risk reason banner */}
-        {r.riskReason && (
-          <div className={`report-alert ${["critical", "high"].includes(r.risk) ? "report-alert-danger" : "report-alert-success"}`} style={{ marginBottom: "var(--sp-4)" }}>
-            {r.riskReason}
-          </div>
-        )}
-
-        {/* Fund-attribution score (资金占比评分) */}
+        {/* ── Verdict: fund-attribution score is THE user-facing judgment ── */}
         {job.fund_score != null && (
           <FundScoreCard
             fundScore={job.fund_score as FundScore}
             chainStats={job.chain_stats as (AddressStats & { balance: number | null }) | null}
             mode="kya"
           />
+        )}
+
+        {/* ── Everything below is path-level EVIDENCE (rule engine view) ── */}
+        {job.fund_score != null && <PathAnalysisDivider />}
+
+        {/* Path-level rule verdict + reason (evidence, not the judgment) */}
+        {r.riskReason && (
+          <div className={`report-alert ${["critical", "high"].includes(r.risk) ? "report-alert-danger" : "report-alert-success"}`} style={{ marginBottom: "var(--sp-4)", display: "flex", alignItems: "center", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+            <span className={`pill-${riskPillClass(r.risk)}`} style={{ flexShrink: 0 }}>
+              Path level: {riskLabel(r.risk)}
+            </span>
+            <span>{r.riskReason}</span>
+          </div>
         )}
 
         {/* ── 2. Subject Identification ── */}
@@ -204,17 +214,17 @@ function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string 
           </div>
         )}
 
-        {/* ── 4. Key Risk Indicators ── */}
+        {/* ── 4. Path-level indicators (rule engine view) ── */}
         <div className="report-section">
-          <div className="report-section-header">Key Risk Indicators (KRI)</div>
+          <div className="report-section-header">Path-Level Indicators · 路径指标(规则口径)</div>
           <div className="report-kri-grid">
-            <KriCard value={r.riskScore === 0 ? "Clean" : riskLabel(r.risk)} label="Risk Level" color={r.riskScore === 0 ? "var(--success)" : riskColorVar(r.risk)} />
+            <KriCard value={r.riskScore === 0 ? "Clean" : riskLabel(r.risk)} label="Path Risk Level" color={r.riskScore === 0 ? "var(--success)" : riskColorVar(r.risk)} />
             <KriCard value={`${r.hitPaths}/${r.totalPaths}`} label="Hit Paths" color={r.hitPaths > 0 ? "var(--risk-high)" : "var(--success)"} />
-            <KriCard value={`${(r.inflowRiskRate * 100).toFixed(1)}%`} label="Inflow Risk Rate" color={r.inflowRiskRate > 0 ? "var(--risk-high)" : "var(--text-secondary)"} />
-            <KriCard value={`${(r.outflowRiskRate * 100).toFixed(1)}%`} label="Outflow Risk Rate" color={r.outflowRiskRate > 0 ? "var(--risk-high)" : "var(--text-secondary)"} />
+            <KriCard value={`${(r.inflowRiskRate * 100).toFixed(1)}%`} label="Inflow Path Risk Rate" color={r.inflowRiskRate > 0 ? "var(--risk-high)" : "var(--text-secondary)"} />
+            <KriCard value={`${(r.outflowRiskRate * 100).toFixed(1)}%`} label="Outflow Path Risk Rate" color={r.outflowRiskRate > 0 ? "var(--risk-high)" : "var(--text-secondary)"} />
             <KriCard
               value={rec}
-              label="Recommendation"
+              label="Rule Action (path)"
               color={rec === "Pass" ? "var(--success)" : rec === "Review" ? "var(--risk-medium)" : "var(--danger)"}
             />
           </div>

@@ -7,7 +7,7 @@ import { riskPillClass, riskColorVar, riskLabel, recommendation, riskSortRank } 
 import { RiskBadge, KriCard, EntityCard } from "./ScreeningResult";
 import type { KytScreenResult } from "@/lib/width-api";
 import type { FundScore } from "@/lib/risk-score";
-import FundScoreCard from "./FundScoreCard";
+import FundScoreCard, { ScoreVerdictBadge, PathAnalysisDivider } from "./FundScoreCard";
 
 const FlowGraph = lazy(() => import("./FlowGraph"));
 
@@ -102,7 +102,11 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "flex-start", flexShrink: 0 }}>
-            <RiskBadge level={r.risk} score={r.riskScore} />
+            {job.fund_score != null ? (
+              <ScoreVerdictBadge fundScore={job.fund_score as FundScore} />
+            ) : (
+              <RiskBadge level={r.risk} score={r.riskScore} />
+            )}
           </div>
         </div>
 
@@ -112,19 +116,22 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
           <MonitorSideButton chain={r.chain} txId={r.transaction} side="to" />
         </div>
 
-        {/* Fund-attribution score (资金占比评分) */}
+        {/* ── Verdict: fund-attribution score is THE user-facing judgment ── */}
         {job.fund_score != null && (
           <FundScoreCard fundScore={job.fund_score as FundScore} mode="kyt" />
         )}
 
-        {/* KRI */}
+        {/* ── Everything below is path-level EVIDENCE (rule engine view) ── */}
+        {job.fund_score != null && <PathAnalysisDivider />}
+
+        {/* Path-level indicators */}
         <div className="report-section">
-          <div className="report-section-header">Key Risk Indicators</div>
+          <div className="report-section-header">Path-Level Indicators · 路径指标(规则口径)</div>
           <div className="report-kri-grid">
-            <KriCard value={r.riskScore === 0 ? "Clean" : riskLabel(r.risk)} label="Risk Level" color={r.riskScore === 0 ? "var(--success)" : riskColorVar(r.risk)} />
+            <KriCard value={r.riskScore === 0 ? "Clean" : riskLabel(r.risk)} label="Path Risk Level" color={r.riskScore === 0 ? "var(--success)" : riskColorVar(r.risk)} />
             <KriCard value={alerts.length} label="Alerts" color={alerts.length ? "var(--risk-high)" : "var(--success)"} />
             <KriCard value={`${r.hitPaths}/${r.totalPaths}`} label="Hit Paths" color={r.hitPaths > 0 ? "var(--risk-high)" : "var(--success)"} />
-            <KriCard value={rec} label="Recommendation" color={rec === "Pass" ? "var(--success)" : rec === "Review" ? "var(--risk-medium)" : "var(--danger)"} />
+            <KriCard value={rec} label="Rule Action (path)" color={rec === "Pass" ? "var(--success)" : rec === "Review" ? "var(--risk-medium)" : "var(--danger)"} />
           </div>
         </div>
 

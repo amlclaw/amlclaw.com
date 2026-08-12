@@ -9,12 +9,48 @@
 import type { FundScore } from "@/lib/risk-score";
 import type { AddressStats } from "@/lib/chain-txs";
 
-const VERDICT_UI: Record<string, { label: string; zh: string; color: string }> = {
+export const VERDICT_UI: Record<string, { label: string; zh: string; color: string }> = {
   accept: { label: "Accept", zh: "放行", color: "var(--success)" },
   review: { label: "Review", zh: "人工复核", color: "var(--risk-medium)" },
   edd: { label: "Enhanced DD", zh: "加强尽调", color: "var(--risk-high)" },
   block: { label: "Block", zh: "拒绝", color: "var(--danger)" },
 };
+
+/** Compact score+verdict pill for report headers — the user-facing judgment. */
+export function ScoreVerdictBadge({ fundScore }: { fundScore: FundScore }) {
+  const v = fundScore.verdict ? VERDICT_UI[fundScore.verdict] : null;
+  const color = v?.color || "var(--text-tertiary)";
+  return (
+    <div style={{
+      textAlign: "center", padding: "var(--sp-2) var(--sp-4)", borderRadius: "var(--radius-md)",
+      border: `1.5px solid ${color}`, background: `color-mix(in srgb, ${color} 8%, transparent)`, minWidth: 110,
+    }}>
+      <div style={{ fontSize: "1.5rem", fontWeight: 800, color, lineHeight: 1.1 }}>
+        {fundScore.score != null ? fundScore.score : "—"}
+        <span style={{ fontSize: "0.65rem", fontWeight: 400, color: "var(--text-tertiary)" }}>/100</span>
+      </div>
+      <div style={{ fontSize: "0.65rem", fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        {v ? `${v.label} · ${v.zh}` : "Score N/A"}
+      </div>
+    </div>
+  );
+}
+
+/** Section divider introducing the evidence zone below the verdict. */
+export function PathAnalysisDivider() {
+  return (
+    <div style={{ margin: "var(--sp-6) 0 var(--sp-4)", paddingTop: "var(--sp-4)", borderTop: "2px solid var(--border-default)" }}>
+      <div style={{ fontSize: "var(--text-sm)", fontWeight: 800, letterSpacing: "0.02em" }}>
+        Fund Path Analysis · 资金路径分析
+        <span className="badge" style={{ marginLeft: "var(--sp-2)", fontWeight: 600, color: "var(--text-tertiary)" }}>证据区</span>
+      </div>
+      <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginTop: 2 }}>
+        以下为规则口径的路径证据,回答「有没有风险连接」——其中可能出现 critical 等级的路径;
+        <b style={{ color: "var(--text-secondary)" }}>处置判定以上方资金占比评分为准</b>(回答「有多少钱有问题」)。
+      </div>
+    </div>
+  );
+}
 
 const fmt = (n: number) =>
   n.toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -55,7 +91,7 @@ export default function FundScoreCard({ fundScore, chainStats, mode }: {
   return (
     <div className="report-section">
       <div className="report-section-header">
-        Fund-Attribution Score · 资金占比评分
+        Verdict · 处置判定(资金占比评分)
       </div>
       <div style={{ background: "var(--surface-1)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-md)", padding: "var(--sp-4)" }}>
         {/* score headline */}
