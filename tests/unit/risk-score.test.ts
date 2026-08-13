@@ -173,14 +173,14 @@ describe("KYT counterparty anchoring", () => {
   });
 
   it("counterpartyFlaggedIn fills the direct-in cell with the full tx", () => {
-    const s = scoreFromHits([], 7000, null, { counterpartyAnchored: true, counterpartyFlaggedIn: true });
+    const s = scoreFromHits([], 7000, null, { counterpartyAnchored: true, counterpartyFlaggedInLevel: "critical" });
     expect(s.score).toBe(80);
     expect(s.verdict).toBe("block");
     expect(s.selfHit).toBe(false);
   });
 
   it("counterpartyFlaggedOut (recipient flagged — CFT) fills the direct-out cell", () => {
-    const s = scoreFromHits([], null, 7000, { counterpartyAnchored: true, counterpartyFlaggedOut: true });
+    const s = scoreFromHits([], null, 7000, { counterpartyAnchored: true, counterpartyFlaggedOutLevel: "critical" });
     expect(s.score).toBe(80); // outBases.direct 80 × critical × 100%
     expect(s.components[0]).toMatchObject({ direction: "out", hopBucket: "direct" });
   });
@@ -197,10 +197,21 @@ describe("KYT counterparty anchoring", () => {
 });
 
 describe("overrides, degradation, custom config", () => {
-  it("KYA SELFHIT overrides to selfHitScore", () => {
-    const s = scoreFromHits([], 1000, 1000, { selfHit: true });
-    expect(s.score).toBe(100);
-    expect(s.verdict).toBe("block");
+  it("KYA SELFHIT is severity-aware: critical 100, high 80, medium 60", () => {
+    expect(scoreFromHits([], 1000, 1000, { selfHitLevel: "critical" }).score).toBe(100);
+    const high = scoreFromHits([], 1000, 1000, { selfHitLevel: "high" });
+    expect(high.score).toBe(80); // 100 × 0.8 — cybercrime entity, still block
+    expect(high.verdict).toBe("block");
+    expect(high.selfHitLevel).toBe("high");
+    const med = scoreFromHits([], 1000, 1000, { selfHitLevel: "medium" });
+    expect(med.score).toBe(60);
+    expect(med.verdict).toBe("edd");
+  });
+
+  it("KYT counterparty flag severity scales the direct cell", () => {
+    const s = scoreFromHits([], 7000, null, { counterpartyAnchored: true, counterpartyFlaggedInLevel: "high" });
+    expect(s.score).toBeCloseTo(80 * 0.8, 1); // 64 — flagged sender at high
+    expect(s.verdict).toBe("edd");
   });
 
   it("degrades to null score without denominators", () => {

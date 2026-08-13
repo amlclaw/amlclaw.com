@@ -141,6 +141,8 @@ export interface FundScore {
   score: number | null;
   verdict: Verdict | null;
   selfHit: boolean;
+  /** Severity of the subject's own flag when selfHit (critical/high/…). */
+  selfHitLevel?: string | null;
   counterpartyFlagged: boolean;
   /** Per-cell breakdown: base × weight × ratio = points, individually verifiable. */
   components: ScoreComponent[];
@@ -165,14 +167,17 @@ export interface ScoreFromHitsOptions {
    * every path hop is shifted +1 before bucketing.
    */
   counterpartyAnchored?: boolean;
-  /** KYT: a KYT_IN_*_SELFHIT fired — the SENDER itself is flagged; the full
-   *  tx amount lands in the direct-inflow bucket (critical). */
-  counterpartyFlaggedIn?: boolean;
-  /** KYT: a KYT_OUT_*_SELFHIT fired — the RECIPIENT itself is flagged (CFT:
-   *  paying a flagged entity directly); full tx amount → direct-outflow. */
-  counterpartyFlaggedOut?: boolean;
-  /** KYA: the subject itself is sanctioned/frozen → selfHitScore override. */
-  selfHit?: boolean;
+  /** KYT: severity of the KYT_IN_*_SELFHIT rule when the SENDER itself is
+   *  flagged — full tx amount lands in the direct-inflow cell at that
+   *  severity (weight applies). null/undefined = not flagged. */
+  counterpartyFlaggedInLevel?: string | null;
+  /** KYT: severity of KYT_OUT_*_SELFHIT — RECIPIENT itself flagged (CFT:
+   *  paying a flagged entity directly); direct-outflow cell. */
+  counterpartyFlaggedOutLevel?: string | null;
+  /** KYA: severity of the subject's own flag (SELFHIT rule level; sanction/
+   *  freeze identifications count as critical). Score = selfHitScore ×
+   *  severityWeight(level). null/undefined = no selfhit. */
+  selfHitLevel?: string | null;
 }
 
 /**
@@ -237,17 +242,19 @@ export function scoreFromHits(
   // 2b. KYT counterparty flagged: full tx amount into the direct cell of the
   //     matching side (sender flagged → direct inflow; recipient flagged →
   //     direct outflow, the first-class CFT signal).
-  if (opts.counterpartyFlaggedIn && totalIn != null && totalIn > 0) {
-    cells.set("in|direct|critical", {
-      direction: "in", hopBucket: "direct", severity: "critical",
-      base: cfg.inBases.direct, weight: cfg.severityWeights.critical,
+  if (opts.counterpartyFlaggedInLevel && totalIn != null && totalIn > 0) {
+    const lv = String(opts.counterpartyFlaggedInLevel).toLowerCase();
+    cells.set(`in|direct|${lv}`, {
+      direction: "in", hopBucket: "direct", severity: lv,
+      base: cfg.inBases.direct, weight: severityWeight(lv, cfg),
       amount: totalIn, rawAmount: totalIn, ratio: 0, points: 0,
     });
   }
-  if (opts.counterpartyFlaggedOut && totalOut != null && totalOut > 0) {
-    cells.set("out|direct|critical", {
-      direction: "out", hopBucket: "direct", severity: "critical",
-      base: cfg.outBases.direct, weight: cfg.severityWeights.critical,
+  if (opts.counterpartyFlaggedOutLevel && totalOut != null && totalOut > 0) {
+    const lv = String(opts.counterpartyFlaggedOutLevel).toLowerCase();
+    cells.set(`out|direct|${lv}`, {
+      direction: "out", hopBucket: "direct", severity: lv,
+      base: cfg.outBases.direct, weight: severityWeight(lv, cfg),
       amount: totalOut, rawAmount: totalOut, ratio: 0, points: 0,
     });
   }
@@ -276,8 +283,10 @@ export function scoreFromHits(
 
   // 4. Total.
   let score: number | null = null;
-  if (opts.selfHit) {
-    score = cfg.selfHitScore;
+  if (opts.selfHitLevel) {
+    // Direct hit on the subject itself is also severity-aware:
+    // sanctioned entity (critical) 100, cybercrime entity (high) 80, …
+    score = Math.round(cfg.selfHitScore * severityWeight(opts.selfHitLevel, cfg) * 10) / 10;
   } else if (totalIn != null || totalOut != null) {
     score = Math.min(100, Math.round(components.reduce((a, c) => a + c.points, 0) * 10) / 10);
   }
@@ -292,8 +301,9 @@ export function scoreFromHits(
   return {
     score,
     verdict: score == null ? null : scoreVerdict(score, cfg.bands),
-    selfHit: !!opts.selfHit,
-    counterpartyFlagged: !!opts.counterpartyFlaggedIn || !!opts.counterpartyFlaggedOut,
+    selfHit: !!opts.selfHitLevel,
+    selfHitLevel: opts.selfHitLevel ? String(opts.selfHitLevel).toLowerCase() : null,
+    counterpartyFlagged: !!opts.counterpartyFlaggedInLevel || !!opts.counterpartyFlaggedOutLevel,
     components,
     r1: totalIn ? Math.min(directAmount / totalIn, 1) : 0,
     r2: totalIn ? Math.min(indirectAmount / totalIn, 1) : 0,
@@ -310,8 +320,25 @@ export function detectSelfHit(
   hits: WidthHit[],
   addressIdentifications?: { category: string }[],
 ): boolean {
-  if (hits.some((h) => h.ruleCode.includes("SELFHIT"))) return true;
-  return (addressIdentifications || []).some((i) =>
-    /sanction|freeze/i.test(i.category || ""),
-  );
+  return detectSelfHitLevel(hits, addressIdentifications) != null;
+}
+
+/**
+ * Severity of the subject's own flag: the worst riskLevel among *_SELFHIT
+ * rules; sanction/freeze identifications count as critical. null = no selfhit.
+ */
+export function detectSelfHitLevel(
+  hits: WidthHit[],
+  addressIdentifications?: { category: string }[],
+): string | null {
+  let worst: string | null = null;
+  for (const h of hits) {
+    if (!h.ruleCode.includes("SELFHIT")) continue;
+    const lv = String(h.riskLevel || "low").toLowerCase();
+    if (!worst || (SEVERITY_RANK[lv] ?? 0) > (SEVERITY_RANK[worst] ?? 0)) worst = lv;
+  }
+  if ((addressIdentifications || []).some((i) => /sanction|freeze/i.test(i.category || ""))) {
+    worst = "critical";
+  }
+  return worst;
 }

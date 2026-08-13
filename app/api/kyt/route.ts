@@ -150,12 +150,12 @@ async function runKytScreening(
       {
         config: getSettings().scoring,
         counterpartyAnchored: true,
-        counterpartyFlaggedIn: result.hits.some(
+        counterpartyFlaggedInLevel: result.hits.find(
           (h) => h.ruleCode.startsWith("KYT_IN") && h.ruleCode.includes("SELFHIT"),
-        ),
-        counterpartyFlaggedOut: result.hits.some(
+        )?.riskLevel ?? null,
+        counterpartyFlaggedOutLevel: result.hits.find(
           (h) => h.ruleCode.startsWith("KYT_OUT") && h.ruleCode.includes("SELFHIT"),
-        ),
+        )?.riskLevel ?? null,
       },
     );
 

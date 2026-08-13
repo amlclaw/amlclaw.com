@@ -4,7 +4,7 @@ import { kyaScreen, screenStatusLabel, type KyaScreenResult } from "@/lib/width-
 import { getSettings } from "@/lib/settings";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
 import { fetchAddressStats, fetchTokenBalance, type AddressStats } from "@/lib/chain-txs";
-import { scoreFromHits, detectSelfHit } from "@/lib/risk-score";
+import { scoreFromHits, detectSelfHitLevel } from "@/lib/risk-score";
 import crypto from "crypto";
 
 // In-memory job storage
@@ -145,7 +145,7 @@ async function runKyaScreening(
       chainStats ? chainStats.outTotal : null,
       {
         config: getSettings().scoring,
-        selfHit: detectSelfHit(result.hits, result.addressIdentifications),
+        selfHitLevel: detectSelfHitLevel(result.hits, result.addressIdentifications),
       },
     );
 

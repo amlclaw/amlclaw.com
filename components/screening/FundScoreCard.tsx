@@ -114,8 +114,8 @@ export default function FundScoreCard({ fundScore, chainStats, mode }: {
             </span>
           )}
           {fs.selfHit && (
-            <span className="badge" style={{ background: "color-mix(in srgb, var(--danger) 15%, transparent)", color: "var(--danger)", fontWeight: 700 }}>
-              SELFHIT — subject itself sanctioned/frozen
+            <span className="badge" style={{ background: `color-mix(in srgb, ${SEV_COLOR[fs.selfHitLevel || "critical"] || "var(--danger)"} 15%, transparent)`, color: SEV_COLOR[fs.selfHitLevel || "critical"] || "var(--danger)", fontWeight: 700 }}>
+              SELFHIT · {(fs.selfHitLevel || "critical").toUpperCase()} — 地址本身被标记,得分 = SELFHIT 基准 × 严重度乘数
             </span>
           )}
           {fs.counterpartyFlagged && (
