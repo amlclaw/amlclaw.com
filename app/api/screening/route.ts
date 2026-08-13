@@ -4,7 +4,7 @@ import { kyaScreen, screenStatusLabel, type KyaScreenResult } from "@/lib/width-
 import { getSettings } from "@/lib/settings";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
 import { fetchAddressStats, fetchTokenBalance, type AddressStats } from "@/lib/chain-txs";
-import { attributeFunds, computeFundScore, detectSelfHit } from "@/lib/risk-score";
+import { scoreFromHits, detectSelfHit } from "@/lib/risk-score";
 import crypto from "crypto";
 
 // In-memory job storage
@@ -139,11 +139,14 @@ async function runKyaScreening(
       try { balance = await fetchTokenBalance(p.chain, p.address, p.token); } catch { /* keep null */ }
       chainStats = { ...stats, balance };
     } catch { /* score degrades to null */ }
-    const attribution = attributeFunds(result.hits, detectSelfHit(result.hits, result.addressIdentifications));
-    const fundScore = computeFundScore(
-      attribution,
+    const fundScore = scoreFromHits(
+      result.hits,
       chainStats ? chainStats.inTotal : null,
       chainStats ? chainStats.outTotal : null,
+      {
+        config: getSettings().scoring,
+        selfHit: detectSelfHit(result.hits, result.addressIdentifications),
+      },
     );
 
     const jobData: Record<string, unknown> = {

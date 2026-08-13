@@ -27,6 +27,13 @@ interface Settings {
     maxTxPerRun: number;
     defaultMinAmount: number;
   };
+  scoring: {
+    inBases: { direct: number; hop2: number; hop3: number };
+    outBases: { direct: number; hop2: number; hop3: number };
+    severityWeights: { critical: number; high: number; medium: number; low: number };
+    selfHitScore: number;
+    bands: { review: number; edd: number; block: number };
+  };
   notifications: {
     webhookUrl: string;
     webhookEnabled: boolean;
@@ -83,6 +90,14 @@ export default function SettingsForm() {
 
   const set = (section: keyof Settings, field: string, value: unknown) => {
     setSettings((s) => s ? { ...s, [section]: { ...s[section], [field]: value } } : s);
+  };
+
+  /** Nested setter for scoring sub-objects (inBases / outBases / severityWeights / bands). */
+  const setScoring = (group: keyof Settings["scoring"], field: string, value: number) => {
+    setSettings((s) => s ? {
+      ...s,
+      scoring: { ...s.scoring, [group]: { ...(s.scoring[group] as Record<string, number>), [field]: value } },
+    } : s);
   };
 
   const testChainKey = async (provider: "width" | "etherscan" | "trongrid") => {
@@ -228,6 +243,61 @@ export default function SettingsForm() {
           </Field>
           <Field label="Default KYT-OUT Ruleset ID" hint="0 = KYT-OUT builtin" style={{ flex: 1, minWidth: 140 }}>
             <input className="input" type="number" min={0} value={settings.screening.defaultKytOutRulesetId} onChange={(e) => set("screening", "defaultKytOutRulesetId", parseInt(e.target.value) || 0)} />
+          </Field>
+        </div>
+      </Section>
+
+      {/* ── Scoring rule engine (资金占比评分) ── */}
+      <Section title="Scoring · 评分规则引擎">
+        <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginBottom: "var(--sp-2)" }}>
+          每格贡献 = 基数(方向×跳数桶) × 严重度乘数 × 资金占比,总分封顶 100。钱只算一次,路径不加分。
+        </div>
+        <div style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap" }}>
+          <Field label="入金基数 0-1跳" style={{ flex: 1, minWidth: 110 }}>
+            <input className="input" type="number" min={0} max={100} value={settings.scoring.inBases.direct} onChange={(e) => setScoring("inBases", "direct", parseFloat(e.target.value) || 0)} />
+          </Field>
+          <Field label="入金 2跳" style={{ flex: 1, minWidth: 110 }}>
+            <input className="input" type="number" min={0} max={100} value={settings.scoring.inBases.hop2} onChange={(e) => setScoring("inBases", "hop2", parseFloat(e.target.value) || 0)} />
+          </Field>
+          <Field label="入金 3跳" style={{ flex: 1, minWidth: 110 }}>
+            <input className="input" type="number" min={0} max={100} value={settings.scoring.inBases.hop3} onChange={(e) => setScoring("inBases", "hop3", parseFloat(e.target.value) || 0)} />
+          </Field>
+          <Field label="出金基数 0-1跳" hint="CFT:直接资助被标记实体,一级信号" style={{ flex: 1, minWidth: 110 }}>
+            <input className="input" type="number" min={0} max={100} value={settings.scoring.outBases.direct} onChange={(e) => setScoring("outBases", "direct", parseFloat(e.target.value) || 0)} />
+          </Field>
+          <Field label="出金 2跳" style={{ flex: 1, minWidth: 110 }}>
+            <input className="input" type="number" min={0} max={100} value={settings.scoring.outBases.hop2} onChange={(e) => setScoring("outBases", "hop2", parseFloat(e.target.value) || 0)} />
+          </Field>
+          <Field label="出金 3跳" style={{ flex: 1, minWidth: 110 }}>
+            <input className="input" type="number" min={0} max={100} value={settings.scoring.outBases.hop3} onChange={(e) => setScoring("outBases", "hop3", parseFloat(e.target.value) || 0)} />
+          </Field>
+        </div>
+        <div style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap" }}>
+          <Field label="乘数 critical" style={{ flex: 1, minWidth: 100 }}>
+            <input className="input" type="number" min={0} max={1} step={0.1} value={settings.scoring.severityWeights.critical} onChange={(e) => setScoring("severityWeights", "critical", parseFloat(e.target.value) || 0)} />
+          </Field>
+          <Field label="乘数 high" style={{ flex: 1, minWidth: 100 }}>
+            <input className="input" type="number" min={0} max={1} step={0.1} value={settings.scoring.severityWeights.high} onChange={(e) => setScoring("severityWeights", "high", parseFloat(e.target.value) || 0)} />
+          </Field>
+          <Field label="乘数 medium" style={{ flex: 1, minWidth: 100 }}>
+            <input className="input" type="number" min={0} max={1} step={0.1} value={settings.scoring.severityWeights.medium} onChange={(e) => setScoring("severityWeights", "medium", parseFloat(e.target.value) || 0)} />
+          </Field>
+          <Field label="乘数 low" style={{ flex: 1, minWidth: 100 }}>
+            <input className="input" type="number" min={0} max={1} step={0.1} value={settings.scoring.severityWeights.low} onChange={(e) => setScoring("severityWeights", "low", parseFloat(e.target.value) || 0)} />
+          </Field>
+        </div>
+        <div style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap" }}>
+          <Field label="SELFHIT 覆盖分" hint="对象本身被制裁/冻结" style={{ flex: 1, minWidth: 110 }}>
+            <input className="input" type="number" min={0} max={100} value={settings.scoring.selfHitScore} onChange={(e) => set("scoring", "selfHitScore", parseFloat(e.target.value) || 0)} />
+          </Field>
+          <Field label="复核下限" hint="≥此分 → 人工复核" style={{ flex: 1, minWidth: 110 }}>
+            <input className="input" type="number" min={0} max={100} value={settings.scoring.bands.review} onChange={(e) => setScoring("bands", "review", parseFloat(e.target.value) || 0)} />
+          </Field>
+          <Field label="尽调下限" hint="≥此分 → 加强尽调" style={{ flex: 1, minWidth: 110 }}>
+            <input className="input" type="number" min={0} max={100} value={settings.scoring.bands.edd} onChange={(e) => setScoring("bands", "edd", parseFloat(e.target.value) || 0)} />
+          </Field>
+          <Field label="拒绝下限" hint="≥此分 → 拒绝" style={{ flex: 1, minWidth: 110 }}>
+            <input className="input" type="number" min={0} max={100} value={settings.scoring.bands.block} onChange={(e) => setScoring("bands", "block", parseFloat(e.target.value) || 0)} />
           </Field>
         </div>
       </Section>

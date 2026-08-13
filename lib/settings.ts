@@ -44,6 +44,22 @@ export interface Settings {
     defaultMinAmount: number;
   };
 
+  // Fund-attribution scoring rule engine: contribution =
+  // base(direction, hop bucket) × severity weight(rule level) × fund ratio.
+  scoring: {
+    /** Inflow (source of funds) bases by hop bucket. */
+    inBases: { direct: number; hop2: number; hop3: number };
+    /** Outflow (destination) bases. Direct outflow to a flagged entity is a
+     *  first-class CFT signal (funding a sanctioned/terror entity); 2-3 hop
+     *  outflow is barely attributable to the subject. */
+    outBases: { direct: number; hop2: number; hop3: number };
+    severityWeights: { critical: number; high: number; medium: number; low: number };
+    /** KYA: subject itself sanctioned/frozen. */
+    selfHitScore: number;
+    /** Band lower bounds: score >= block → block, >= edd → edd, >= review → review, else accept. */
+    bands: { review: number; edd: number; block: number };
+  };
+
   // Notifications
   notifications: {
     webhookUrl: string;
@@ -78,6 +94,15 @@ export const DEFAULT_SETTINGS: Settings = {
     maxTxPerRun: 20,
     defaultMinAmount: 100,
   },
+  scoring: {
+    inBases: { direct: 80, hop2: 50, hop3: 40 },
+    // CFT: paying a flagged entity DIRECTLY is a first-class signal (base 80);
+    // 2-3 hop outflow is barely attributable to the subject (10 / 5).
+    outBases: { direct: 80, hop2: 10, hop3: 5 },
+    severityWeights: { critical: 1, high: 0.8, medium: 0.6, low: 0.3 },
+    selfHitScore: 100,
+    bands: { review: 20, edd: 50, block: 80 },
+  },
   notifications: {
     webhookUrl: "",
     webhookEnabled: false,
@@ -108,7 +133,7 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
 }
 
 /** Sections that belong to the current settings shape. */
-const VALID_SECTIONS = new Set(["api", "screening", "monitoring", "notifications"]);
+const VALID_SECTIONS = new Set(["api", "screening", "monitoring", "scoring", "notifications"]);
 
 export function getSettings(): Settings {
   try {

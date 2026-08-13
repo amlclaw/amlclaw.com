@@ -22,15 +22,52 @@
  */
 import type { WidthHit } from "./width-api";
 
+/** Legacy weights kept for reference; the live engine uses ScoringConfig. */
 export const SCORE_WEIGHTS = { direct: 80, indirect: 40, outflow: 10 } as const;
+
+// ---------------------------------------------------------------------------
+// Scoring rule engine config: contribution =
+//   base(direction, hop bucket) × severityWeight(rule level) × fund ratio
+// Money is still counted once — every subject-adjacent edge is claimed by the
+// single highest-rate cell that hit it. Total is clamped to 100.
+// ---------------------------------------------------------------------------
+
+export interface ScoringConfig {
+  inBases: { direct: number; hop2: number; hop3: number };
+  outBases: { direct: number; hop2: number; hop3: number };
+  severityWeights: { critical: number; high: number; medium: number; low: number };
+  selfHitScore: number;
+  bands: { review: number; edd: number; block: number };
+}
+
+export const DEFAULT_SCORING: ScoringConfig = {
+  inBases: { direct: 80, hop2: 50, hop3: 40 },
+  outBases: { direct: 80, hop2: 10, hop3: 5 },
+  severityWeights: { critical: 1, high: 0.8, medium: 0.6, low: 0.3 },
+  selfHitScore: 100,
+  bands: { review: 20, edd: 50, block: 80 },
+};
 
 export type Verdict = "accept" | "review" | "edd" | "block";
 
-export function scoreVerdict(score: number): Verdict {
-  if (score >= 80) return "block";
-  if (score >= 50) return "edd";
-  if (score >= 20) return "review";
+export function scoreVerdict(score: number, bands = DEFAULT_SCORING.bands): Verdict {
+  if (score >= bands.block) return "block";
+  if (score >= bands.edd) return "edd";
+  if (score >= bands.review) return "review";
   return "accept";
+}
+
+type HopBucket = "direct" | "hop2" | "hop3";
+
+function hopBucket(hops: number): HopBucket {
+  if (hops <= 1) return "direct";
+  if (hops === 2) return "hop2";
+  return "hop3";
+}
+
+function severityWeight(level: string, cfg: ScoringConfig): number {
+  const l = String(level || "").toLowerCase() as keyof ScoringConfig["severityWeights"];
+  return cfg.severityWeights[l] ?? cfg.severityWeights.low;
 }
 
 export interface RiskyEdge {
@@ -80,64 +117,16 @@ function edgeKey(e: RiskyEdge): string {
   return `${e.neighbor}|${e.amount.toFixed(6)}`;
 }
 
-export interface AttributeOptions {
-  /**
-   * KYT mode: paths are anchored at the tx COUNTERPARTY (KYT-IN traces from
-   * the sender; hops count from there, NOT from the screened subject). A
-   * hops=1 hit means "flagged entity pays the sender directly" — which is
-   * 2 hops from the subject. So in this mode every path hit is INDIRECT;
-   * "direct" is only the counterparty itself being flagged (the *_SELFHIT
-   * rules), which the caller maps to the full tx amount in computeFundScore.
-   */
-  counterpartyAnchored?: boolean;
-}
-
-/**
- * Fold hit paths into money-disjoint buckets of subject-adjacent edges.
- * Severity precedence: direct (<=1 hop) inflow claims an edge first; an edge
- * already claimed by direct is not re-counted as indirect.
- */
-export function attributeFunds(
-  hits: WidthHit[],
-  selfHit: boolean,
-  opts: AttributeOptions = {},
-): FundAttribution {
-  const direct = new Map<string, RiskyEdge>();
-  const indirect = new Map<string, RiskyEdge>();
-  const outflow = new Map<string, RiskyEdge>();
-
-  const inflowHits = hits
-    .filter((h) => h.pathFlow === "inflow")
-    .sort((a, b) => (a.hops || 0) - (b.hops || 0));
-  for (const h of inflowHits) {
-    const e = edgeOfHit(h);
-    if (e.amount <= 0) continue;
-    const key = edgeKey(e);
-    if (!opts.counterpartyAnchored && (h.hops || 0) <= 1) {
-      direct.set(key, e);
-      indirect.delete(key);
-    } else if (!direct.has(key)) {
-      indirect.set(key, e);
-    }
-  }
-  for (const h of hits.filter((h) => h.pathFlow === "outflow")) {
-    const e = edgeOfHit(h);
-    if (e.amount > 0) outflow.set(edgeKey(e), e);
-  }
-
-  const sum = (m: Map<string, RiskyEdge>) =>
-    [...m.values()].reduce((a, e) => a + e.amount, 0);
-
-  return {
-    selfHit,
-    directAmount: sum(direct),
-    indirectAmount: sum(indirect),
-    outflowAmount: sum(outflow),
-    directEdges: [...direct.values()],
-    indirectEdges: [...indirect.values()],
-    outflowEdges: [...outflow.values()],
-    hitPaths: hits.length,
-  };
+export interface ScoreComponent {
+  direction: "in" | "out";
+  hopBucket: HopBucket;
+  severity: string;
+  base: number;
+  weight: number;
+  /** Deduped, money-disjoint amount claimed by this cell. */
+  amount: number;
+  ratio: number;
+  points: number;
 }
 
 export interface FundScore {
@@ -145,6 +134,10 @@ export interface FundScore {
   score: number | null;
   verdict: Verdict | null;
   selfHit: boolean;
+  counterpartyFlagged: boolean;
+  /** Per-cell breakdown: base × weight × ratio = points, individually verifiable. */
+  components: ScoreComponent[];
+  // Direction summaries (direct-in / other-in / out) for compact display.
   r1: number;
   r2: number;
   rOut: number;
@@ -155,64 +148,124 @@ export interface FundScore {
   totalOut: number | null;
   hitPaths: number;
   riskyEdges: number;
-  weights: typeof SCORE_WEIGHTS;
 }
 
-export interface ScoreOptions {
+export interface ScoreFromHitsOptions {
+  config?: ScoringConfig;
   /**
-   * KYT mode: the *_SELFHIT rules mean the tx COUNTERPARTY (e.g. the sender)
-   * is itself a flagged entity — the money arrives directly from it, so the
-   * full tx amount goes into the direct bucket (r1=100% → 80). This is NOT
-   * the KYA SELFHIT (subject itself sanctioned), which overrides to 100.
+   * KYT mode: paths are anchored at the tx COUNTERPARTY (KYT-IN traces from
+   * the sender; hops count from there, NOT from the screened subject) — so
+   * every path hop is shifted +1 before bucketing.
    */
+  counterpartyAnchored?: boolean;
+  /** KYT: a *_SELFHIT rule fired — the counterparty itself is flagged; the
+   *  full tx amount lands in the direct bucket (critical). */
   counterpartyFlagged?: boolean;
+  /** KYA: the subject itself is sanctioned/frozen → selfHitScore override. */
+  selfHit?: boolean;
 }
 
 /**
- * Convert attribution into the score. `totalIn` / `totalOut` are the
- * denominators: full inflow/outflow volume for KYA, the transaction amount for
- * KYT. Pass null when unknown — the score degrades to null (amounts still
- * reported).
+ * The scoring rule engine. Each subject-adjacent edge is claimed ONCE by the
+ * single highest-rate cell (base × severity weight) among the hits that
+ * produced it; cell amounts are then capped against the direction denominator
+ * in rate order, so per-direction ratios never exceed 100%. Total clamped to
+ * 100. Money is the unit — paths are evidence, not score.
  */
-export function computeFundScore(
-  attr: FundAttribution,
+export function scoreFromHits(
+  hits: WidthHit[],
   totalIn: number | null,
   totalOut: number | null,
-  opts: ScoreOptions = {},
+  opts: ScoreFromHitsOptions = {},
 ): FundScore {
-  // Cap amounts at the denominators; keep buckets disjoint (direct first).
-  let directAmount = totalIn != null ? Math.min(attr.directAmount, totalIn) : attr.directAmount;
-  if (opts.counterpartyFlagged && totalIn != null) {
-    directAmount = totalIn; // money arrives straight from a flagged entity
+  const cfg = opts.config ?? DEFAULT_SCORING;
+  const hopShift = opts.counterpartyAnchored ? 1 : 0;
+
+  // 1. Fold hits onto edges; each edge remembers its best (highest-rate) cell.
+  interface EdgeBest { amount: number; direction: "in" | "out"; bucket: HopBucket; severity: string; rate: number }
+  const edges = new Map<string, EdgeBest>();
+  for (const h of hits) {
+    const e = edgeOfHit(h);
+    if (e.amount <= 0) continue;
+    const dir: "in" | "out" = h.pathFlow === "outflow" ? "out" : "in";
+    const bucket = hopBucket((h.hops || 0) + hopShift);
+    const base = (dir === "in" ? cfg.inBases : cfg.outBases)[bucket];
+    const w = severityWeight(h.riskLevel, cfg);
+    const rate = base * w;
+    const key = `${dir}|${e.neighbor}|${e.amount.toFixed(6)}`;
+    const prev = edges.get(key);
+    if (!prev || rate > prev.rate) {
+      edges.set(key, { amount: e.amount, direction: dir, bucket, severity: String(h.riskLevel || "low").toLowerCase(), rate });
+    }
   }
-  const indirectAmount = totalIn != null
-    ? Math.min(attr.indirectAmount, Math.max(0, totalIn - directAmount))
-    : attr.indirectAmount;
-  const outflowAmount = totalOut != null ? Math.min(attr.outflowAmount, totalOut) : attr.outflowAmount;
 
-  const r1 = totalIn ? Math.min(directAmount / totalIn, 1) : 0;
-  const r2 = totalIn ? Math.min(indirectAmount / totalIn, 1) : 0;
-  const rOut = totalOut ? Math.min(outflowAmount / totalOut, 1) : 0;
+  // 2. Aggregate edges into cells.
+  const cells = new Map<string, ScoreComponent>();
+  for (const e of edges.values()) {
+    const base = (e.direction === "in" ? cfg.inBases : cfg.outBases)[e.bucket];
+    const w = severityWeight(e.severity, cfg);
+    const key = `${e.direction}|${e.bucket}|${e.severity}`;
+    const c = cells.get(key) || {
+      direction: e.direction, hopBucket: e.bucket, severity: e.severity,
+      base, weight: w, amount: 0, ratio: 0, points: 0,
+    };
+    c.amount += e.amount;
+    cells.set(key, c);
+  }
 
+  // 2b. KYT counterparty flagged: full tx amount is a direct critical inflow.
+  if (opts.counterpartyFlagged && totalIn != null && totalIn > 0) {
+    cells.set("in|direct|critical", {
+      direction: "in", hopBucket: "direct", severity: "critical",
+      base: cfg.inBases.direct, weight: cfg.severityWeights.critical,
+      amount: totalIn, ratio: 0, points: 0,
+    });
+  }
+
+  // 3. Cap cell amounts against the direction denominator, high-rate cells
+  //    claiming the denominator first — per-direction ratios sum to <= 100%.
+  const byRate = [...cells.values()].sort((a, b) => b.base * b.weight - a.base * a.weight);
+  const remaining: Record<"in" | "out", number | null> = { in: totalIn, out: totalOut };
+  for (const c of byRate) {
+    const rem = remaining[c.direction];
+    if (rem != null) {
+      c.amount = Math.min(c.amount, Math.max(0, rem));
+      remaining[c.direction] = rem - c.amount;
+    }
+    const denom = c.direction === "in" ? totalIn : totalOut;
+    c.ratio = denom ? Math.min(c.amount / denom, 1) : 0;
+    c.points = Math.round(c.base * c.weight * c.ratio * 10) / 10;
+  }
+  const components = byRate.filter((c) => c.amount > 0);
+
+  // 4. Total.
   let score: number | null = null;
-  if (attr.selfHit && !opts.counterpartyFlagged) {
-    score = 100;
+  if (opts.selfHit) {
+    score = cfg.selfHitScore;
   } else if (totalIn != null || totalOut != null) {
-    score = Math.round(
-      (SCORE_WEIGHTS.direct * r1 + SCORE_WEIGHTS.indirect * r2 + SCORE_WEIGHTS.outflow * rOut) * 10,
-    ) / 10;
+    score = Math.min(100, Math.round(components.reduce((a, c) => a + c.points, 0) * 10) / 10);
   }
+
+  // Direction summaries for compact display.
+  const sum = (f: (c: ScoreComponent) => boolean) =>
+    components.filter(f).reduce((a, c) => a + c.amount, 0);
+  const directAmount = sum((c) => c.direction === "in" && c.hopBucket === "direct");
+  const indirectAmount = sum((c) => c.direction === "in" && c.hopBucket !== "direct");
+  const outflowAmount = sum((c) => c.direction === "out");
 
   return {
     score,
-    verdict: score == null ? null : scoreVerdict(score),
-    selfHit: attr.selfHit,
-    r1, r2, rOut,
+    verdict: score == null ? null : scoreVerdict(score, cfg.bands),
+    selfHit: !!opts.selfHit,
+    counterpartyFlagged: !!opts.counterpartyFlagged,
+    components,
+    r1: totalIn ? Math.min(directAmount / totalIn, 1) : 0,
+    r2: totalIn ? Math.min(indirectAmount / totalIn, 1) : 0,
+    rOut: totalOut ? Math.min(outflowAmount / totalOut, 1) : 0,
     directAmount, indirectAmount, outflowAmount,
     totalIn, totalOut,
-    hitPaths: attr.hitPaths,
-    riskyEdges: attr.directEdges.length + attr.indirectEdges.length + attr.outflowEdges.length,
-    weights: SCORE_WEIGHTS,
+    hitPaths: hits.length,
+    riskyEdges: edges.size,
   };
 }
 

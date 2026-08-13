@@ -4,7 +4,7 @@ import { kytScreen, screenStatusLabel, type KytScreenResult, type KytDirection }
 import { getSettings } from "@/lib/settings";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
 import { resolveTxEndpoints, type TxEndpoints } from "@/lib/chain-txs";
-import { attributeFunds, computeFundScore, detectSelfHit } from "@/lib/risk-score";
+import { scoreFromHits, detectSelfHit } from "@/lib/risk-score";
 import crypto from "crypto";
 
 // In-memory job storage
@@ -142,14 +142,16 @@ async function runKytScreening(
     kytJobs[jobId].progress = "Computing fund-attribution score…";
     let txEndpoints: TxEndpoints | null = null;
     try { txEndpoints = await resolveTxEndpoints(p.chain, p.txId); } catch { /* score degrades */ }
-    const counterpartyFlagged = detectSelfHit(result.hits);
-    const attribution = attributeFunds(result.hits, false, { counterpartyAnchored: true });
     const txAmount = txEndpoints ? txEndpoints.amount : null;
-    const fundScore = computeFundScore(
-      attribution,
+    const fundScore = scoreFromHits(
+      result.hits,
       p.direction !== "out" ? txAmount : null,
       p.direction !== "in" ? txAmount : null,
-      { counterpartyFlagged },
+      {
+        config: getSettings().scoring,
+        counterpartyAnchored: true,
+        counterpartyFlagged: detectSelfHit(result.hits),
+      },
     );
 
     const jobData: Record<string, unknown> = {

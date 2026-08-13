@@ -56,6 +56,14 @@ const fmt = (n: number) =>
   n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 const pct = (r: number) => `${(r * 100).toFixed(2)}%`;
 
+const HOP_LABEL: Record<string, string> = { direct: "0-1 跳", hop2: "2 跳", hop3: "3 跳" };
+const SEV_COLOR: Record<string, string> = {
+  critical: "var(--danger)",
+  high: "var(--risk-high)",
+  medium: "var(--risk-medium)",
+  low: "var(--success)",
+};
+
 function ScoreBar({ ratio, color }: { ratio: number; color: string }) {
   return (
     <div style={{ flex: 1, height: 10, background: "var(--surface-2)", borderRadius: 5, overflow: "hidden", border: "1px solid var(--border-subtle)" }}>
@@ -110,6 +118,11 @@ export default function FundScoreCard({ fundScore, chainStats, mode }: {
               SELFHIT — subject itself sanctioned/frozen
             </span>
           )}
+          {fs.counterpartyFlagged && (
+            <span className="badge" style={{ background: "color-mix(in srgb, var(--danger) 15%, transparent)", color: "var(--danger)", fontWeight: 700 }}>
+              对手方本身被标记 — 全额计入直接桶
+            </span>
+          )}
           <span style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)" }}>
             {fs.hitPaths} hit paths → {fs.riskyEdges} deduped edges
           </span>
@@ -121,24 +134,33 @@ export default function FundScoreCard({ fundScore, chainStats, mode }: {
           </div>
         )}
 
-        {/* component breakdown */}
-        {!fs.selfHit && (
+        {/* component breakdown — rule-engine cells (direction × hop bucket × severity) */}
+        {!fs.selfHit && fs.components && fs.components.length > 0 && (
           <div style={{ marginBottom: "var(--sp-3)" }}>
-            <ComponentRow
-              label="r₁ Direct (≤1 hop) risky inflow"
-              amount={fs.directAmount} denom={fs.totalIn} ratio={fs.r1}
-              weight={fs.weights.direct} color="var(--danger)"
-            />
-            <ComponentRow
-              label="r₂ Indirect (2+ hop) risky inflow"
-              amount={fs.indirectAmount} denom={fs.totalIn} ratio={fs.r2}
-              weight={fs.weights.indirect} color="var(--risk-high)"
-            />
-            <ComponentRow
-              label="r_out Risky outflow"
-              amount={fs.outflowAmount} denom={fs.totalOut} ratio={fs.rOut}
-              weight={fs.weights.outflow} color="var(--risk-medium)"
-            />
+            {fs.components.map((c, i) => (
+              <ComponentRow
+                key={i}
+                label={`${c.direction === "in" ? "入金" : "出金"} · ${HOP_LABEL[c.hopBucket] || c.hopBucket} · ${c.severity}`}
+                amount={c.amount}
+                denom={c.direction === "in" ? fs.totalIn : fs.totalOut}
+                ratio={c.ratio}
+                weight={Math.round(c.base * c.weight * 100) / 100}
+                color={SEV_COLOR[c.severity] || "var(--risk-medium)"}
+              />
+            ))}
+          </div>
+        )}
+        {!fs.selfHit && fs.components && fs.components.length === 0 && fs.score != null && (
+          <div style={{ fontSize: "var(--text-xs)", color: "var(--success)", marginBottom: "var(--sp-3)" }}>
+            无任何风险资金归因 — 0 分。
+          </div>
+        )}
+        {/* legacy entries (pre rule-engine) — fixed three-row layout */}
+        {!fs.selfHit && !fs.components && (
+          <div style={{ marginBottom: "var(--sp-3)" }}>
+            <ComponentRow label="r₁ Direct (≤1 hop) risky inflow" amount={fs.directAmount} denom={fs.totalIn} ratio={fs.r1} weight={80} color="var(--danger)" />
+            <ComponentRow label="r₂ Indirect (2+ hop) risky inflow" amount={fs.indirectAmount} denom={fs.totalIn} ratio={fs.r2} weight={40} color="var(--risk-high)" />
+            <ComponentRow label="r_out Risky outflow" amount={fs.outflowAmount} denom={fs.totalOut} ratio={fs.rOut} weight={10} color="var(--risk-medium)" />
           </div>
         )}
 
@@ -169,10 +191,13 @@ export default function FundScoreCard({ fundScore, chainStats, mode }: {
               同一笔钱同时命中多类风险时,按 <b>SELFHIT &gt; 直接(≤1跳) &gt; 间接(2跳以上)</b> 的严重度优先只归入一个桶,各桶资金互不重叠。
             </p>
             <p style={{ marginBottom: 6 }}>
-              <b>公式:</b>SELFHIT(地址本身被制裁/冻结)命中 → 直接 <b>100 分</b>(覆盖);否则
-              <code style={{ margin: "0 4px" }}>score = 80 × r₁ + 40 × r₂ + 10 × r_out</code>
-              ,其中 r₁ = 直接风险入金 ÷ 总入金,r₂ = 间接风险入金 ÷ 总入金,r_out = 风险出金 ÷ 总出金
-              {mode === "kyt" && "(KYT 场景分母为本笔交易金额)"}。占比天然 ≤ 100%,路径再多也不会爆表。
+              <b>规则引擎公式:</b>每格贡献 =
+              <code style={{ margin: "0 4px" }}>基数(方向×跳数桶) × 严重度乘数(规则等级) × 资金占比</code>
+              ,总分为各格之和(封顶 100)。默认基数:入金 0-1跳 80 / 2跳 50 / 3跳 40;
+              出金 0-1跳 <b>80</b>(CFT:直接资助被标记实体是一级信号)/ 2跳 10 / 3跳 5。
+              严重度乘数:critical 1.0 / high 0.8 / medium 0.6 / low 0.3(可在 Settings → Scoring 自定义)。
+              SELFHIT(地址本身被制裁/冻结)覆盖为 100
+              {mode === "kyt" && ";KYT 场景分母为本笔交易金额,打款方本身被标记时全额计入直接桶"}。
             </p>
             <p style={{ margin: 0 }}>
               <b>分数段:</b>
