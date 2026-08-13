@@ -136,15 +136,20 @@ async function runKytScreening(
 
     // Fund-attribution score. For a transaction the denominator is the tx's own
     // transfer amount (KYT paths are scoped to the funds behind this transfer).
+    // KYT paths are anchored at the tx COUNTERPARTY (hops count from the
+    // sender/recipient, not from the tx): every path hit is indirect for the
+    // subject, and *_SELFHIT (counterparty itself flagged) maps to direct.
     kytJobs[jobId].progress = "Computing fund-attribution score…";
     let txEndpoints: TxEndpoints | null = null;
     try { txEndpoints = await resolveTxEndpoints(p.chain, p.txId); } catch { /* score degrades */ }
-    const attribution = attributeFunds(result.hits, detectSelfHit(result.hits));
+    const counterpartyFlagged = detectSelfHit(result.hits);
+    const attribution = attributeFunds(result.hits, false, { counterpartyAnchored: true });
     const txAmount = txEndpoints ? txEndpoints.amount : null;
     const fundScore = computeFundScore(
       attribution,
       p.direction !== "out" ? txAmount : null,
       p.direction !== "in" ? txAmount : null,
+      { counterpartyFlagged },
     );
 
     const jobData: Record<string, unknown> = {

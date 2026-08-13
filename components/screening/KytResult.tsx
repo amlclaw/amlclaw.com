@@ -1,15 +1,12 @@
 "use client";
 
-import { useState, Suspense, lazy } from "react";
-import { formatTime, shortenAddr, showToast } from "@/lib/utils";
-import { hitsToEntities } from "@/lib/parse-evidence-flow";
-import { riskPillClass, riskColorVar, riskLabel, recommendation, riskSortRank } from "@/lib/risk-ui";
-import { RiskBadge, KriCard, EntityCard } from "./ScreeningResult";
+import { useState } from "react";
+import { formatTime, showToast } from "@/lib/utils";
+import { RiskBadge } from "./ScreeningResult";
 import type { KytScreenResult } from "@/lib/width-api";
 import type { FundScore } from "@/lib/risk-score";
 import FundScoreCard, { ScoreVerdictBadge, PathAnalysisDivider } from "./FundScoreCard";
-
-const FlowGraph = lazy(() => import("./FlowGraph"));
+import RiskEvidence from "./RiskEvidence";
 
 interface KytResultProps {
   job: Record<string, unknown> | null;
@@ -67,18 +64,9 @@ export default function KytResult({ job, loading, progress }: KytResultProps) {
 }
 
 function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
-  const [evidenceView, setEvidenceView] = useState<"list" | "graph">("list");
-
   const r = (job.result ?? {}) as unknown as KytScreenResult;
   const req = (job.request as Record<string, unknown>) || {};
-  const hits = r.hits || [];
-  // Severity-desc — API order is unsorted; worst findings must lead the table
-  const alerts = (r.alerts || []).slice().sort(
-    (a, b) => riskSortRank(b.alertLevel) - riskSortRank(a.alertLevel),
-  );
-  const entities = hitsToEntities(hits);
-  const target = { address: r.transaction, chain: r.chain, tags: [] };
-  const rec = recommendation(hits.map((h) => h.action));
+  const fundScore = (job.fund_score as FundScore | null) ?? null;
   const direction = (req.direction as string) || "both";
 
   return (
@@ -102,8 +90,8 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: "var(--sp-3)", alignItems: "flex-start", flexShrink: 0 }}>
-            {job.fund_score != null ? (
-              <ScoreVerdictBadge fundScore={job.fund_score as FundScore} />
+            {fundScore ? (
+              <ScoreVerdictBadge fundScore={fundScore} />
             ) : (
               <RiskBadge level={r.risk} score={r.riskScore} />
             )}
@@ -117,103 +105,22 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
         </div>
 
         {/* ── Verdict: fund-attribution score is THE user-facing judgment ── */}
-        {job.fund_score != null && (
-          <FundScoreCard fundScore={job.fund_score as FundScore} mode="kyt" />
+        {fundScore && (
+          <FundScoreCard fundScore={fundScore} mode="kyt" />
         )}
 
         {/* ── Everything below is path-level EVIDENCE (rule engine view) ── */}
-        {job.fund_score != null && <PathAnalysisDivider />}
+        {fundScore && <PathAnalysisDivider />}
 
-        {/* Path-level indicators */}
-        <div className="report-section">
-          <div className="report-section-header">Path-Level Indicators · 路径指标(规则口径)</div>
-          <div className="report-kri-grid">
-            <KriCard value={r.riskScore === 0 ? "Clean" : riskLabel(r.risk)} label="Path Risk Level" color={r.riskScore === 0 ? "var(--success)" : riskColorVar(r.risk)} />
-            <KriCard value={alerts.length} label="Alerts" color={alerts.length ? "var(--risk-high)" : "var(--success)"} />
-            <KriCard value={`${r.hitPaths}/${r.totalPaths}`} label="Hit Paths" color={r.hitPaths > 0 ? "var(--risk-high)" : "var(--success)"} />
-            <KriCard value={rec} label="Rule Action (path)" color={rec === "Pass" ? "var(--success)" : rec === "Review" ? "var(--risk-medium)" : "var(--danger)"} />
-          </div>
-        </div>
-
-        {/* Alerts */}
-        <div className="report-section">
-          <div className="report-section-header">Alerts ({alerts.length})</div>
-          {alerts.length > 0 ? (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Level</th>
-                  <th>Category</th>
-                  <th>Exposure</th>
-                  <th>Amount</th>
-                  <th>Rule</th>
-                  <th>Counterparty</th>
-                </tr>
-              </thead>
-              <tbody>
-                {alerts.map((a, i) => (
-                  <tr key={i}>
-                    <td>
-                      <span className={`risk-pill ${riskPillClass(a.alertLevel)}`}>{riskLabel(a.alertLevel)}</span>
-                    </td>
-                    <td>{a.category}</td>
-                    <td>{a.exposureType}{a.hops ? ` · ${a.hops} hop${a.hops !== 1 ? "s" : ""}` : ""}</td>
-                    <td style={{ fontFamily: "var(--mono)" }}>{a.alertAmount.toLocaleString()}</td>
-                    <td style={{ fontFamily: "var(--mono)", fontSize: "0.65rem" }}>{a.categoryId}</td>
-                    <td style={{ fontFamily: "var(--mono)", fontSize: "0.65rem" }}>{shortenAddr(a.opponentAddress)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="report-alert report-alert-success">No alerts — transaction appears clean</div>
-          )}
-        </div>
-
-        {/* Evidence */}
-        <div className="report-section">
-          <div className="report-section-header">
-            <span>Risk Evidence ({entities.length})</span>
-            {entities.length > 0 && (
-              <div className="tab-bar" style={{ width: "auto" }}>
-                <button className={`tab-btn ${evidenceView === "list" ? "active" : ""}`} onClick={() => setEvidenceView("list")}>
-                  List
-                </button>
-                <button className={`tab-btn ${evidenceView === "graph" ? "active" : ""}`} onClick={() => setEvidenceView("graph")}>
-                  Graph
-                </button>
-              </div>
-            )}
-          </div>
-
-          {entities.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "var(--sp-8)", color: "var(--success)" }}>
-              <div style={{ fontSize: "2rem", marginBottom: "var(--sp-2)" }}>{"✓"}</div>
-              <div style={{ fontSize: "var(--text-sm)", fontWeight: 500 }}>
-                No risk paths detected for this transaction.
-              </div>
-            </div>
-          ) : evidenceView === "graph" ? (
-            <Suspense fallback={
-              <div style={{ height: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div className="spinner spinner-lg" />
-              </div>
-            }>
-              <FlowGraph
-                entities={entities as unknown as Record<string, unknown>[]}
-                target={target as unknown as Record<string, unknown>}
-                scenario="all"
-                chain={r.chain || "Tron"}
-              />
-            </Suspense>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
-              {entities.map((entity, idx) => (
-                <EntityCard key={idx} entity={entity as unknown as Record<string, unknown>} />
-              ))}
-            </div>
-          )}
-        </div>
+        {/* ── Risk Evidence: rule-grouped fund paths (证据核心) ──
+            KYT paths anchor at the tx counterparty, so per-path ratio chips
+            (edge ÷ tx amount) would be misleading — denominators omitted. */}
+        <RiskEvidence
+          hits={r.hits || []}
+          chain={r.chain || "Tron"}
+          totalIn={null}
+          totalOut={null}
+        />
       </div>
     </Container>
   );

@@ -1,15 +1,13 @@
 "use client";
 
-import { useState, Suspense, lazy } from "react";
+import { useState } from "react";
 import { formatTime, shortenAddr, showToast } from "@/lib/utils";
-import { hitsToEntities } from "@/lib/parse-evidence-flow";
-import { riskPillClass, riskColorVar, riskLabel, recommendation, formatUsd } from "@/lib/risk-ui";
-import type { KyaScreenResult, WidthHit } from "@/lib/width-api";
+import { riskPillClass, riskColorVar, riskLabel } from "@/lib/risk-ui";
+import type { KyaScreenResult } from "@/lib/width-api";
 import type { FundScore } from "@/lib/risk-score";
 import type { AddressStats } from "@/lib/chain-txs";
 import FundScoreCard, { ScoreVerdictBadge, PathAnalysisDivider } from "./FundScoreCard";
-
-const FlowGraph = lazy(() => import("./FlowGraph"));
+import RiskEvidence from "./RiskEvidence";
 
 interface ScreeningResultProps {
   job: Record<string, unknown> | null;
@@ -78,22 +76,11 @@ export default function ScreeningResult({ job, jobId, loading, progress }: Scree
 }
 
 function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string | null }) {
-  const [evidenceView, setEvidenceView] = useState<"list" | "graph">("list");
-
   const r = (job.result ?? {}) as unknown as KyaScreenResult;
   const req = (job.request as Record<string, unknown>) || {};
   const hits = r.hits || [];
-  const entities = hitsToEntities(hits);
-  const target = { address: r.address, chain: r.chain, tags: [] };
-  const rec = recommendation(hits.map((h) => h.action));
   const scenario = (req.scenario as string) || "all";
-
-  // Group hits by rule
-  const ruleGroups = new Map<string, WidthHit[]>();
-  for (const hit of hits) {
-    if (!ruleGroups.has(hit.ruleCode)) ruleGroups.set(hit.ruleCode, []);
-    ruleGroups.get(hit.ruleCode)!.push(hit);
-  }
+  const chainStats = (job.chain_stats as (AddressStats & { balance: number | null }) | null) ?? null;
 
   return (
     <ResultContainer>
@@ -214,126 +201,15 @@ function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string 
           </div>
         )}
 
-        {/* ── 4. Path-level indicators (rule engine view) ── */}
-        <div className="report-section">
-          <div className="report-section-header">Path-Level Indicators · 路径指标(规则口径)</div>
-          <div className="report-kri-grid">
-            <KriCard value={r.riskScore === 0 ? "Clean" : riskLabel(r.risk)} label="Path Risk Level" color={r.riskScore === 0 ? "var(--success)" : riskColorVar(r.risk)} />
-            <KriCard value={`${r.hitPaths}/${r.totalPaths}`} label="Hit Paths" color={r.hitPaths > 0 ? "var(--risk-high)" : "var(--success)"} />
-            <KriCard value={`${(r.inflowRiskRate * 100).toFixed(1)}%`} label="Inflow Path Risk Rate" color={r.inflowRiskRate > 0 ? "var(--risk-high)" : "var(--text-secondary)"} />
-            <KriCard value={`${(r.outflowRiskRate * 100).toFixed(1)}%`} label="Outflow Path Risk Rate" color={r.outflowRiskRate > 0 ? "var(--risk-high)" : "var(--text-secondary)"} />
-            <KriCard
-              value={rec}
-              label="Rule Action (path)"
-              color={rec === "Pass" ? "var(--success)" : rec === "Review" ? "var(--risk-medium)" : "var(--danger)"}
-            />
-          </div>
-        </div>
-
-        {/* ── 5. Exposure Breakdown ── */}
-        {r.exposures?.length > 0 && (
-          <div className="report-section">
-            <div className="report-section-header">Exposure Breakdown</div>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th>Direction</th>
-                  <th>Exposure Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {r.exposures.map((ex, i) => (
-                  <tr key={i}>
-                    <td><span className={`pill-${riskPillClass(ex.category === "Sanctions" ? "critical" : "medium")}`}>{ex.category}</span></td>
-                    <td>{ex.direction}</td>
-                    <td style={{ fontFamily: "var(--mono)" }}>{formatUsd(ex.value)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* ── 6. Rules Triggered ── */}
-        <div className="report-section">
-          <div className="report-section-header">Rules Triggered</div>
-          {ruleGroups.size > 0 ? (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Rule Code</th>
-                  <th>Risk</th>
-                  <th>Name</th>
-                  <th>Paths</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from(ruleGroups.entries()).map(([code, groupHits]) => (
-                  <tr key={code}>
-                    <td style={{ fontFamily: "var(--mono)" }}>{code}</td>
-                    <td>
-                      <span className={`risk-pill ${riskPillClass(groupHits[0].riskLevel)}`}>
-                        {riskLabel(groupHits[0].riskLevel)}
-                      </span>
-                    </td>
-                    <td>{groupHits[0].ruleName}</td>
-                    <td>{groupHits.length}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="report-alert report-alert-success">
-              All rules passed — no policy violations detected
-            </div>
-          )}
-        </div>
-
-        {/* ── 7. Risk Evidence ── */}
-        <div className="report-section">
-          <div className="report-section-header">
-            <span>Risk Evidence ({entities.length})</span>
-            {entities.length > 0 && (
-              <div className="tab-bar" style={{ width: "auto" }}>
-                <button className={`tab-btn ${evidenceView === "list" ? "active" : ""}`} onClick={() => setEvidenceView("list")}>
-                  List
-                </button>
-                <button className={`tab-btn ${evidenceView === "graph" ? "active" : ""}`} onClick={() => setEvidenceView("graph")}>
-                  Graph
-                </button>
-              </div>
-            )}
-          </div>
-
-          {entities.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "var(--sp-8)", color: "var(--success)" }}>
-              <div style={{ fontSize: "2rem", marginBottom: "var(--sp-2)" }}>{"✓"}</div>
-              <div style={{ fontSize: "var(--text-sm)", fontWeight: 500 }}>
-                No risk entities detected. Address appears clean.
-              </div>
-            </div>
-          ) : evidenceView === "graph" ? (
-            <Suspense fallback={
-              <div style={{ height: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div className="spinner spinner-lg" />
-              </div>
-            }>
-              <FlowGraph
-                entities={entities as unknown as Record<string, unknown>[]}
-                target={target as unknown as Record<string, unknown>}
-                scenario={scenario}
-                chain={r.chain || "Tron"}
-              />
-            </Suspense>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
-              {entities.map((entity, idx) => (
-                <EntityCard key={idx} entity={entity as unknown as Record<string, unknown>} />
-              ))}
-            </div>
-          )}
-        </div>
+        {/* ── Risk Evidence: rule-grouped fund paths (证据核心) ── */}
+        <RiskEvidence
+          hits={hits}
+          chain={r.chain || (req.chain as string) || "Tron"}
+          targetAddress={r.address}
+          totalIn={chainStats ? chainStats.inTotal : null}
+          totalOut={chainStats ? chainStats.outTotal : null}
+          scenario={scenario}
+        />
       </div>
     </ResultContainer>
   );

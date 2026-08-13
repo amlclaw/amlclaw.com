@@ -147,6 +147,33 @@ describe("computeFundScore", () => {
   });
 });
 
+describe("KYT counterparty-anchored semantics", () => {
+  // KYT-IN paths anchor at the tx SENDER: hops=1 = flagged→sender, which is
+  // 2 hops from the subject — must land in the indirect bucket.
+  it("hops=1 path hits are INDIRECT in counterpartyAnchored mode", () => {
+    const a = attributeFunds([inflowHit(5000, "TSender", 1)], false, { counterpartyAnchored: true });
+    expect(a.directAmount).toBe(0);
+    expect(a.indirectAmount).toBe(5000);
+    const s = computeFundScore(a, 7000, null);
+    expect(s.score).toBe(28.6); // 40 × 5000/7000 rounded to 1dp — not 80
+    expect(s.verdict).toBe("review");
+  });
+
+  it("counterpartyFlagged (sender itself flagged) fills direct with the tx amount → 80, not 100", () => {
+    const a = attributeFunds([], false, { counterpartyAnchored: true });
+    const s = computeFundScore(a, 7000, null, { counterpartyFlagged: true });
+    expect(s.r1).toBe(1);
+    expect(s.score).toBe(80);
+    expect(s.verdict).toBe("block");
+    expect(s.selfHit).toBe(false); // NOT the KYA subject-self case
+  });
+
+  it("KYA semantics unchanged: hops=1 still direct without the flag", () => {
+    const a = attributeFunds([inflowHit(100, "TN1", 1)], false);
+    expect(a.directAmount).toBe(100);
+  });
+});
+
 describe("verdict bands + selfhit detection", () => {
   it("bands", () => {
     expect(scoreVerdict(0)).toBe("accept");

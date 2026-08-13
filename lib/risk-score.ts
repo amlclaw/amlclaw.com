@@ -80,12 +80,28 @@ function edgeKey(e: RiskyEdge): string {
   return `${e.neighbor}|${e.amount.toFixed(6)}`;
 }
 
+export interface AttributeOptions {
+  /**
+   * KYT mode: paths are anchored at the tx COUNTERPARTY (KYT-IN traces from
+   * the sender; hops count from there, NOT from the screened subject). A
+   * hops=1 hit means "flagged entity pays the sender directly" — which is
+   * 2 hops from the subject. So in this mode every path hit is INDIRECT;
+   * "direct" is only the counterparty itself being flagged (the *_SELFHIT
+   * rules), which the caller maps to the full tx amount in computeFundScore.
+   */
+  counterpartyAnchored?: boolean;
+}
+
 /**
  * Fold hit paths into money-disjoint buckets of subject-adjacent edges.
  * Severity precedence: direct (<=1 hop) inflow claims an edge first; an edge
  * already claimed by direct is not re-counted as indirect.
  */
-export function attributeFunds(hits: WidthHit[], selfHit: boolean): FundAttribution {
+export function attributeFunds(
+  hits: WidthHit[],
+  selfHit: boolean,
+  opts: AttributeOptions = {},
+): FundAttribution {
   const direct = new Map<string, RiskyEdge>();
   const indirect = new Map<string, RiskyEdge>();
   const outflow = new Map<string, RiskyEdge>();
@@ -97,7 +113,7 @@ export function attributeFunds(hits: WidthHit[], selfHit: boolean): FundAttribut
     const e = edgeOfHit(h);
     if (e.amount <= 0) continue;
     const key = edgeKey(e);
-    if ((h.hops || 0) <= 1) {
+    if (!opts.counterpartyAnchored && (h.hops || 0) <= 1) {
       direct.set(key, e);
       indirect.delete(key);
     } else if (!direct.has(key)) {
@@ -142,6 +158,16 @@ export interface FundScore {
   weights: typeof SCORE_WEIGHTS;
 }
 
+export interface ScoreOptions {
+  /**
+   * KYT mode: the *_SELFHIT rules mean the tx COUNTERPARTY (e.g. the sender)
+   * is itself a flagged entity — the money arrives directly from it, so the
+   * full tx amount goes into the direct bucket (r1=100% → 80). This is NOT
+   * the KYA SELFHIT (subject itself sanctioned), which overrides to 100.
+   */
+  counterpartyFlagged?: boolean;
+}
+
 /**
  * Convert attribution into the score. `totalIn` / `totalOut` are the
  * denominators: full inflow/outflow volume for KYA, the transaction amount for
@@ -152,9 +178,13 @@ export function computeFundScore(
   attr: FundAttribution,
   totalIn: number | null,
   totalOut: number | null,
+  opts: ScoreOptions = {},
 ): FundScore {
   // Cap amounts at the denominators; keep buckets disjoint (direct first).
-  const directAmount = totalIn != null ? Math.min(attr.directAmount, totalIn) : attr.directAmount;
+  let directAmount = totalIn != null ? Math.min(attr.directAmount, totalIn) : attr.directAmount;
+  if (opts.counterpartyFlagged && totalIn != null) {
+    directAmount = totalIn; // money arrives straight from a flagged entity
+  }
   const indirectAmount = totalIn != null
     ? Math.min(attr.indirectAmount, Math.max(0, totalIn - directAmount))
     : attr.indirectAmount;
@@ -165,7 +195,7 @@ export function computeFundScore(
   const rOut = totalOut ? Math.min(outflowAmount / totalOut, 1) : 0;
 
   let score: number | null = null;
-  if (attr.selfHit) {
+  if (attr.selfHit && !opts.counterpartyFlagged) {
     score = 100;
   } else if (totalIn != null || totalOut != null) {
     score = Math.round(
