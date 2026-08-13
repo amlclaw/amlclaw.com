@@ -165,6 +165,8 @@ async function runKyaScreening(
       subject: p.address,
       scenario: p.scenario,
       risk_level: result.risk,
+      score: fundScore.score,
+      verdict: fundScore.verdict,
       hits_count: result.hits.length,
       completed_at: jobData.completed_at as string,
       source: "manual",

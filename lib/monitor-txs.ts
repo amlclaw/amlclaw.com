@@ -33,6 +33,9 @@ export interface MonitorTx {
   kyt_status: "pending" | "screened" | "error" | "failed";
   retry_count: number;
   risk_level?: string;
+  /** Fund-attribution score of the screened tx (score-first UI). */
+  score?: number | null;
+  verdict?: string | null;
   /** Screening history job id — links to the full KYT report. */
   job_id?: string;
   error?: string;

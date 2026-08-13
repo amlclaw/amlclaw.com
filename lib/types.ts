@@ -41,6 +41,9 @@ export interface MonitorTask {
   kya_ruleset_id?: number;
   /** Risk level of the last KYA run (for escalation detection). */
   last_risk_level?: string;
+  /** TX monitors: latest fund-attribution score of the watched counterparty. */
+  last_score?: number | null;
+  last_verdict?: string | null;
 
   schedule: string; // cron expression "0 */4 * * *"
   schedule_preset: string; // "every_4h" | "custom" etc.
@@ -92,6 +95,8 @@ export interface MonitorRunResult {
   address?: string;
   previous_risk_level?: string;
   escalated?: boolean;
+  score?: number | null;
+  verdict?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +114,9 @@ export interface HistoryIndexEntry {
   scenario?: string;
   direction?: string; // KYT: in | out | both
   risk_level: string; // low | medium | high | critical
+  /** Fund-attribution score (score-first UI); null = denominators unavailable. */
+  score?: number | null;
+  verdict?: string | null; // accept | review | edd | block
   hits_count: number;
   completed_at: string;
   source?: "manual" | "monitor";

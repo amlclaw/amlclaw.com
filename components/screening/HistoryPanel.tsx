@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { shortenAddr, formatTime } from "@/lib/utils";
-import { riskColorVar, riskLabel } from "@/lib/risk-ui";
+import { riskColorVar, riskLabel, verdictColorVar, verdictZh } from "@/lib/risk-ui";
 
 interface HistoryEntry {
   job_id: string;
@@ -12,6 +12,8 @@ interface HistoryEntry {
   scenario?: string;
   direction?: string;
   risk_level: string;
+  score?: number | null;
+  verdict?: string | null;
   hits_count: number;
   completed_at: string;
   source?: string;
@@ -76,15 +78,28 @@ export default function HistoryPanel({ type, onSelect, refreshTrigger }: History
               >
                 {shortenAddr(e.subject)}
               </span>
-              <span
-                style={{
-                  fontSize: "0.6rem", fontWeight: 700,
-                  color: riskColorVar(e.risk_level),
-                  flexShrink: 0, marginLeft: 4, textTransform: "uppercase",
-                }}
-              >
-                {riskLabel(e.risk_level)}
-              </span>
+              {e.score != null ? (
+                <span
+                  style={{
+                    fontSize: "0.65rem", fontWeight: 800,
+                    color: verdictColorVar(e.verdict),
+                    flexShrink: 0, marginLeft: 4, fontFamily: "var(--mono)",
+                  }}
+                  title={verdictZh(e.verdict)}
+                >
+                  {e.score}分·{verdictZh(e.verdict)}
+                </span>
+              ) : (
+                <span
+                  style={{
+                    fontSize: "0.6rem", fontWeight: 700,
+                    color: riskColorVar(e.risk_level),
+                    flexShrink: 0, marginLeft: 4, textTransform: "uppercase",
+                  }}
+                >
+                  {riskLabel(e.risk_level)}
+                </span>
+              )}
             </div>
             <div style={{ fontSize: "0.6rem", color: "var(--text-tertiary)" }}>
               {e.chain}

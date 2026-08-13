@@ -47,3 +47,27 @@ export function formatUsd(n: number): string {
   if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
   return `$${n.toFixed(2)}`;
 }
+
+// ---------------------------------------------------------------------------
+// Fund-score verdict display helpers (score-first UI; risk level is legacy).
+// ---------------------------------------------------------------------------
+
+export function verdictColorVar(verdict?: string | null): string {
+  switch (verdict) {
+    case "block": return "var(--danger)";
+    case "edd": return "var(--risk-high)";
+    case "review": return "var(--risk-medium)";
+    case "accept": return "var(--success)";
+    default: return "var(--text-tertiary)";
+  }
+}
+
+export function verdictZh(verdict?: string | null): string {
+  switch (verdict) {
+    case "block": return "拒绝";
+    case "edd": return "尽调";
+    case "review": return "复核";
+    case "accept": return "放行";
+    default: return "—";
+  }
+}

@@ -5,7 +5,7 @@ import PageGuide from "@/components/shared/PageGuide";
 import { showToast, shortenAddr, formatTime } from "@/lib/utils";
 import { detectChainFromAddress, detectChainFromTxId } from "@/lib/chain-detect";
 import { explorerTxUrl, explorerAddressUrl } from "@/lib/explorers";
-import { riskColorVar, riskLabel, riskSortRank } from "@/lib/risk-ui";
+import { riskColorVar, riskLabel, riskSortRank, verdictColorVar, verdictZh } from "@/lib/risk-ui";
 import type { MonitorTask, MonitorRun } from "@/lib/types";
 
 const SCHEDULES = [
@@ -154,11 +154,15 @@ function MonitorCard({ monitor: m, onChanged, onOpen, onEdit }: { monitor: Monit
             <span style={{ fontWeight: 600, fontSize: "var(--text-sm)" }}>{m.name}</span>
             {m.running && <span className="badge badge-warning">Running</span>}
             {!m.enabled && <span className="badge">Paused</span>}
-            {m.type === "kyt" && m.last_risk_level && (
+            {m.type === "kyt" && m.last_score != null ? (
+              <span style={{ fontSize: "0.7rem", fontWeight: 800, fontFamily: "var(--mono)", color: verdictColorVar(m.last_verdict) }}>
+                {m.last_score}分·{verdictZh(m.last_verdict)}
+              </span>
+            ) : m.type === "kyt" && m.last_risk_level ? (
               <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", color: riskColorVar(m.last_risk_level) }}>
                 {riskLabel(m.last_risk_level)}
               </span>
-            )}
+            ) : null}
           </div>
           <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginTop: 2, display: "flex", gap: "var(--sp-2)", flexWrap: "wrap" }}>
             <span>{m.chain}</span>
@@ -522,6 +526,8 @@ interface LedgerTx {
   risk_level?: string;
   job_id?: string;
   error?: string;
+  score?: number | null;
+  verdict?: string | null;
 }
 
 const TIME_PRESETS = [
@@ -812,9 +818,15 @@ function TxRow({ tx, monitorAddress, chain }: { tx: LedgerTx; monitorAddress: st
   };
 
   const kytCell = tx.kyt_status === "screened" ? (
-    <span style={{ color: riskColorVar(tx.risk_level || "low"), fontWeight: 700, textTransform: "uppercase" }}>
-      {riskLabel(tx.risk_level || "low")}
-    </span>
+    tx.score != null ? (
+      <span style={{ color: verdictColorVar(tx.verdict), fontWeight: 800, fontFamily: "var(--mono)" }}>
+        {tx.score}分·{verdictZh(tx.verdict)}
+      </span>
+    ) : (
+      <span style={{ color: riskColorVar(tx.risk_level || "low"), fontWeight: 700, textTransform: "uppercase" }}>
+        {riskLabel(tx.risk_level || "low")}
+      </span>
+    )
   ) : tx.kyt_status === "pending" ? (
     <span style={{ color: "var(--warning)" }}>Queued</span>
   ) : tx.kyt_status === "error" ? (
@@ -919,6 +931,8 @@ interface KyaScan {
   status: "completed" | "error" | "skipped";
   error?: string;
   trigger: string;
+  score?: number | null;
+  verdict?: string | null;
 }
 
 function KyaLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: () => void }) {
@@ -944,6 +958,8 @@ function KyaLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: (
               timestamp: ts,
               address: res.address || monitor.address,
               risk_level: res.risk_level || "low",
+              score: (res as { score?: number | null }).score ?? null,
+              verdict: (res as { verdict?: string | null }).verdict ?? null,
               previous_risk_level: res.previous_risk_level,
               escalated: res.escalated,
               job_id: res.job_id,
@@ -1225,9 +1241,15 @@ function KyaScanRow({ scan, chain }: { scan: KyaScan; chain: string }) {
         </td>
         <td>
           {scan.status === "completed" ? (
-            <span style={{ color: riskColorVar(scan.risk_level), fontWeight: 700, textTransform: "uppercase" }}>
-              {riskLabel(scan.risk_level)}
-            </span>
+            scan.score != null ? (
+              <span style={{ color: verdictColorVar(scan.verdict), fontWeight: 800, fontFamily: "var(--mono)" }}>
+                {scan.score}分·{verdictZh(scan.verdict)}
+              </span>
+            ) : (
+              <span style={{ color: riskColorVar(scan.risk_level), fontWeight: 700, textTransform: "uppercase" }}>
+                {riskLabel(scan.risk_level)}
+              </span>
+            )
           ) : (
             <span style={{ color: "var(--danger)" }} title={scan.error}>Error</span>
           )}

@@ -175,6 +175,8 @@ async function runKytScreening(
       subject: p.txId,
       direction: p.direction,
       risk_level: result.risk,
+      score: fundScore.score,
+      verdict: fundScore.verdict,
       hits_count: result.hits.length,
       completed_at: jobData.completed_at as string,
       source: "manual",

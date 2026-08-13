@@ -28,6 +28,8 @@ import {
 } from "./monitor-txs";
 import { getSettings } from "./settings";
 import { sendWebhook, shouldAlert } from "./webhook";
+import { scoreFromHits, detectSelfHitLevel } from "./risk-score";
+import { fetchAddressStats } from "./chain-txs";
 import type { MonitorTask, MonitorRun, MonitorRunResult, MonitorRunSummary } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -309,6 +311,24 @@ async function runAddressMonitor(
         maxTimestamp: nowMs,
       });
 
+      // Fund-attribution score: denominator = the tx's own amount; KYT paths
+      // are counterparty-anchored (rule-code prefix decides the side).
+      const fundScore = scoreFromHits(
+        result.hits,
+        tx.direction === "in" ? tx.amount : null,
+        tx.direction === "out" ? tx.amount : null,
+        {
+          config: settings.scoring,
+          counterpartyAnchored: true,
+          counterpartyFlaggedInLevel: result.hits.find(
+            (h) => h.ruleCode.startsWith("KYT_IN") && h.ruleCode.includes("SELFHIT"),
+          )?.riskLevel ?? null,
+          counterpartyFlaggedOutLevel: result.hits.find(
+            (h) => h.ruleCode.startsWith("KYT_OUT") && h.ruleCode.includes("SELFHIT"),
+          )?.riskLevel ?? null,
+        },
+      );
+
       // Save as screening history (cross-link)
       const jobId = crypto.randomUUID().slice(0, 8);
       const completedAt = new Date().toISOString();
@@ -328,12 +348,15 @@ async function runAddressMonitor(
           out_ruleset_id: task.out_ruleset_id ?? 0,
         },
         result,
+        fund_score: fundScore,
       }, {
         type: "kyt",
         chain: task.chain,
         subject: tx.tx_id,
         direction: tx.direction,
         risk_level: result.risk,
+        score: fundScore.score,
+        verdict: fundScore.verdict,
         hits_count: result.hits.length,
         completed_at: completedAt,
         source: "monitor",
@@ -342,6 +365,8 @@ async function runAddressMonitor(
       updateMonitorTx(task.id, tx.tx_id, {
         kyt_status: "screened",
         risk_level: result.risk,
+        score: fundScore.score,
+        verdict: fundScore.verdict,
         job_id: jobId,
         screened_at: completedAt,
         error: undefined,
@@ -351,6 +376,8 @@ async function runAddressMonitor(
         status: "completed",
         job_id: jobId,
         risk_level: result.risk,
+        score: fundScore.score,
+        verdict: fundScore.verdict,
         tx_id: tx.tx_id,
         direction: tx.direction,
         token: tx.token,
@@ -439,8 +466,26 @@ async function runKytMonitor(
     maxTimestamp: Date.now(),
   });
 
+  // Fund score for the watched address: chain volume denominators are
+  // best-effort (one stats fetch per cycle; score degrades to null on failure).
+  let statsIn: number | null = null;
+  let statsOut: number | null = null;
+  try {
+    const st = await fetchAddressStats(task.chain, task.address, "USDT");
+    statsIn = st.inTotal;
+    statsOut = st.outTotal;
+  } catch { /* degrade */ }
+  const fundScore = scoreFromHits(result.hits, statsIn, statsOut, {
+    config: settings.scoring,
+    selfHitLevel: detectSelfHitLevel(result.hits, result.addressIdentifications),
+  });
+
   const escalated = riskRank(result.risk) > riskRank(previousRisk);
-  updateMonitor(task.id, { last_risk_level: result.risk });
+  updateMonitor(task.id, {
+    last_risk_level: result.risk,
+    last_score: fundScore.score,
+    last_verdict: fundScore.verdict,
+  });
 
   // Save as screening history (cross-link)
   const jobId = crypto.randomUUID().slice(0, 8);
@@ -459,12 +504,15 @@ async function runKytMonitor(
       scenario: "all",
     },
     result,
+    fund_score: fundScore,
   }, {
     type: "kya",
     chain: task.chain,
     subject: task.address,
     scenario: "all",
     risk_level: result.risk,
+    score: fundScore.score,
+    verdict: fundScore.verdict,
     hits_count: result.hits.length,
     completed_at: completedAt,
     source: "monitor",
@@ -490,6 +538,8 @@ async function runKytMonitor(
       job_id: jobId,
       address: task.address,
       risk_level: result.risk,
+      score: fundScore.score,
+      verdict: fundScore.verdict,
       previous_risk_level: previousRisk,
       escalated,
     }],
