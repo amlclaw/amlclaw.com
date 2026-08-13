@@ -137,17 +137,39 @@ export default function FundScoreCard({ fundScore, chainStats, mode }: {
         {/* component breakdown — rule-engine cells (direction × hop bucket × severity) */}
         {!fs.selfHit && fs.components && fs.components.length > 0 && (
           <div style={{ marginBottom: "var(--sp-3)" }}>
-            {fs.components.map((c, i) => (
-              <ComponentRow
-                key={i}
-                label={`${c.direction === "in" ? "入金" : "出金"} · ${HOP_LABEL[c.hopBucket] || c.hopBucket} · ${c.severity}`}
-                amount={c.amount}
-                denom={c.direction === "in" ? fs.totalIn : fs.totalOut}
-                ratio={c.ratio}
-                weight={Math.round(c.base * c.weight * 100) / 100}
-                color={SEV_COLOR[c.severity] || "var(--risk-medium)"}
-              />
-            ))}
+            {fs.components.map((c, i) => {
+              const label = `${c.direction === "in" ? "入金" : "出金"} · ${HOP_LABEL[c.hopBucket] || c.hopBucket} · ${c.severity}`;
+              const capped = c.rawAmount != null && c.rawAmount > c.amount;
+              if (c.amount <= 0 && capped) {
+                // Fully crowded out by higher-priority cells — money counted once.
+                return (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", fontSize: "var(--text-xs)", padding: "5px 0", opacity: 0.55 }}>
+                    <span style={{ width: 190, color: "var(--text-tertiary)", flexShrink: 0 }}>{label}</span>
+                    <div style={{ flex: 1, height: 10, background: "var(--surface-2)", borderRadius: 5, border: "1px dashed var(--border-default)" }} />
+                    <span style={{ width: 250, textAlign: "right", fontFamily: "var(--mono)", color: "var(--text-tertiary)", flexShrink: 0 }}>
+                      归因 {fmt(c.rawAmount!)} → 计入 0(与更高优先格资金重叠)
+                    </span>
+                  </div>
+                );
+              }
+              return (
+                <div key={i}>
+                  <ComponentRow
+                    label={label}
+                    amount={c.amount}
+                    denom={c.direction === "in" ? fs.totalIn : fs.totalOut}
+                    ratio={c.ratio}
+                    weight={Math.round(c.base * c.weight * 100) / 100}
+                    color={SEV_COLOR[c.severity] || "var(--risk-medium)"}
+                  />
+                  {capped && (
+                    <div style={{ fontSize: "0.65rem", color: "var(--text-tertiary)", paddingLeft: 190, marginTop: -2 }}>
+                      该格原始归因 {fmt(c.rawAmount!)},按「钱只算一次」封顶计入 {fmt(c.amount)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
         {!fs.selfHit && fs.components && fs.components.length === 0 && fs.score != null && (

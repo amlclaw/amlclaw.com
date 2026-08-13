@@ -124,10 +124,36 @@ describe("rule engine — money counted once", () => {
       [inflowHit(800, "TN1", 1, "critical"), inflowHit(900, "TN2", 3, "critical")],
       1000, null,
     );
-    // direct claims 800, hop3 gets the remaining 200
+    // direct claims 800, hop3 gets the remaining 200 (rawAmount keeps the 900)
     expect(s.components.find((c) => c.hopBucket === "direct")!.amount).toBe(800);
-    expect(s.components.find((c) => c.hopBucket === "hop3")!.amount).toBe(200);
+    const hop3 = s.components.find((c) => c.hopBucket === "hop3")!;
+    expect(hop3.amount).toBe(200);
+    expect(hop3.rawAmount).toBe(900);
     expect(s.score).toBeCloseTo(80 * 0.8 + 40 * 0.2, 1); // 72
+  });
+
+  it("fully crowded-out cells stay visible with amount 0 and their rawAmount", () => {
+    // top cell's raw already exceeds the denominator → second cell counted 0
+    const s = scoreFromHits(
+      [inflowHit(5000, "TN1", 1, "critical"), inflowHit(900, "TN2", 3, "high")],
+      1000, null,
+    );
+    const hop3 = s.components.find((c) => c.hopBucket === "hop3")!;
+    expect(hop3.amount).toBe(0);
+    expect(hop3.rawAmount).toBe(900);
+    expect(s.score).toBe(80); // only the direct-critical cell scores
+  });
+
+  it("rate tie-break is deterministic: higher severity claims the money first", () => {
+    // hop2·high (50×0.8=40) ties hop3·critical (40×1.0=40) → critical wins
+    const s = scoreFromHits(
+      [inflowHit(600, "TN1", 2, "high"), inflowHit(700, "TN2", 3, "critical")],
+      1000, null,
+    );
+    const first = s.components[0];
+    expect(first.severity).toBe("critical");
+    expect(first.amount).toBe(700);
+    expect(s.components.find((c) => c.severity === "high")!.amount).toBe(300);
   });
 
   it("total clamped at 100 when both directions max out", () => {

@@ -65,6 +65,9 @@ function hopBucket(hops: number): HopBucket {
   return "hop3";
 }
 
+const SEVERITY_RANK: Record<string, number> = { critical: 3, high: 2, medium: 1, low: 0 };
+const BUCKET_RANK: Record<HopBucket, number> = { direct: 2, hop2: 1, hop3: 0 };
+
 function severityWeight(level: string, cfg: ScoringConfig): number {
   const l = String(level || "").toLowerCase() as keyof ScoringConfig["severityWeights"];
   return cfg.severityWeights[l] ?? cfg.severityWeights.low;
@@ -123,8 +126,12 @@ export interface ScoreComponent {
   severity: string;
   base: number;
   weight: number;
-  /** Deduped, money-disjoint amount claimed by this cell. */
+  /** Deduped, money-disjoint amount claimed by this cell (after caps). */
   amount: number;
+  /** Deduped amount attributed to this cell BEFORE denominator capping. A cell
+   *  with rawAmount > 0 but amount 0 was fully crowded out by higher-priority
+   *  cells (money is counted once). */
+  rawAmount: number;
   ratio: number;
   points: number;
 }
@@ -193,9 +200,15 @@ export function scoreFromHits(
     const w = severityWeight(h.riskLevel, cfg);
     const rate = base * w;
     const key = `${dir}|${e.neighbor}|${e.amount.toFixed(6)}`;
+    const sev = String(h.riskLevel || "low").toLowerCase();
     const prev = edges.get(key);
-    if (!prev || rate > prev.rate) {
-      edges.set(key, { amount: e.amount, direction: dir, bucket, severity: String(h.riskLevel || "low").toLowerCase(), rate });
+    const beats = !prev
+      || rate > prev.rate
+      || (rate === prev.rate && (SEVERITY_RANK[sev] ?? 0) > (SEVERITY_RANK[prev.severity] ?? 0))
+      || (rate === prev.rate && (SEVERITY_RANK[sev] ?? 0) === (SEVERITY_RANK[prev.severity] ?? 0)
+          && BUCKET_RANK[bucket] > BUCKET_RANK[prev.bucket]);
+    if (beats) {
+      edges.set(key, { amount: e.amount, direction: dir, bucket, severity: sev, rate });
     }
   }
 
@@ -207,9 +220,10 @@ export function scoreFromHits(
     const key = `${e.direction}|${e.bucket}|${e.severity}`;
     const c = cells.get(key) || {
       direction: e.direction, hopBucket: e.bucket, severity: e.severity,
-      base, weight: w, amount: 0, ratio: 0, points: 0,
+      base, weight: w, amount: 0, rawAmount: 0, ratio: 0, points: 0,
     };
     c.amount += e.amount;
+    c.rawAmount += e.amount;
     cells.set(key, c);
   }
 
@@ -218,13 +232,17 @@ export function scoreFromHits(
     cells.set("in|direct|critical", {
       direction: "in", hopBucket: "direct", severity: "critical",
       base: cfg.inBases.direct, weight: cfg.severityWeights.critical,
-      amount: totalIn, ratio: 0, points: 0,
+      amount: totalIn, rawAmount: totalIn, ratio: 0, points: 0,
     });
   }
 
   // 3. Cap cell amounts against the direction denominator, high-rate cells
   //    claiming the denominator first — per-direction ratios sum to <= 100%.
-  const byRate = [...cells.values()].sort((a, b) => b.base * b.weight - a.base * a.weight);
+  const byRate = [...cells.values()].sort(
+    (a, b) => b.base * b.weight - a.base * a.weight
+      || (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0)
+      || BUCKET_RANK[b.hopBucket] - BUCKET_RANK[a.hopBucket],
+  );
   const remaining: Record<"in" | "out", number | null> = { in: totalIn, out: totalOut };
   for (const c of byRate) {
     const rem = remaining[c.direction];
@@ -236,7 +254,9 @@ export function scoreFromHits(
     c.ratio = denom ? Math.min(c.amount / denom, 1) : 0;
     c.points = Math.round(c.base * c.weight * c.ratio * 10) / 10;
   }
-  const components = byRate.filter((c) => c.amount > 0);
+  // Keep crowded-out cells (rawAmount > 0, amount 0) so reports can show WHERE
+  // the other rules' money went — it overlapped higher-priority cells.
+  const components = byRate.filter((c) => c.rawAmount > 0);
 
   // 4. Total.
   let score: number | null = null;
