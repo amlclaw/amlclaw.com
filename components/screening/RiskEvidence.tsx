@@ -43,13 +43,20 @@ function nodeTags(n: WidthPathNode): string[] {
   return out.slice(0, 2);
 }
 
+/** KYT anchoring info: inflow paths trace the tx's FROM address, outflow the TO. */
+export interface KytAnchors {
+  from: string;
+  to: string;
+}
+
 /* ── one horizontal path strip ── */
-function PathStrip({ hit, chain, targetAddress, totalIn, totalOut }: {
+function PathStrip({ hit, chain, targetAddress, totalIn, totalOut, kytAnchors }: {
   hit: WidthHit;
   chain: string;
   targetAddress?: string;
   totalIn: number | null;
   totalOut: number | null;
+  kytAnchors?: KytAnchors;
 }) {
   const inflow = hit.pathFlow === "inflow";
   const nodes = [...(hit.pathNodes || [])].sort((a, b) => a.deep - b.deep);
@@ -68,6 +75,11 @@ function PathStrip({ hit, chain, targetAddress, totalIn, totalOut }: {
         <span className="badge" style={{ color: inflow ? "var(--primary-500)" : "var(--risk-medium)", fontWeight: 700 }}>
           {inflow ? "↓ 流入" : "↑ 流出"}
         </span>
+        {kytAnchors && (
+          <span className="badge" style={{ color: "var(--text-secondary)", border: "1px solid var(--border-default)" }}>
+            溯源 {inflow ? "from" : "to"} · {shortenAddr(inflow ? kytAnchors.from : kytAnchors.to)}
+          </span>
+        )}
         <span style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>{hit.hops} 跳</span>
         <span style={{ fontSize: "var(--text-xs)", fontFamily: "var(--mono)", fontWeight: 700 }}>{fmtAmt(edge.amount)}</span>
         {ratio != null && (
@@ -93,7 +105,9 @@ function PathStrip({ hit, chain, targetAddress, totalIn, totalOut }: {
       <div style={{ display: "flex", alignItems: "center", gap: 0, overflowX: "auto", paddingBottom: 4 }}>
         {nodes.map((n, i) => {
           const isOpp = n.address === opponent;
-          const isTarget = targetAddress && n.address === targetAddress;
+          const anchorAddr = kytAnchors ? (inflow ? kytAnchors.from : kytAnchors.to) : targetAddress;
+          const isTarget = anchorAddr && n.address === anchorAddr;
+          const anchorLabel = kytAnchors ? (inflow ? "from(付款方)" : "to(收款方)") : "目标";
           const tags = isOpp ? nodeTags(n) : [];
           return (
             <div key={i} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
@@ -124,7 +138,7 @@ function PathStrip({ hit, chain, targetAddress, totalIn, totalOut }: {
                 </a>
                 {(isOpp && tags.length > 0) || isTarget ? (
                   <div style={{ fontSize: "0.62rem", color: isOpp ? "var(--danger)" : "var(--text-tertiary)", marginTop: 2 }}>
-                    {isOpp ? `· ${tags.join(" · ")}` : "目标"}
+                    {isOpp ? `· ${tags.join(" · ")}` : anchorLabel}
                   </div>
                 ) : null}
               </div>
@@ -137,7 +151,7 @@ function PathStrip({ hit, chain, targetAddress, totalIn, totalOut }: {
 }
 
 /* ── rule group card ── */
-function RuleCard({ ruleName, riskLevel, hits, chain, targetAddress, totalIn, totalOut, defaultOpen }: {
+function RuleCard({ ruleName, riskLevel, hits, chain, targetAddress, totalIn, totalOut, defaultOpen, kytAnchors }: {
   ruleName: string;
   riskLevel: string;
   hits: WidthHit[];
@@ -146,6 +160,7 @@ function RuleCard({ ruleName, riskLevel, hits, chain, targetAddress, totalIn, to
   totalIn: number | null;
   totalOut: number | null;
   defaultOpen: boolean;
+  kytAnchors?: KytAnchors;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [showAll, setShowAll] = useState(false);
@@ -169,7 +184,7 @@ function RuleCard({ ruleName, riskLevel, hits, chain, targetAddress, totalIn, to
       {open && (
         <div style={{ padding: "0 var(--sp-4) var(--sp-3)" }}>
           {shown.map((h, i) => (
-            <PathStrip key={i} hit={h} chain={chain} targetAddress={targetAddress} totalIn={totalIn} totalOut={totalOut} />
+            <PathStrip key={i} hit={h} chain={chain} targetAddress={targetAddress} totalIn={totalIn} totalOut={totalOut} kytAnchors={kytAnchors} />
           ))}
           {hits.length > PATHS_PREVIEW && !showAll && (
             <button
@@ -186,13 +201,14 @@ function RuleCard({ ruleName, riskLevel, hits, chain, targetAddress, totalIn, to
 }
 
 /* ── main module ── */
-export default function RiskEvidence({ hits, chain, targetAddress, totalIn, totalOut, scenario }: {
+export default function RiskEvidence({ hits, chain, targetAddress, totalIn, totalOut, scenario, kytAnchors }: {
   hits: WidthHit[];
   chain: string;
   targetAddress?: string;
   totalIn: number | null;
   totalOut: number | null;
   scenario?: string;
+  kytAnchors?: KytAnchors;
 }) {
   const [view, setView] = useState<"list" | "graph">("list");
 
@@ -252,6 +268,7 @@ export default function RiskEvidence({ hits, chain, targetAddress, totalIn, tota
               totalIn={totalIn}
               totalOut={totalOut}
               defaultOpen={i === 0}
+              kytAnchors={kytAnchors}
             />
           ))}
         </div>

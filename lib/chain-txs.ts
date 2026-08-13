@@ -339,6 +339,8 @@ export interface TxEndpoints {
   to: string;
   token: string;
   amount: number;
+  /** Block timestamp in ms (0 when the provider didn't return one). */
+  timestamp: number;
 }
 
 export async function resolveTxEndpoints(chain: string, txId: string): Promise<TxEndpoints> {
@@ -365,11 +367,22 @@ export async function resolveTxEndpoints(chain: string, txId: string): Promise<T
       );
       if (!tokenEntry || topics[0] !== TRANSFER_TOPIC || topics.length < 3) continue;
       const [symbol, { decimals }] = tokenEntry;
+      // Block timestamp needs one extra call; non-fatal when it fails.
+      let timestamp = 0;
+      try {
+        const blockUrl =
+          `https://api.etherscan.io/v2/api?chainid=1&module=proxy&action=eth_getBlockByNumber` +
+          `&tag=${receipt.blockNumber}&boolean=false&apikey=${encodeURIComponent(apiKey)}`;
+        const blockRes = await fetch(blockUrl, { signal: AbortSignal.timeout(15_000) });
+        const blockJson = (await blockRes.json()) as { result?: { timestamp?: string } };
+        timestamp = parseInt(String(blockJson.result?.timestamp ?? "0x0"), 16) * 1000;
+      } catch { /* keep 0 */ }
       return {
         from: "0x" + topics[1].slice(26),
         to: "0x" + topics[2].slice(26),
         token: symbol,
         amount: parseInt(String(log.data ?? "0x0"), 16) / 10 ** decimals,
+        timestamp,
       };
     }
     throw new Error("No USDT/USDC transfer found in this transaction");
@@ -397,6 +410,7 @@ export async function resolveTxEndpoints(chain: string, txId: string): Promise<T
         to: tronHexToBase58("41" + topics[2].slice(24)),
         token: "USDT",
         amount: parseInt(String(log.data ?? "0"), 16) / 1e6,
+        timestamp: Number(info.blockTimeStamp ?? 0),
       };
     }
     throw new Error("No TRC20 transfer found in this transaction");

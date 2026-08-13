@@ -67,6 +67,7 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
   const r = (job.result ?? {}) as unknown as KytScreenResult;
   const req = (job.request as Record<string, unknown>) || {};
   const fundScore = (job.fund_score as FundScore | null) ?? null;
+  const tx = (job.tx_endpoints as { from: string; to: string; token: string; amount: number; timestamp?: number } | null) ?? null;
   const direction = (req.direction as string) || "both";
 
   return (
@@ -104,6 +105,43 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
           <MonitorSideButton chain={r.chain} txId={r.transaction} side="to" />
         </div>
 
+        {/* ── Transaction key factors ── */}
+        {tx && (
+          <div className="report-section">
+            <div className="report-section-header">Transaction · 交易要素</div>
+            <table className="data-table" style={{ fontSize: "var(--text-xs)" }}>
+              <tbody>
+                <tr>
+                  <td style={{ color: "var(--text-tertiary)", width: 140, fontWeight: 600 }}>From(付款方)</td>
+                  <td style={{ fontFamily: "var(--mono)", fontSize: "0.7rem", wordBreak: "break-all" }}>
+                    {tx.from}
+                    <span className="badge" style={{ marginLeft: 8, color: "var(--primary-500)" }}>KYT-IN 溯源对象</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ color: "var(--text-tertiary)", fontWeight: 600 }}>To(收款方)</td>
+                  <td style={{ fontFamily: "var(--mono)", fontSize: "0.7rem", wordBreak: "break-all" }}>
+                    {tx.to}
+                    <span className="badge" style={{ marginLeft: 8, color: "var(--risk-medium)" }}>KYT-OUT 溯源对象</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ color: "var(--text-tertiary)", fontWeight: 600 }}>Amount</td>
+                  <td style={{ fontFamily: "var(--mono)", fontWeight: 700 }}>
+                    {tx.amount.toLocaleString("en-US", { maximumFractionDigits: 2 })} {tx.token}
+                  </td>
+                </tr>
+                {tx.timestamp ? (
+                  <tr>
+                    <td style={{ color: "var(--text-tertiary)", fontWeight: 600 }}>Time</td>
+                    <td>{formatTime(new Date(tx.timestamp).toISOString())}</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {/* ── Verdict: fund-attribution score is THE user-facing judgment ── */}
         {fundScore && (
           <FundScoreCard fundScore={fundScore} mode="kyt" />
@@ -120,6 +158,7 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
           chain={r.chain || "Tron"}
           totalIn={null}
           totalOut={null}
+          kytAnchors={tx ? { from: tx.from, to: tx.to } : undefined}
         />
       </div>
     </Container>

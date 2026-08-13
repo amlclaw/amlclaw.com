@@ -201,6 +201,42 @@ function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string 
           </div>
         )}
 
+        {/* ── Address activity: on-chain volume facts (the score denominators) ── */}
+        {chainStats && (
+          <div className="report-section">
+            <div className="report-section-header">
+              Address Activity · 链上活动({chainStats.token})
+              {chainStats.truncated && (
+                <span style={{ fontWeight: 400, fontSize: "var(--text-xs)", color: "var(--risk-medium)", marginLeft: 8 }}>
+                  ⚠ 超出拉取上限,按最近 {chainStats.inCount + chainStats.outCount} 笔统计
+                </span>
+              )}
+            </div>
+            <div className="report-kri-grid">
+              <KriCard
+                value={`${chainStats.inCount.toLocaleString()} 笔`}
+                label={`入账 · ${chainStats.inTotal.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${chainStats.token}`}
+                color="var(--primary-500)"
+              />
+              <KriCard
+                value={`${chainStats.outCount.toLocaleString()} 笔`}
+                label={`出账 · ${chainStats.outTotal.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${chainStats.token}`}
+                color="var(--risk-medium)"
+              />
+              <KriCard
+                value={chainStats.balance != null ? chainStats.balance.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—"}
+                label={`当前余额 (${chainStats.token})`}
+                color="var(--text-secondary)"
+              />
+              <KriCard
+                value={chainStats.firstTs ? `${new Date(chainStats.firstTs).toISOString().slice(0, 10)} ~ ${new Date(chainStats.lastTs).toISOString().slice(0, 10)}` : "—"}
+                label="活跃区间"
+                color="var(--text-secondary)"
+              />
+            </div>
+          </div>
+        )}
+
         {/* ── Risk Evidence: rule-grouped fund paths (证据核心) ── */}
         <RiskEvidence
           hits={hits}
