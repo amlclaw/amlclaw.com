@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSettings, updateSettings } from "@/lib/settings";
 
-const ALLOWED_SECTIONS = new Set(["api", "screening", "monitoring", "notifications"]);
+const ALLOWED_SECTIONS = new Set(["api", "screening", "monitoring", "scoring", "notifications"]);
 
 const SECRET_FIELDS: [section: string, field: string][] = [
   ["api", "widthApiKey"],
@@ -13,16 +13,21 @@ function maskKey(k: string): string {
   return k ? `${"*".repeat(Math.max(0, k.length - 4))}${k.slice(-4)}` : "";
 }
 
-export async function GET() {
-  const settings = getSettings();
-  const masked = structuredClone(settings) as unknown as Record<string, Record<string, unknown>>;
+/** Deep-copy settings with secret fields masked — used by BOTH GET and PUT
+ *  responses (returning raw keys from PUT would leak them to the client). */
+function maskedSettings(settings: unknown): Record<string, Record<string, unknown>> {
+  const masked = structuredClone(settings) as Record<string, Record<string, unknown>>;
   for (const [section, field] of SECRET_FIELDS) {
     const value = masked[section]?.[field];
     if (typeof value === "string" && value) {
       masked[section][field] = maskKey(value);
     }
   }
-  return NextResponse.json(masked);
+  return masked;
+}
+
+export async function GET() {
+  return NextResponse.json(maskedSettings(getSettings()));
 }
 
 export async function PUT(req: Request) {
@@ -77,5 +82,5 @@ export async function PUT(req: Request) {
   }
 
   const updated = updateSettings(body);
-  return NextResponse.json({ ok: true, settings: updated });
+  return NextResponse.json({ ok: true, settings: maskedSettings(updated) });
 }
