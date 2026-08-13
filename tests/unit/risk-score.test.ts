@@ -172,11 +172,27 @@ describe("KYT counterparty anchoring", () => {
     expect(s.score).toBeCloseTo(50 * Math.min(5000 / 7000, 1), 1); // ~35.7
   });
 
-  it("counterpartyFlagged fills the direct-critical cell with the full tx", () => {
-    const s = scoreFromHits([], 7000, null, { counterpartyAnchored: true, counterpartyFlagged: true });
+  it("counterpartyFlaggedIn fills the direct-in cell with the full tx", () => {
+    const s = scoreFromHits([], 7000, null, { counterpartyAnchored: true, counterpartyFlaggedIn: true });
     expect(s.score).toBe(80);
     expect(s.verdict).toBe("block");
     expect(s.selfHit).toBe(false);
+  });
+
+  it("counterpartyFlaggedOut (recipient flagged — CFT) fills the direct-out cell", () => {
+    const s = scoreFromHits([], null, 7000, { counterpartyAnchored: true, counterpartyFlaggedOut: true });
+    expect(s.score).toBe(80); // outBases.direct 80 × critical × 100%
+    expect(s.components[0]).toMatchObject({ direction: "out", hopBucket: "direct" });
+  });
+
+  it("KYT direction comes from the rule-code prefix, not pathFlow", () => {
+    // API quirk: KYT_OUT hits also report pathFlow "inflow" — the prefix wins.
+    const h = inflowHit(500, "TNbr", 1);
+    h.ruleCode = "KYT_OUT_CYBER_EXPOSURE";
+    const s = scoreFromHits([h], null, 1000, { counterpartyAnchored: true });
+    expect(s.components[0].direction).toBe("out");
+    expect(s.components[0].hopBucket).toBe("hop2"); // +1 anchor shift
+    expect(s.score).toBeCloseTo(10 * 1.0 * 0.5, 1); // outBases.hop2 × critical × 50%
   });
 });
 

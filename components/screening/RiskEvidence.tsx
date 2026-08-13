@@ -43,10 +43,16 @@ function nodeTags(n: WidthPathNode): string[] {
   return out.slice(0, 2);
 }
 
-/** KYT anchoring info: inflow paths trace the tx's FROM address, outflow the TO. */
+/** KYT anchoring info: KYT_IN rules trace the tx's FROM address, KYT_OUT the TO. */
 export interface KytAnchors {
   from: string;
   to: string;
+}
+
+/** KYT side of a hit — from the rule-code prefix (pathFlow is unreliable:
+ *  the API reports "inflow" on KYT_OUT hits too). */
+function kytSideOf(hit: WidthHit): "in" | "out" {
+  return String(hit.ruleCode || "").startsWith("KYT_OUT") ? "out" : "in";
 }
 
 /* ── one horizontal path strip ── */
@@ -59,9 +65,10 @@ function PathStrip({ hit, chain, targetAddress, totalIn, totalOut, kytAnchors }:
   kytAnchors?: KytAnchors;
 }) {
   const inflow = hit.pathFlow === "inflow";
+  const side = kytAnchors ? kytSideOf(hit) : (inflow ? "in" : "out");
   const nodes = [...(hit.pathNodes || [])].sort((a, b) => a.deep - b.deep);
   const edge = edgeOfHit(hit);
-  const denom = inflow ? totalIn : totalOut;
+  const denom = side === "in" ? totalIn : totalOut;
   const ratio = denom && edge.amount > 0 ? Math.min(edge.amount / denom, 1) : null;
   const opponent =
     hit.opponentAddress ||
@@ -77,7 +84,7 @@ function PathStrip({ hit, chain, targetAddress, totalIn, totalOut, kytAnchors }:
         </span>
         {kytAnchors && (
           <span className="badge" style={{ color: "var(--text-secondary)", border: "1px solid var(--border-default)" }}>
-            溯源 {inflow ? "from" : "to"} · {shortenAddr(inflow ? kytAnchors.from : kytAnchors.to)}
+            溯源 {side === "in" ? "from" : "to"} · {shortenAddr(side === "in" ? kytAnchors.from : kytAnchors.to)}
           </span>
         )}
         <span style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)" }}>{hit.hops} 跳</span>
@@ -105,9 +112,9 @@ function PathStrip({ hit, chain, targetAddress, totalIn, totalOut, kytAnchors }:
       <div style={{ display: "flex", alignItems: "center", gap: 0, overflowX: "auto", paddingBottom: 4 }}>
         {nodes.map((n, i) => {
           const isOpp = n.address === opponent;
-          const anchorAddr = kytAnchors ? (inflow ? kytAnchors.from : kytAnchors.to) : targetAddress;
+          const anchorAddr = kytAnchors ? (side === "in" ? kytAnchors.from : kytAnchors.to) : targetAddress;
           const isTarget = anchorAddr && n.address === anchorAddr;
-          const anchorLabel = kytAnchors ? (inflow ? "from(付款方)" : "to(收款方)") : "目标";
+          const anchorLabel = kytAnchors ? (side === "in" ? "from(付款方)" : "to(收款方)") : "目标";
           const tags = isOpp ? nodeTags(n) : [];
           return (
             <div key={i} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
@@ -177,7 +184,18 @@ function RuleCard({ ruleName, riskLevel, hits, chain, targetAddress, totalIn, to
         }}
       >
         <span style={{ color: "var(--text-tertiary)", fontSize: "0.7rem", transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▶</span>
-        <span style={{ flex: 1, fontWeight: 700, fontSize: "var(--text-sm)" }}>{ruleName}</span>
+        <span style={{ flex: 1, fontWeight: 700, fontSize: "var(--text-sm)", display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
+          {kytAnchors && (
+            <span className="badge" style={{
+              flexShrink: 0, fontWeight: 700, fontSize: "0.62rem",
+              color: hits[0] && kytSideOf(hits[0]) === "out" ? "var(--risk-medium)" : "var(--primary-500)",
+              border: `1px solid ${hits[0] && kytSideOf(hits[0]) === "out" ? "var(--risk-medium)" : "var(--primary-500)"}`,
+            }}>
+              {hits[0] && kytSideOf(hits[0]) === "out" ? "KYT-OUT" : "KYT-IN"}
+            </span>
+          )}
+          {ruleName}
+        </span>
         <span className={`risk-pill ${riskPillClass(riskLevel)}`}>{riskLabel(riskLevel)}</span>
         <span style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)" }}>×{hits.length} 条路径</span>
       </button>
@@ -255,6 +273,39 @@ export default function RiskEvidence({ hits, chain, targetAddress, totalIn, tota
             chain={chain}
           />
         </Suspense>
+      ) : kytAnchors ? (
+        // KYT: the same rule names exist on both sides — split into IN / OUT sections.
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
+          {([
+            ["inflow", `KYT-IN · 付款方资金来源(from ${shortenAddr(kytAnchors.from)})`, "var(--primary-500)"],
+            ["outflow", `KYT-OUT · 收款方资金去向(to ${shortenAddr(kytAnchors.to)})`, "var(--risk-medium)"],
+          ] as const).map(([flow, label, color]) => {
+            const side = groups.filter((g) => (g.hits[0] ? kytSideOf(g.hits[0]) : "in") === (flow === "outflow" ? "out" : "in"));
+            if (side.length === 0) return null;
+            return (
+              <div key={flow} style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
+                <div style={{ fontSize: "var(--text-xs)", fontWeight: 800, color, letterSpacing: "0.02em", marginTop: flow === "outflow" ? "var(--sp-2)" : 0 }}>
+                  {label}
+                  <span style={{ fontWeight: 400, color: "var(--text-tertiary)", marginLeft: 8 }}>{side.length} 组规则</span>
+                </div>
+                {side.map((g, i) => (
+                  <RuleCard
+                    key={i}
+                    ruleName={g.ruleName}
+                    riskLevel={g.riskLevel}
+                    hits={g.hits}
+                    chain={chain}
+                    targetAddress={targetAddress}
+                    totalIn={totalIn}
+                    totalOut={totalOut}
+                    defaultOpen={flow === "inflow" && i === 0}
+                    kytAnchors={kytAnchors}
+                  />
+                ))}
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
           {groups.map((g, i) => (

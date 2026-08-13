@@ -4,7 +4,7 @@ import { kytScreen, screenStatusLabel, type KytScreenResult, type KytDirection }
 import { getSettings } from "@/lib/settings";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
 import { resolveTxEndpoints, type TxEndpoints } from "@/lib/chain-txs";
-import { scoreFromHits, detectSelfHit } from "@/lib/risk-score";
+import { scoreFromHits } from "@/lib/risk-score";
 import crypto from "crypto";
 
 // In-memory job storage
@@ -150,7 +150,12 @@ async function runKytScreening(
       {
         config: getSettings().scoring,
         counterpartyAnchored: true,
-        counterpartyFlagged: detectSelfHit(result.hits),
+        counterpartyFlaggedIn: result.hits.some(
+          (h) => h.ruleCode.startsWith("KYT_IN") && h.ruleCode.includes("SELFHIT"),
+        ),
+        counterpartyFlaggedOut: result.hits.some(
+          (h) => h.ruleCode.startsWith("KYT_OUT") && h.ruleCode.includes("SELFHIT"),
+        ),
       },
     );
 

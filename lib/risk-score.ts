@@ -165,9 +165,12 @@ export interface ScoreFromHitsOptions {
    * every path hop is shifted +1 before bucketing.
    */
   counterpartyAnchored?: boolean;
-  /** KYT: a *_SELFHIT rule fired — the counterparty itself is flagged; the
-   *  full tx amount lands in the direct bucket (critical). */
-  counterpartyFlagged?: boolean;
+  /** KYT: a KYT_IN_*_SELFHIT fired — the SENDER itself is flagged; the full
+   *  tx amount lands in the direct-inflow bucket (critical). */
+  counterpartyFlaggedIn?: boolean;
+  /** KYT: a KYT_OUT_*_SELFHIT fired — the RECIPIENT itself is flagged (CFT:
+   *  paying a flagged entity directly); full tx amount → direct-outflow. */
+  counterpartyFlaggedOut?: boolean;
   /** KYA: the subject itself is sanctioned/frozen → selfHitScore override. */
   selfHit?: boolean;
 }
@@ -194,7 +197,11 @@ export function scoreFromHits(
   for (const h of hits) {
     const e = edgeOfHit(h);
     if (e.amount <= 0) continue;
-    const dir: "in" | "out" = h.pathFlow === "outflow" ? "out" : "in";
+    // pathFlow is unreliable for KYT (KYT_OUT hits also report "inflow") —
+    // in counterparty-anchored mode the rule-code prefix is the authority.
+    const dir: "in" | "out" = opts.counterpartyAnchored
+      ? (String(h.ruleCode || "").startsWith("KYT_OUT") ? "out" : "in")
+      : (h.pathFlow === "outflow" ? "out" : "in");
     const bucket = hopBucket((h.hops || 0) + hopShift);
     const base = (dir === "in" ? cfg.inBases : cfg.outBases)[bucket];
     const w = severityWeight(h.riskLevel, cfg);
@@ -227,12 +234,21 @@ export function scoreFromHits(
     cells.set(key, c);
   }
 
-  // 2b. KYT counterparty flagged: full tx amount is a direct critical inflow.
-  if (opts.counterpartyFlagged && totalIn != null && totalIn > 0) {
+  // 2b. KYT counterparty flagged: full tx amount into the direct cell of the
+  //     matching side (sender flagged → direct inflow; recipient flagged →
+  //     direct outflow, the first-class CFT signal).
+  if (opts.counterpartyFlaggedIn && totalIn != null && totalIn > 0) {
     cells.set("in|direct|critical", {
       direction: "in", hopBucket: "direct", severity: "critical",
       base: cfg.inBases.direct, weight: cfg.severityWeights.critical,
       amount: totalIn, rawAmount: totalIn, ratio: 0, points: 0,
+    });
+  }
+  if (opts.counterpartyFlaggedOut && totalOut != null && totalOut > 0) {
+    cells.set("out|direct|critical", {
+      direction: "out", hopBucket: "direct", severity: "critical",
+      base: cfg.outBases.direct, weight: cfg.severityWeights.critical,
+      amount: totalOut, rawAmount: totalOut, ratio: 0, points: 0,
     });
   }
 
@@ -277,7 +293,7 @@ export function scoreFromHits(
     score,
     verdict: score == null ? null : scoreVerdict(score, cfg.bands),
     selfHit: !!opts.selfHit,
-    counterpartyFlagged: !!opts.counterpartyFlagged,
+    counterpartyFlagged: !!opts.counterpartyFlaggedIn || !!opts.counterpartyFlaggedOut,
     components,
     r1: totalIn ? Math.min(directAmount / totalIn, 1) : 0,
     r2: totalIn ? Math.min(indirectAmount / totalIn, 1) : 0,
