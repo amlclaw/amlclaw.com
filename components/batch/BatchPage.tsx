@@ -24,6 +24,22 @@ const RISK_FILTERS = [
 
 type RiskFilter = (typeof RISK_FILTERS)[number]["value"];
 
+/** Human-readable duration, e.g. 12.3s / 1m23s. */
+function fmtDur(ms?: number): string {
+  if (ms == null || ms < 0) return "—";
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)}s`;
+  const m = Math.floor(s / 60);
+  const rem = Math.round(s % 60);
+  return `${m}m${String(rem).padStart(2, "0")}s`;
+}
+
+/** Batch wall-clock duration: created_at → completed_at (or now while running). */
+function batchDuration(batch: BatchJob): string {
+  const end = batch.completed_at ? new Date(batch.completed_at).getTime() : Date.now();
+  return fmtDur(end - new Date(batch.created_at).getTime());
+}
+
 export default function BatchPage({ type }: { type: BatchType }) {
   const isKya = type === "kya";
   const [itemsText, setItemsText] = useState("");
@@ -178,6 +194,9 @@ export default function BatchPage({ type }: { type: BatchType }) {
             </div>
             <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)" }}>
               {batch.done}/{batch.total} done · {batch.failed} failed · <span style={{ color: "var(--danger)", fontWeight: 700 }}>{batch.flagged} flagged</span>
+              <span style={{ marginLeft: 8 }}>
+                耗时 <b style={{ color: "var(--text-secondary)", fontFamily: "var(--mono)" }}>{batchDuration(batch)}</b>
+              </span>
             </div>
             <div style={{ flex: 1, minWidth: 160, display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
               <div style={{ flex: 1, height: 8, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden" }}>
@@ -313,6 +332,7 @@ function BatchTable({ batch, type }: { batch: BatchJob; type: BatchType }) {
               <th>Status</th>
               <th title={type === "kya" ? "地址自身标签 subjectTags" : "发送方标签 fromTags"}>Tags</th>
               <th>Score · Verdict</th>
+              <th title="该条从开始筛查到出结果的时间">耗时</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -387,6 +407,9 @@ function ItemRow({ item, type, open, onToggle }: {
         ) : item.status === "completed" ? (
           <span style={{ color: riskColorVar(item.risk || "low"), fontWeight: 700 }}>{riskLabel(item.risk || "low")}</span>
         ) : "—"}
+      </td>
+      <td style={{ fontFamily: "var(--mono)", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+        {item.status === "running" ? "…" : fmtDur(item.elapsedMs)}
       </td>
       <td style={{ whiteSpace: "nowrap" }}>
         <RowActions item={item} type={type} />
@@ -472,7 +495,7 @@ function TagChips({ tags }: { tags?: WidthTag[] }) {
 /* ── CSV export ── */
 
 function exportCsv(batch: BatchJob) {
-  const header = ["index", "subject", "chain", "status", "risk", "score", "verdict", "error"];
+  const header = ["index", "subject", "chain", "status", "risk", "score", "verdict", "elapsed_seconds", "error"];
   const rows = batch.items.map((it) => [
     it.index,
     it.subject,
@@ -481,6 +504,7 @@ function exportCsv(batch: BatchJob) {
     it.status === "completed" ? (it.risk ?? "") : "",
     it.score != null ? String(it.score) : "",
     it.verdict ?? "",
+    it.elapsedMs != null ? (it.elapsedMs / 1000).toFixed(1) : "",
     it.error ?? "",
   ]);
   const csv = [header, ...rows]

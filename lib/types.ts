@@ -144,6 +144,8 @@ export interface BatchItemSummary {
   verdict?: string | null;
   /** The subject's own tags: KYA = subjectTags, KYT = fromTags (sender). */
   tags?: WidthTag[];
+  /** Wall-clock time of this item's screen, in ms (start → result/error). */
+  elapsedMs?: number;
   error?: string;
 }
 

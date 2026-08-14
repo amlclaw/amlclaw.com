@@ -173,6 +173,7 @@ async function runBatch(id: string) {
       const i = cursor++;
       if (i >= batch.total) return;
       const item = batch.items[i];
+      const startedAt = Date.now();
       try {
         const payload = await screenItem(batch.type, item.subject, item.chain);
         saveBatchItem(id, i, payload);
@@ -194,6 +195,7 @@ async function runBatch(id: string) {
         item.error = e instanceof Error ? e.message : String(e);
         batch.failed++;
       } finally {
+        item.elapsedMs = Date.now() - startedAt;
         batch.done++;
         persist(batch);
       }
