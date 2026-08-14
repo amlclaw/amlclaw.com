@@ -214,11 +214,17 @@ export default function BatchPage({ type }: { type: BatchType }) {
 
       {/* ── Batch history (persisted under data/batches/, survives refresh/restart) ── */}
       <div className="card" style={{ padding: "var(--sp-4)" }}>
-        <div style={{ fontSize: "var(--text-sm)", fontWeight: 700, marginBottom: "var(--sp-2)" }}>
-          Batch History · 批次历史
-          <span className="badge" style={{ marginLeft: 8, fontWeight: 400, color: "var(--text-tertiary)" }}>
-            完成/中断的批次保存在 data/batches/,刷新或重启后仍可查看
-          </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginBottom: "var(--sp-2)" }}>
+          <div style={{ fontSize: "var(--text-sm)", fontWeight: 700 }}>
+            Batch History · 批次历史
+            <span className="badge" style={{ marginLeft: 8, fontWeight: 400, color: "var(--text-tertiary)" }}>
+              完成/中断的批次保存在 data/batches/,刷新或重启后仍可查看
+            </span>
+          </div>
+          <div style={{ flex: 1 }} />
+          <button className="btn btn-sm btn-secondary" onClick={loadHistory} title="手动刷新批次历史">
+            ⟳ 刷新
+          </button>
         </div>
         {history.length === 0 ? (
           <div style={{ textAlign: "center", color: "var(--text-tertiary)", fontSize: "var(--text-xs)", padding: "var(--sp-6)" }}>
