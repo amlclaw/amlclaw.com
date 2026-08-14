@@ -2,12 +2,11 @@
 
 /**
  * Fund-attribution risk score card ("资金占比评分") — shown on KYA and KYT
- * reports. Renders the score, the per-component breakdown (each line is
- * amount / denominator × weight = points, individually verifiable), and the
- * formula in plain language.
+ * reports. The score & component breakdown come straight from the width.info
+ * engine (`result.score`); this card only renders them.
  */
 import type { FundScore } from "@/lib/risk-score";
-import type { AddressStats } from "@/lib/chain-txs";
+import type { ScoreOverview } from "@/lib/width-api";
 
 export const VERDICT_UI: Record<string, { label: string; zh: string; color: string }> = {
   accept: { label: "Accept", zh: "放行", color: "var(--success)" },
@@ -89,7 +88,7 @@ function ComponentRow({ label, amount, denom, ratio, weight, color }: {
 
 export default function FundScoreCard({ fundScore, chainStats, mode }: {
   fundScore: FundScore;
-  chainStats?: (AddressStats & { balance: number | null }) | null;
+  chainStats?: ScoreOverview | null;
   mode: "kya" | "kyt";
 }) {
   const fs = fundScore;
@@ -130,7 +129,7 @@ export default function FundScoreCard({ fundScore, chainStats, mode }: {
 
         {fs.score == null && !fs.selfHit && (
           <div className="report-alert" style={{ marginBottom: "var(--sp-3)", fontSize: "var(--text-xs)" }}>
-            链上总量数据不可用(Etherscan/TronGrid 拉取失败或未配置 Key),无法计算占比——下方仅展示去重后的风险金额。
+            width 引擎未返回资金占比评分(分母不可用)——下方仅展示去重后的风险金额。
           </div>
         )}
 
@@ -186,7 +185,7 @@ export default function FundScoreCard({ fundScore, chainStats, mode }: {
           </div>
         )}
 
-        {/* chain stats context (KYA) */}
+        {/* chain stats context (KYA) — from the width engine's scoreOverview */}
         {mode === "kya" && chainStats && (
           <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", borderTop: "1px dashed var(--border-subtle)", paddingTop: "var(--sp-2)", marginBottom: "var(--sp-2)", display: "flex", gap: "var(--sp-4)", flexWrap: "wrap" }}>
             <span>In: <b style={{ color: "var(--text-secondary)" }}>{chainStats.inCount} txs / {fmt(chainStats.inTotal)} {chainStats.token}</b></span>
@@ -197,7 +196,7 @@ export default function FundScoreCard({ fundScore, chainStats, mode }: {
         )}
         {mode === "kyt" && fs.totalIn != null && (
           <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", borderTop: "1px dashed var(--border-subtle)", paddingTop: "var(--sp-2)", marginBottom: "var(--sp-2)" }}>
-            分母 = 本笔交易转账金额 <b style={{ color: "var(--text-secondary)" }}>{fmt(fs.totalIn)}</b>(KYT 路径即「本笔资金」的来源/去向)
+            分母 = width 引擎的资金总量(totalIn <b style={{ color: "var(--text-secondary)" }}>{fmt(fs.totalIn)}</b> / totalOut {fs.totalOut != null ? fmt(fs.totalOut) : "—"})
           </div>
         )}
 
@@ -208,18 +207,16 @@ export default function FundScoreCard({ fundScore, chainStats, mode }: {
           </summary>
           <div style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", lineHeight: 1.8, paddingTop: "var(--sp-2)" }}>
             <p style={{ marginBottom: 6 }}>
-              <b>原则:钱只算一次,路径不加分。</b>
+              <b>评分由 width.info 引擎服务端计算,规则集在 width 侧配置。</b>
               多条风险路径命中同一笔资金只计一次(按「与目标相接的边」金额去重);
               同一笔钱同时命中多类风险时,按 <b>SELFHIT &gt; 直接(≤1跳) &gt; 间接(2跳以上)</b> 的严重度优先只归入一个桶,各桶资金互不重叠。
             </p>
             <p style={{ marginBottom: 6 }}>
-              <b>规则引擎公式:</b>每格贡献 =
+              <b>引擎公式:</b>每格贡献 =
               <code style={{ margin: "0 4px" }}>基数(方向×跳数桶) × 严重度乘数(规则等级) × 资金占比</code>
-              ,总分为各格之和(封顶 100)。默认基数:入金 0-1跳 80 / 2跳 50 / 3跳 40;
-              出金 0-1跳 <b>80</b>(CFT:直接资助被标记实体是一级信号)/ 2跳 10 / 3跳 5。
-              严重度乘数:critical 1.0 / high 0.8 / medium 0.6 / low 0.3(可在 Settings → Scoring 自定义)。
-              SELFHIT(地址本身被制裁/冻结)覆盖为 100
-              {mode === "kyt" && ";KYT 场景分母为本笔交易金额,打款方本身被标记时全额计入直接桶"}。
+              ,总分为各格之和(封顶 100)。基数和乘数由 width 服务端评分规则集(scoring ruleset)决定,可通过
+              <code style={{ margin: "0 4px" }}>scoring_ruleset_id</code> 切换;SELFHIT(地址本身被制裁/冻结)直接覆盖为高分
+              {mode === "kyt" && ";KYT 场景分母为本笔资金的总量,打款方本身被标记时全额计入直接桶"}。
             </p>
             <p style={{ margin: 0 }}>
               <b>分数段:</b>
@@ -227,7 +224,7 @@ export default function FundScoreCard({ fundScore, chainStats, mode }: {
               <span style={{ color: "var(--risk-medium)" }}> 20–50 人工复核</span> ·
               <span style={{ color: "var(--risk-high)" }}> 50–80 加强尽调</span> ·
               <span style={{ color: "var(--danger)" }}> 80–100 拒绝</span>。
-              规则等级(旧口径)回答「有没有风险连接」,本评分(新口径)回答「有多少钱有问题」——两者互补,处置以本评分为主。
+              规则等级回答「有没有风险连接」,资金占比评分回答「有多少钱有问题」——两者互补,处置以评分为主。
             </p>
           </div>
         </details>

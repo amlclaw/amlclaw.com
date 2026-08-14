@@ -3,8 +3,7 @@ import { saveHistoryEntry } from "@/lib/storage";
 import { kytScreen, screenStatusLabel, type KytScreenResult, type KytDirection } from "@/lib/width-api";
 import { getSettings } from "@/lib/settings";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
-import { resolveTxEndpoints, type TxEndpoints } from "@/lib/chain-txs";
-import { scoreFromHits } from "@/lib/risk-score";
+import { resolveTxEndpoints } from "@/lib/chain-txs";
 import crypto from "crypto";
 
 // In-memory job storage
@@ -36,6 +35,8 @@ export async function POST(req: Request) {
     : settings.screening.minAmount;
   const maxOpponentPaths = parseInt(body.max_opponent_paths || String(settings.screening.maxOpponentPaths));
   const isPenetrateContract = body.is_penetrate_contract === true;
+  const scoringRulesetId = parseInt(String(body.scoring_ruleset_id ?? settings.screening.defaultScoringRulesetId)) || 0;
+  const forceTimeSequence = body.force_time_sequence !== undefined ? body.force_time_sequence === true : settings.screening.forceTimeSequence;
   const minTimestamp = body.min_timestamp ? Number(body.min_timestamp) : 0;
   const maxTimestamp = body.max_timestamp ? Number(body.max_timestamp) : Date.now();
 
@@ -62,6 +63,8 @@ export async function POST(req: Request) {
       min_amount: minAmount,
       max_opponent_paths: maxOpponentPaths,
       is_penetrate_contract: isPenetrateContract,
+      scoring_ruleset_id: scoringRulesetId,
+      force_time_sequence: forceTimeSequence,
       min_timestamp: minTimestamp,
       max_timestamp: maxTimestamp,
     },
@@ -80,6 +83,8 @@ export async function POST(req: Request) {
     maxOpponentPaths,
     minAmount,
     isPenetrateContract,
+    scoringRulesetId,
+    forceTimeSequence,
     minTimestamp,
     maxTimestamp,
   });
@@ -102,6 +107,8 @@ async function runKytScreening(
     maxOpponentPaths: number;
     minAmount: number;
     isPenetrateContract: boolean;
+    scoringRulesetId: number;
+    forceTimeSequence: boolean;
     minTimestamp: number;
     maxTimestamp: number;
   },
@@ -125,6 +132,8 @@ async function runKytScreening(
         maxTimestamp: p.maxTimestamp,
         inRulesetId: p.inRulesetId,
         outRulesetId: p.outRulesetId,
+        scoringRulesetId: p.scoringRulesetId,
+        forceTimeSequence: p.forceTimeSequence,
       },
       {
         onStatus: (s) => {
@@ -134,30 +143,13 @@ async function runKytScreening(
       },
     );
 
-    // Fund-attribution score. For a transaction the denominator is the tx's own
-    // transfer amount (KYT paths are scoped to the funds behind this transfer).
-    // KYT paths are anchored at the tx COUNTERPARTY (hops count from the
-    // sender/recipient, not from the tx): every path hit is indirect for the
-    // subject, and *_SELFHIT (counterparty itself flagged) maps to direct.
-    kytJobs[jobId].progress = "Computing fund-attribution score…";
-    let txEndpoints: TxEndpoints | null = null;
-    try { txEndpoints = await resolveTxEndpoints(p.chain, p.txId); } catch { /* score degrades */ }
-    const txAmount = txEndpoints ? txEndpoints.amount : null;
-    const fundScore = scoreFromHits(
-      result.hits,
-      p.direction !== "out" ? txAmount : null,
-      p.direction !== "in" ? txAmount : null,
-      {
-        config: getSettings().scoring,
-        counterpartyAnchored: true,
-        counterpartyFlaggedInLevel: result.hits.find(
-          (h) => h.ruleCode.startsWith("KYT_IN") && h.ruleCode.includes("SELFHIT"),
-        )?.riskLevel ?? null,
-        counterpartyFlaggedOutLevel: result.hits.find(
-          (h) => h.ruleCode.startsWith("KYT_OUT") && h.ruleCode.includes("SELFHIT"),
-        )?.riskLevel ?? null,
-      },
-    );
+    // Fund score is computed server-side by the width engine — use it directly.
+    // (Overall `score` first; in/out sub-scores are available on the result.)
+    const fundScore = result.score;
+
+    // Resolve the tx from/to for display only (report header + KYT anchors).
+    let txEndpoints = null;
+    try { txEndpoints = await resolveTxEndpoints(p.chain, p.txId); } catch { /* display degrades */ }
 
     const jobData: Record<string, unknown> = {
       status: "completed",
@@ -175,8 +167,8 @@ async function runKytScreening(
       subject: p.txId,
       direction: p.direction,
       risk_level: result.risk,
-      score: fundScore.score,
-      verdict: fundScore.verdict,
+      score: fundScore?.score ?? null,
+      verdict: fundScore?.verdict ?? null,
       hits_count: result.hits.length,
       completed_at: jobData.completed_at as string,
       source: "manual",

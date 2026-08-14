@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSettings, updateSettings } from "@/lib/settings";
 
-const ALLOWED_SECTIONS = new Set(["api", "screening", "monitoring", "scoring", "notifications"]);
+const ALLOWED_SECTIONS = new Set(["api", "screening", "monitoring", "notifications"]);
 
 const SECRET_FIELDS: [section: string, field: string][] = [
   ["api", "widthApiKey"],

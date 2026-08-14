@@ -67,7 +67,7 @@ From any KYT result, put the transaction's `from` or `to` address under watch. E
 
 ## Features
 
-- **Fund-attribution score (资金占比评分)** — beyond rule levels, every KYA/KYT report computes how much *money* is actually risky: hit paths are deduped to subject-adjacent edges (money counted once — paths are evidence, not score), then `score = 80×r₁ (direct inflow ratio) + 40×r₂ (indirect) + 10×r_out`, with SELFHIT overriding to 100. Denominators come from Etherscan/TronGrid volume (KYA) or the tx amount (KYT). Bands: 0-20 accept · 20-50 review · 50-80 enhanced DD · 80-100 block
+- **Fund-attribution score (资金占比评分, server-side)** — the width.info engine scores every KYA/KYT report (`score` / `inScore` / `outScore` in the response): hit paths are deduped to subject-adjacent edges (money counted once — paths are evidence, not score), each cell contributes `base(direction × hop bucket) × severity weight × fund ratio`, SELFHIT overrides, total clamped to 100. Bands: 0-20 accept · 20-50 review · 50-80 enhanced DD · 80-100 block. The UI renders the score exactly as the API returns it — no local re-computation.
 - **Server-side rulesets** — no local rule maintenance; `ruleset_id 0` = builtin defaults, or reference your own rulesets by id from width.info → Compliance → Rulesets
 - **Explorer-style ledgers** — every monitored transaction / scan in a filterable table (by risk level, time range) with per-row evidence; failed screens auto-retry
 - **Evidence graph** — interactive fund-flow visualization (React Flow + dagre), cluster aggregation for same-tag risk sources

@@ -18,6 +18,21 @@
  * KYT-IN / KYT-OUT builtins per direction).
  */
 import { getWidthApiKey, getWidthBaseUrl } from "./settings";
+import type { FundScore } from "./risk-score";
+
+/** Address volume + balance snapshot the engine used as score denominators. */
+export interface ScoreOverview {
+  address: string;
+  token: string;
+  inTotal: number;
+  outTotal: number;
+  inCount: number;
+  outCount: number;
+  balance: number;
+  firstTs: number;
+  lastTs: number;
+  truncated?: boolean;
+}
 
 // ---------------------------------------------------------------------------
 // Types (verified against live API responses 2026-07-22)
@@ -104,6 +119,10 @@ export interface KyaScreenResult {
   inflowRiskRate: number;
   outflowRiskAmount: number;
   outflowRiskRate: number;
+  /** Fund-attribution score computed server-side by the width engine. */
+  score: FundScore | null;
+  scoreOverview: ScoreOverview | null;
+  subjectTags: WidthTag[];
 }
 
 export interface KytScreenResult {
@@ -117,6 +136,14 @@ export interface KytScreenResult {
   rulesetId: number;
   totalPaths: number;
   hitPaths: number;
+  /** Overall fund score (server-side). in/out sub-scores for direction split. */
+  score: FundScore | null;
+  inScore: FundScore | null;
+  outScore: FundScore | null;
+  scoreOverview: ScoreOverview | null;
+  inScoreOverview: ScoreOverview | null;
+  outScoreOverview: ScoreOverview | null;
+  fromTags: WidthTag[];
 }
 
 export interface KyaScreenParams {
@@ -132,6 +159,11 @@ export interface KyaScreenParams {
   maxOpponentPaths?: number;
   isPenetrateContract?: boolean;
   rulesetId?: number; // 0 = builtin default
+  scoringRulesetId?: number; // 0 = builtin scoring matrix (server-side)
+  /** Enforce chronological order along each path (each hop no earlier than the previous). */
+  forceTimeSequence?: boolean;
+  /** If the subject is a known exchange, treat it as immune (score 0 / no risk). */
+  cexImmune?: boolean;
   scenario?: string; // all | deposit | withdrawal | cdd | monitoring | screening
 }
 
@@ -152,6 +184,8 @@ export interface KytScreenParams {
   isPenetrateContract?: boolean;
   inRulesetId?: number; // 0 = KYT-IN builtin
   outRulesetId?: number; // 0 = KYT-OUT builtin
+  scoringRulesetId?: number; // 0 = builtin scoring matrix (server-side)
+  forceTimeSequence?: boolean;
   scenario?: string;
 }
 
@@ -342,7 +376,10 @@ export async function kyaScreen(
       max_nodes_per_hop: params.maxNodesPerHop ?? 200,
       max_opponent_paths: params.maxOpponentPaths ?? 50,
       is_penetrate_contract: params.isPenetrateContract ?? false,
+      force_time_sequence: params.forceTimeSequence ?? true,
+      cex_immune: params.cexImmune ?? true,
       ruleset_id: params.rulesetId ?? 0,
+      scoring_ruleset_id: params.scoringRulesetId ?? 0,
       scenario: params.scenario ?? "all",
     },
     progress,
@@ -370,9 +407,11 @@ export async function kytScreen(
       max_nodes_per_hop: params.maxNodesPerHop ?? 200,
       max_opponent_paths: params.maxOpponentPaths ?? 50,
       is_penetrate_contract: params.isPenetrateContract ?? false,
+      force_time_sequence: params.forceTimeSequence ?? true,
       in_ruleset_id: params.inRulesetId ?? 0,
       out_ruleset_id: params.outRulesetId ?? 0,
       ruleset_id: 0,
+      scoring_ruleset_id: params.scoringRulesetId ?? 0,
       scenario: params.scenario ?? "all",
     },
     progress,
@@ -436,9 +475,55 @@ function normalizeHit(raw: Record<string, unknown>): WidthHit {
   };
 }
 
+/**
+ * Normalize a tag object — the API returns camelCase for fromTags/subjectTags
+ * ({primaryCategory, tertiaryCategory, riskLevel}) but snake_case inside
+ * pathNodes[].tags — into the canonical snake_case WidthTag shape.
+ */
+function normalizeTag(t: unknown): WidthTag {
+  if (!t || typeof t !== "object") return {};
+  const o = t as Record<string, unknown>;
+  const pick = (camel: string, snake: string) => {
+    const v = o[camel] ?? o[snake];
+    return v == null ? undefined : String(v);
+  };
+  return {
+    primary_category: pick("primaryCategory", "primary_category"),
+    secondary_category: pick("secondaryCategory", "secondary_category"),
+    tertiary_category: pick("tertiaryCategory", "tertiary_category"),
+    quaternary_category: pick("quaternaryCategory", "quaternary_category"),
+    risk_level: pick("riskLevel", "risk_level"),
+  };
+}
+
+/** Pass through the server-side FundScore (shape already matches). */
+function parseScore(s: unknown): FundScore | null {
+  return s && typeof s === "object" ? (s as FundScore) : null;
+}
+
+function parseOverview(o: unknown): ScoreOverview | null {
+  if (!o || typeof o !== "object") return null;
+  const d = o as Record<string, unknown>;
+  return {
+    address: String(d.address ?? ""),
+    token: String(d.token ?? "usdt"),
+    inTotal: Number(d.inTotal ?? 0),
+    outTotal: Number(d.outTotal ?? 0),
+    inCount: Number(d.inCount ?? 0),
+    outCount: Number(d.outCount ?? 0),
+    balance: Number(d.balance ?? 0),
+    firstTs: Number(d.firstTs ?? 0),
+    lastTs: Number(d.lastTs ?? 0),
+    truncated: Boolean(d.truncated),
+  };
+}
+
 function normalizeKya(data: Record<string, unknown>): KyaScreenResult {
   const cluster = (data.cluster as Record<string, unknown>) || {};
   return {
+    score: parseScore(data.score),
+    scoreOverview: parseOverview(data.scoreOverview),
+    subjectTags: asArray<unknown>(data.subjectTags).map(normalizeTag),
     address: String(data.address ?? ""),
     chain: String(data.chain ?? ""),
     risk: normalizeRisk(data.risk),
@@ -462,6 +547,13 @@ function normalizeKya(data: Record<string, unknown>): KyaScreenResult {
 
 function normalizeKyt(data: Record<string, unknown>): KytScreenResult {
   return {
+    score: parseScore(data.score),
+    inScore: parseScore(data.inScore),
+    outScore: parseScore(data.outScore),
+    scoreOverview: parseOverview(data.scoreOverview),
+    inScoreOverview: parseOverview(data.inScoreOverview),
+    outScoreOverview: parseOverview(data.outScoreOverview),
+    fromTags: asArray<unknown>(data.fromTags).map(normalizeTag),
     transaction: String(data.transaction ?? ""),
     chain: String(data.chain ?? ""),
     risk: normalizeRisk(data.risk),

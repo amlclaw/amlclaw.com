@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { showToast } from "@/lib/utils";
 import { detectChainFromAddress } from "@/lib/chain-detect";
 
@@ -25,10 +25,34 @@ export default function ScreeningForm({ onJobStarted, onLoading, initialAddress,
   const [minAmount, setMinAmount] = useState("10");
   const [maxOpponentPaths, setMaxOpponentPaths] = useState("50");
   const [penetrateContract, setPenetrateContract] = useState(false);
+  const [forceTimeSequence, setForceTimeSequence] = useState(true);
+  const [cexImmune, setCexImmune] = useState(true);
+  const [scoringRulesetId, setScoringRulesetId] = useState("0");
   const [timeFrom, setTimeFrom] = useState(""); // datetime-local, empty = no limit
   const [timeTo, setTimeTo] = useState("");     // datetime-local, empty = now
   const [submitting, setSubmitting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Prefill advanced defaults (force_time_sequence / cex_immune / scoring ruleset)
+  // from Settings when the page mounts.
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((s) => {
+        if (s?.screening) {
+          setForceTimeSequence(s.screening.forceTimeSequence !== false);
+          setCexImmune(s.screening.cexImmune !== false);
+          setScoringRulesetId(String(s.screening.defaultScoringRulesetId ?? 0));
+          setInflowHops(String(s.screening.defaultInflowHops ?? 3));
+          setOutflowHops(String(s.screening.defaultOutflowHops ?? 1));
+          setRulesetId(String(s.screening.defaultKyaRulesetId ?? 0));
+          setMaxNodes(String(s.screening.maxNodesPerHop ?? 200));
+          setMaxOpponentPaths(String(s.screening.maxOpponentPaths ?? 50));
+          setMinAmount(String(s.screening.minAmount ?? 10));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -57,6 +81,9 @@ export default function ScreeningForm({ onJobStarted, onLoading, initialAddress,
             min_amount: minAmount,
             max_opponent_paths: maxOpponentPaths,
             is_penetrate_contract: penetrateContract,
+            scoring_ruleset_id: scoringRulesetId,
+            force_time_sequence: forceTimeSequence,
+            cex_immune: cexImmune,
             min_timestamp: timeFrom ? new Date(timeFrom).getTime() : 0,
             max_timestamp: timeTo ? new Date(timeTo).getTime() : undefined,
           }),
@@ -75,7 +102,7 @@ export default function ScreeningForm({ onJobStarted, onLoading, initialAddress,
       }
       setSubmitting(false);
     },
-    [chain, address, token, rulesetId, inflowHops, outflowHops, maxNodes, minAmount, maxOpponentPaths, penetrateContract, timeFrom, timeTo, onJobStarted, onLoading]
+    [chain, address, token, rulesetId, inflowHops, outflowHops, maxNodes, minAmount, maxOpponentPaths, penetrateContract, scoringRulesetId, forceTimeSequence, cexImmune, timeFrom, timeTo, onJobStarted, onLoading]
   );
 
   return (
@@ -191,6 +218,16 @@ export default function ScreeningForm({ onJobStarted, onLoading, initialAddress,
               </div>
               <div style={{ display: "flex", gap: "var(--sp-3)", marginTop: "var(--sp-2)" }}>
                 <div style={{ flex: 1 }}>
+                  <label className="label">Scoring Ruleset ID (0 = builtin)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    min={0}
+                    value={scoringRulesetId}
+                    onChange={(e) => setScoringRulesetId(e.target.value)}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
                   <label className="label">Max Opponent Paths</label>
                   <input
                     type="number"
@@ -220,14 +257,32 @@ export default function ScreeningForm({ onJobStarted, onLoading, initialAddress,
                   />
                 </div>
               </div>
-              <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", marginTop: "var(--sp-2)", fontSize: "var(--text-xs)", color: "var(--text-secondary)", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={penetrateContract}
-                  onChange={(e) => setPenetrateContract(e.target.checked)}
-                />
-                Penetrate contract addresses (trace through contracts)
-              </label>
+              <div style={{ display: "flex", gap: "var(--sp-4)", flexWrap: "wrap", marginTop: "var(--sp-2)" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", fontSize: "var(--text-xs)", color: "var(--text-secondary)", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={forceTimeSequence}
+                    onChange={(e) => setForceTimeSequence(e.target.checked)}
+                  />
+                  强制时间序列(force_time_sequence)—— 多跳路径左侧时间须早于右侧
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", fontSize: "var(--text-xs)", color: "var(--text-secondary)", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={cexImmune}
+                    onChange={(e) => setCexImmune(e.target.checked)}
+                  />
+                  交易所免疫(cex_immune)—— 地址为 CEX 则判 0 分
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)", fontSize: "var(--text-xs)", color: "var(--text-secondary)", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={penetrateContract}
+                    onChange={(e) => setPenetrateContract(e.target.checked)}
+                  />
+                  Penetrate contract addresses (trace through contracts)
+                </label>
+              </div>
             </div>
           )}
         </div>

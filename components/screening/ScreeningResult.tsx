@@ -3,9 +3,8 @@
 import { useState } from "react";
 import { formatTime, shortenAddr, showToast } from "@/lib/utils";
 import { riskPillClass, riskColorVar, riskLabel } from "@/lib/risk-ui";
-import type { KyaScreenResult } from "@/lib/width-api";
+import type { KyaScreenResult, ScoreOverview } from "@/lib/width-api";
 import type { FundScore } from "@/lib/risk-score";
-import type { AddressStats } from "@/lib/chain-txs";
 import FundScoreCard, { ScoreVerdictBadge, PathAnalysisDivider } from "./FundScoreCard";
 import RiskEvidence from "./RiskEvidence";
 
@@ -80,7 +79,8 @@ function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string 
   const req = (job.request as Record<string, unknown>) || {};
   const hits = r.hits || [];
   const scenario = (req.scenario as string) || "all";
-  const chainStats = (job.chain_stats as (AddressStats & { balance: number | null }) | null) ?? null;
+  // Width engine's scoreOverview = the score denominators (volume snapshot).
+  const chainStats = (job.chain_stats as ScoreOverview | null) ?? null;
 
   return (
     <ResultContainer>
@@ -119,7 +119,7 @@ function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string 
         {job.fund_score != null && (
           <FundScoreCard
             fundScore={job.fund_score as FundScore}
-            chainStats={job.chain_stats as (AddressStats & { balance: number | null }) | null}
+            chainStats={job.chain_stats as ScoreOverview | null}
             mode="kya"
           />
         )}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatTime, showToast } from "@/lib/utils";
+import { riskPillClass, riskColorVar, riskLabel, riskSortRank, verdictColorVar, verdictZh } from "@/lib/risk-ui";
 import { RiskBadge } from "./ScreeningResult";
 import type { KytScreenResult } from "@/lib/width-api";
 import type { FundScore } from "@/lib/risk-score";
@@ -69,6 +70,9 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
   const fundScore = (job.fund_score as FundScore | null) ?? null;
   const tx = (job.tx_endpoints as { from: string; to: string; token: string; amount: number; timestamp?: number } | null) ?? null;
   const direction = (req.direction as string) || "both";
+
+  // Alerts from the width API (Chainalysis-style), sorted by severity desc.
+  const alerts = (r.alerts || []).slice().sort((a, b) => riskSortRank(b.alertLevel) - riskSortRank(a.alertLevel));
 
   return (
     <Container>
@@ -139,6 +143,16 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
                 ) : null}
               </tbody>
             </table>
+            {r.fromTags && r.fromTags.length > 0 && (
+              <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginTop: "var(--sp-2)", display: "flex", gap: "var(--sp-2)", flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ fontWeight: 600 }}>Sender Tags:</span>
+                {r.fromTags.map((t, i) => (
+                  <span key={i} className={`risk-pill ${riskPillClass(t.risk_level || "low")}`} style={{ fontSize: "0.65rem" }}>
+                    {[t.primary_category, t.tertiary_category].filter(Boolean).join(" · ")}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -147,8 +161,71 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
           <FundScoreCard fundScore={fundScore} mode="kyt" />
         )}
 
+        {/* ── IN / OUT directional sub-scores (from the width engine) ── */}
+        {(r.inScore || r.outScore) && (
+          <div className="report-section">
+            <div className="report-section-header">Directional Scores · 分向评分(KYT-IN 溯源 / KYT-OUT 去向)</div>
+            <div style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap" }}>
+              {r.inScore && (
+                <ScoreSplitBox title="KYT-IN · 付款方资金来源" score={r.inScore} color="var(--primary-500)" />
+              )}
+              {r.outScore && (
+                <ScoreSplitBox title="KYT-OUT · 收款方资金去向" score={r.outScore} color="var(--risk-medium)" />
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── Everything below is path-level EVIDENCE (rule engine view) ── */}
         {fundScore && <PathAnalysisDivider />}
+
+        {/* ── Alerts (Chainalysis-style, straight from the width API) ── */}
+        {alerts.length > 0 && (
+          <div className="report-section">
+            <div className="report-section-header">Alerts · 告警({alerts.length})</div>
+            <table className="data-table" style={{ fontSize: "var(--text-xs)" }}>
+              <thead>
+                <tr>
+                  <th>Level</th><th>Category</th><th>Exposure</th><th>Hops</th><th style={{ textAlign: "right" }}>Amount</th><th>Rule</th><th>Counterparty</th><th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {alerts.slice(0, 20).map((a, i) => (
+                  <tr key={i}>
+                    <td>
+                      <span style={{ color: riskColorVar(a.alertLevel), fontWeight: 700, textTransform: "uppercase" }}>
+                        {riskLabel(a.alertLevel)}
+                      </span>
+                    </td>
+                    <td>{a.category}</td>
+                    <td>{a.exposureType}{a.direction ? ` · ${a.direction}` : ""}</td>
+                    <td>{a.hops > 0 ? `${a.hops}h` : "—"}</td>
+                    <td style={{ fontFamily: "var(--mono)", textAlign: "right" }}>
+                      {a.alertAmount.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ fontFamily: "var(--mono)" }}>{a.categoryId}</td>
+                    <td style={{ fontFamily: "var(--mono)" }}>
+                      <a
+                        href={explorerUrl(r.chain || "Tron", a.opponentAddress)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "var(--text-secondary)", textDecoration: "none", wordBreak: "break-all" }}
+                      >
+                        {a.opponentAddress || "-"}
+                      </a>
+                    </td>
+                    <td>{a.action}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {alerts.length > 20 && (
+              <div style={{ fontSize: "0.65rem", color: "var(--text-tertiary)", marginTop: 4 }}>
+                Showing first 20 of {alerts.length} alerts.
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Risk Evidence: rule-grouped fund paths (证据核心) ──
             KYT paths anchor at the tx counterparty, so per-path ratio chips
@@ -200,6 +277,44 @@ function MonitorSideButton({ chain, txId, side }: { chain: string; txId: string;
       {state === "done" ? `✓ Monitoring ${side}` : state === "saving" ? "Adding..." : `⏱ Monitor ${side} address`}
     </button>
   );
+}
+
+/** One IN or OUT directional sub-score box (renders the width engine's score). */
+function ScoreSplitBox({ title, score, color }: { title: string; score: FundScore; color: string }) {
+  return (
+    <div style={{
+      flex: 1, minWidth: 240, padding: "var(--sp-3)", borderRadius: "var(--radius-md)",
+      border: `1px solid color-mix(in srgb, ${color} 45%, transparent)`,
+      background: `color-mix(in srgb, ${color} 6%, transparent)`,
+    }}>
+      <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color, letterSpacing: "0.02em", marginBottom: "var(--sp-2)" }}>
+        {title}
+      </div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "var(--sp-2)", flexWrap: "wrap" }}>
+        <span style={{ fontSize: "1.6rem", fontWeight: 800, color: verdictColorVar(score.verdict), lineHeight: 1 }}>
+          {score.score != null ? score.score : "—"}
+          <span style={{ fontSize: "0.6rem", fontWeight: 400, color: "var(--text-tertiary)" }}>/100</span>
+        </span>
+        <span className="badge" style={{ background: `color-mix(in srgb, ${verdictColorVar(score.verdict)} 15%, transparent)`, color: verdictColorVar(score.verdict), fontWeight: 700 }}>
+          {score.verdict ? `${score.verdict.toUpperCase()} · ${verdictZh(score.verdict)}` : "N/A"}
+        </span>
+        {score.selfHit && (
+          <span className="badge" style={{ background: "color-mix(in srgb, var(--danger) 15%, transparent)", color: "var(--danger)", fontWeight: 700 }}>
+            SELFHIT · {(score.selfHitLevel || "critical").toUpperCase()}
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize: "0.65rem", color: "var(--text-tertiary)", marginTop: "var(--sp-1)" }}>
+        {score.hitPaths} hit paths · {score.riskyEdges} deduped edges
+      </div>
+    </div>
+  );
+}
+
+function explorerUrl(chain: string, address: string): string {
+  return chain === "Ethereum"
+    ? `https://etherscan.io/address/${address}`
+    : `https://tronscan.org/#/address/${address}`;
 }
 
 function Container({ children }: { children: React.ReactNode }) {

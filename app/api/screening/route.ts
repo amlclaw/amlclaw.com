@@ -3,8 +3,6 @@ import { saveHistoryEntry } from "@/lib/storage";
 import { kyaScreen, screenStatusLabel, type KyaScreenResult } from "@/lib/width-api";
 import { getSettings } from "@/lib/settings";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
-import { fetchAddressStats, fetchTokenBalance, type AddressStats } from "@/lib/chain-txs";
-import { scoreFromHits, detectSelfHitLevel } from "@/lib/risk-score";
 import crypto from "crypto";
 
 // In-memory job storage
@@ -34,6 +32,9 @@ export async function POST(req: Request) {
     : settings.screening.minAmount;
   const maxOpponentPaths = parseInt(body.max_opponent_paths || String(settings.screening.maxOpponentPaths));
   const isPenetrateContract = body.is_penetrate_contract === true;
+  const scoringRulesetId = parseInt(String(body.scoring_ruleset_id ?? settings.screening.defaultScoringRulesetId)) || 0;
+  const forceTimeSequence = body.force_time_sequence !== undefined ? body.force_time_sequence === true : settings.screening.forceTimeSequence;
+  const cexImmune = body.cex_immune !== undefined ? body.cex_immune === true : settings.screening.cexImmune;
   const minTimestamp = body.min_timestamp ? Number(body.min_timestamp) : 0;
   const maxTimestamp = body.max_timestamp ? Number(body.max_timestamp) : Date.now();
 
@@ -59,6 +60,9 @@ export async function POST(req: Request) {
       min_amount: minAmount,
       max_opponent_paths: maxOpponentPaths,
       is_penetrate_contract: isPenetrateContract,
+      scoring_ruleset_id: scoringRulesetId,
+      force_time_sequence: forceTimeSequence,
+      cex_immune: cexImmune,
       min_timestamp: minTimestamp,
       max_timestamp: maxTimestamp,
     },
@@ -77,6 +81,9 @@ export async function POST(req: Request) {
     maxOpponentPaths,
     minAmount,
     isPenetrateContract,
+    scoringRulesetId,
+    forceTimeSequence,
+    cexImmune,
     minTimestamp,
     maxTimestamp,
   });
@@ -98,6 +105,9 @@ async function runKyaScreening(
     maxOpponentPaths: number;
     minAmount: number;
     isPenetrateContract: boolean;
+    scoringRulesetId: number;
+    forceTimeSequence: boolean;
+    cexImmune: boolean;
     minTimestamp: number;
     maxTimestamp: number;
   },
@@ -119,6 +129,9 @@ async function runKyaScreening(
         minTimestamp: p.minTimestamp,
         maxTimestamp: p.maxTimestamp,
         rulesetId: p.rulesetId,
+        scoringRulesetId: p.scoringRulesetId,
+        forceTimeSequence: p.forceTimeSequence,
+        cexImmune: p.cexImmune,
         scenario: p.scenario,
       },
       {
@@ -129,25 +142,9 @@ async function runKyaScreening(
       },
     );
 
-    // Fund-attribution score: chain volume denominators + edge-level dedupe.
-    // Degrades gracefully — a failed chain fetch leaves score null, amounts kept.
-    screeningJobs[jobId].progress = "Computing fund-attribution score…";
-    let chainStats: (AddressStats & { balance: number | null }) | null = null;
-    try {
-      const stats = await fetchAddressStats(p.chain, p.address, p.token);
-      let balance: number | null = null;
-      try { balance = await fetchTokenBalance(p.chain, p.address, p.token); } catch { /* keep null */ }
-      chainStats = { ...stats, balance };
-    } catch { /* score degrades to null */ }
-    const fundScore = scoreFromHits(
-      result.hits,
-      chainStats ? chainStats.inTotal : null,
-      chainStats ? chainStats.outTotal : null,
-      {
-        config: getSettings().scoring,
-        selfHitLevel: detectSelfHitLevel(result.hits, result.addressIdentifications),
-      },
-    );
+    // Score is computed server-side by the width engine; use it directly.
+    const fundScore = result.score;
+    const chainStats = result.scoreOverview;
 
     const jobData: Record<string, unknown> = {
       status: "completed",
@@ -165,8 +162,8 @@ async function runKyaScreening(
       subject: p.address,
       scenario: p.scenario,
       risk_level: result.risk,
-      score: fundScore.score,
-      verdict: fundScore.verdict,
+      score: fundScore?.score ?? null,
+      verdict: fundScore?.verdict ?? null,
       hits_count: result.hits.length,
       completed_at: jobData.completed_at as string,
       source: "manual",

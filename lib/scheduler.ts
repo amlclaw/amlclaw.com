@@ -28,8 +28,6 @@ import {
 } from "./monitor-txs";
 import { getSettings } from "./settings";
 import { sendWebhook, shouldAlert } from "./webhook";
-import { scoreFromHits, detectSelfHitLevel } from "./risk-score";
-import { fetchAddressStats } from "./chain-txs";
 import type { MonitorTask, MonitorRun, MonitorRunResult, MonitorRunSummary } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -309,25 +307,11 @@ async function runAddressMonitor(
         // Rolling window; never later than the tx itself (retries can predate last_run)
         minTimestamp: Math.min(windowStart, tx.timestamp),
         maxTimestamp: nowMs,
+        forceTimeSequence: settings.screening.forceTimeSequence,
       });
 
-      // Fund-attribution score: denominator = the tx's own amount; KYT paths
-      // are counterparty-anchored (rule-code prefix decides the side).
-      const fundScore = scoreFromHits(
-        result.hits,
-        tx.direction === "in" ? tx.amount : null,
-        tx.direction === "out" ? tx.amount : null,
-        {
-          config: settings.scoring,
-          counterpartyAnchored: true,
-          counterpartyFlaggedInLevel: result.hits.find(
-            (h) => h.ruleCode.startsWith("KYT_IN") && h.ruleCode.includes("SELFHIT"),
-          )?.riskLevel ?? null,
-          counterpartyFlaggedOutLevel: result.hits.find(
-            (h) => h.ruleCode.startsWith("KYT_OUT") && h.ruleCode.includes("SELFHIT"),
-          )?.riskLevel ?? null,
-        },
-      );
+      // Fund score is computed server-side by the width engine — use it directly.
+      const fundScore = result.score;
 
       // Save as screening history (cross-link)
       const jobId = crypto.randomUUID().slice(0, 8);
@@ -355,8 +339,8 @@ async function runAddressMonitor(
         subject: tx.tx_id,
         direction: tx.direction,
         risk_level: result.risk,
-        score: fundScore.score,
-        verdict: fundScore.verdict,
+        score: fundScore?.score ?? null,
+        verdict: fundScore?.verdict ?? null,
         hits_count: result.hits.length,
         completed_at: completedAt,
         source: "monitor",
@@ -365,8 +349,8 @@ async function runAddressMonitor(
       updateMonitorTx(task.id, tx.tx_id, {
         kyt_status: "screened",
         risk_level: result.risk,
-        score: fundScore.score,
-        verdict: fundScore.verdict,
+        score: fundScore?.score ?? null,
+        verdict: fundScore?.verdict ?? null,
         job_id: jobId,
         screened_at: completedAt,
         error: undefined,
@@ -376,8 +360,8 @@ async function runAddressMonitor(
         status: "completed",
         job_id: jobId,
         risk_level: result.risk,
-        score: fundScore.score,
-        verdict: fundScore.verdict,
+        score: fundScore?.score ?? null,
+        verdict: fundScore?.verdict ?? null,
         tx_id: tx.tx_id,
         direction: tx.direction,
         token: tx.token,
@@ -464,27 +448,18 @@ async function runKytMonitor(
     minAmount: settings.screening.minAmount,
     minTimestamp: monitorWindowStart(task),
     maxTimestamp: Date.now(),
+    forceTimeSequence: settings.screening.forceTimeSequence,
+    cexImmune: settings.screening.cexImmune,
   });
 
-  // Fund score for the watched address: chain volume denominators are
-  // best-effort (one stats fetch per cycle; score degrades to null on failure).
-  let statsIn: number | null = null;
-  let statsOut: number | null = null;
-  try {
-    const st = await fetchAddressStats(task.chain, task.address, "USDT");
-    statsIn = st.inTotal;
-    statsOut = st.outTotal;
-  } catch { /* degrade */ }
-  const fundScore = scoreFromHits(result.hits, statsIn, statsOut, {
-    config: settings.scoring,
-    selfHitLevel: detectSelfHitLevel(result.hits, result.addressIdentifications),
-  });
+  // Fund score is computed server-side by the width engine — use it directly.
+  const fundScore = result.score;
 
   const escalated = riskRank(result.risk) > riskRank(previousRisk);
   updateMonitor(task.id, {
     last_risk_level: result.risk,
-    last_score: fundScore.score,
-    last_verdict: fundScore.verdict,
+    last_score: fundScore?.score ?? null,
+    last_verdict: fundScore?.verdict ?? null,
   });
 
   // Save as screening history (cross-link)
@@ -511,8 +486,8 @@ async function runKytMonitor(
     subject: task.address,
     scenario: "all",
     risk_level: result.risk,
-    score: fundScore.score,
-    verdict: fundScore.verdict,
+    score: fundScore?.score ?? null,
+    verdict: fundScore?.verdict ?? null,
     hits_count: result.hits.length,
     completed_at: completedAt,
     source: "monitor",
@@ -538,8 +513,8 @@ async function runKytMonitor(
       job_id: jobId,
       address: task.address,
       risk_level: result.risk,
-      score: fundScore.score,
-      verdict: fundScore.verdict,
+      score: fundScore?.score ?? null,
+      verdict: fundScore?.verdict ?? null,
       previous_risk_level: previousRisk,
       escalated,
     }],
