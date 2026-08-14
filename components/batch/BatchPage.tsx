@@ -27,7 +27,6 @@ export default function BatchPage({ type }: { type: BatchType }) {
   const isKya = type === "kya";
   const [itemsText, setItemsText] = useState("");
   const [chain, setChain] = useState("Tron");
-  const [batchId, setBatchId] = useState<string | null>(null);
   const [batch, setBatch] = useState<BatchJob | null>(null);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<BatchIndexEntry[]>([]);
@@ -42,7 +41,11 @@ export default function BatchPage({ type }: { type: BatchType }) {
 
   useEffect(() => {
     loadHistory();
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    const t = setInterval(loadHistory, 15000); // keep history fresh (other tabs / background runs)
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      clearInterval(t);
+    };
   }, [loadHistory]);
 
   const stopPolling = useCallback(() => {
@@ -80,7 +83,6 @@ export default function BatchPage({ type }: { type: BatchType }) {
     }
     setLoading(true);
     setBatch(null);
-    setBatchId(null);
     try {
       const res = await fetch("/api/batch", {
         method: "POST",
@@ -92,7 +94,6 @@ export default function BatchPage({ type }: { type: BatchType }) {
         throw new Error(err.detail || "Failed to start batch");
       }
       const { batch_id } = await res.json();
-      setBatchId(batch_id);
       poll(batch_id);
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Error", "error");
@@ -177,12 +178,19 @@ export default function BatchPage({ type }: { type: BatchType }) {
         </div>
       )}
 
-      {/* ── Batch history ── */}
-      {history.length > 0 && (
-        <div className="card" style={{ padding: "var(--sp-4)" }}>
-          <div style={{ fontSize: "var(--text-sm)", fontWeight: 700, marginBottom: "var(--sp-2)" }}>
-            Batch History · 批次历史
+      {/* ── Batch history (persisted under data/batches/, survives refresh/restart) ── */}
+      <div className="card" style={{ padding: "var(--sp-4)" }}>
+        <div style={{ fontSize: "var(--text-sm)", fontWeight: 700, marginBottom: "var(--sp-2)" }}>
+          Batch History · 批次历史
+          <span className="badge" style={{ marginLeft: 8, fontWeight: 400, color: "var(--text-tertiary)" }}>
+            完成/中断的批次保存在 data/batches/,刷新或重启后仍可查看
+          </span>
+        </div>
+        {history.length === 0 ? (
+          <div style={{ textAlign: "center", color: "var(--text-tertiary)", fontSize: "var(--text-xs)", padding: "var(--sp-6)" }}>
+            暂无批次记录 — 提交一个批量检测后,结果会保存在这里。
           </div>
+        ) : (
           <table className="data-table" style={{ fontSize: "var(--text-xs)" }}>
             <thead>
               <tr>
@@ -192,7 +200,7 @@ export default function BatchPage({ type }: { type: BatchType }) {
             </thead>
             <tbody>
               {history.slice(0, 20).map((h) => (
-                <tr key={h.id} style={{ cursor: "pointer" }} onClick={() => { setBatchId(h.id); poll(h.id); }}>
+                <tr key={h.id} style={{ cursor: "pointer" }} onClick={() => { poll(h.id); }}>
                   <td><span className="badge">{h.type === "kya" ? "KYA" : "KYT"}</span></td>
                   <td style={{ fontFamily: "var(--mono)" }}>{h.id}</td>
                   <td>{h.chain}</td>
@@ -201,7 +209,12 @@ export default function BatchPage({ type }: { type: BatchType }) {
                   <td style={{ textAlign: "right", color: h.failed > 0 ? "var(--danger)" : undefined }}>{h.failed}</td>
                   <td style={{ textAlign: "right", color: h.flagged > 0 ? "var(--danger)" : undefined, fontWeight: 700 }}>{h.flagged}</td>
                   <td>
-                    <span className="badge" style={{ color: h.status === "completed" ? "var(--success)" : h.status === "error" ? "var(--danger)" : "var(--warning)" }}>
+                    <span className="badge" style={{
+                      color: h.status === "completed" ? "var(--success)"
+                        : h.status === "interrupted" ? "var(--warning)"
+                        : h.status === "error" ? "var(--danger)"
+                        : "var(--primary-500)",
+                    }}>
                       {h.status}
                     </span>
                   </td>
@@ -211,8 +224,8 @@ export default function BatchPage({ type }: { type: BatchType }) {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

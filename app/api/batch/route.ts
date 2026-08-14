@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   saveBatchMeta,
+  loadBatchMeta,
   loadBatchIndex,
   upsertBatchIndexEntry,
   saveBatchItem,
@@ -81,6 +82,24 @@ function persist(batch: BatchJob) {
   saveBatchMeta(batch);
   upsertBatchIndexEntry(indexEntryOf(batch));
 }
+
+// Stale-state recovery: a batch left "running" by a previous process (or a
+// dev hot-reload that reset the in-memory map) never gets its completion
+// write — mark it interrupted so it stays visible in history and its already-
+// finished items remain openable. Runs once at module load.
+(function markInterruptedBatches() {
+  try {
+    for (const entry of loadBatchIndex()) {
+      if (entry.status !== "running") continue;
+      const meta = loadBatchMeta(entry.id);
+      if (meta && meta.status === "running") {
+        meta.status = "interrupted";
+        meta.completed_at ??= new Date().toISOString();
+        persist(meta);
+      }
+    }
+  } catch { /* best-effort */ }
+})();
 
 /** Screen one item with settings defaults; returns the job-shaped payload. */
 async function screenItem(type: BatchType, subject: string, chain: string, token = "usdt"): Promise<Record<string, unknown>> {
@@ -240,3 +259,4 @@ export async function POST(req: Request) {
 export async function GET() {
   return NextResponse.json(loadBatchIndex());
 }
+
