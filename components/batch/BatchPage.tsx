@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import PageGuide from "@/components/shared/PageGuide";
 import { showToast, shortenAddr } from "@/lib/utils";
 import { explorerAddressUrl, explorerTxUrl } from "@/lib/explorers";
@@ -31,6 +32,20 @@ export default function BatchPage({ type }: { type: BatchType }) {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<BatchIndexEntry[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resultPanelRef = useRef<HTMLDivElement | null>(null);
+
+  /** Open a stored batch from history (completed/interrupted) and scroll to it. */
+  const openHistoryBatch = useCallback((id: string) => {
+    fetch(`/api/batch/${id}`)
+      .then((r) => r.json())
+      .then((data: BatchJob) => {
+        setBatch(data);
+        setLoading(false);
+        // Scroll once the panel has rendered (below).
+        setTimeout(() => resultPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+      })
+      .catch(() => showToast("Failed to load batch", "error"));
+  }, []);
 
   const loadHistory = useCallback(() => {
     fetch("/api/batch")
@@ -153,7 +168,7 @@ export default function BatchPage({ type }: { type: BatchType }) {
 
       {/* ── Active batch panel ── */}
       {batch && (
-        <div className="card" style={{ padding: "var(--sp-4)", marginBottom: "var(--sp-4)" }}>
+        <div ref={resultPanelRef} className="card" style={{ padding: "var(--sp-4)", marginBottom: "var(--sp-4)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-4)", flexWrap: "wrap", marginBottom: "var(--sp-3)" }}>
             <div style={{ fontSize: "var(--text-sm)", fontWeight: 700 }}>
               Batch {batch.id}
@@ -174,7 +189,7 @@ export default function BatchPage({ type }: { type: BatchType }) {
               <button className="btn btn-sm btn-secondary" onClick={() => exportCsv(batch)}>Export CSV</button>
             )}
           </div>
-          <BatchTable batch={batch} type={type} />
+          <BatchTable key={batch.id} batch={batch} type={type} />
         </div>
       )}
 
@@ -200,7 +215,7 @@ export default function BatchPage({ type }: { type: BatchType }) {
             </thead>
             <tbody>
               {history.slice(0, 20).map((h) => (
-                <tr key={h.id} style={{ cursor: "pointer" }} onClick={() => { poll(h.id); }}>
+                <tr key={h.id} style={{ cursor: "pointer" }} onClick={() => { openHistoryBatch(h.id); }}>
                   <td><span className="badge">{h.type === "kya" ? "KYA" : "KYT"}</span></td>
                   <td style={{ fontFamily: "var(--mono)" }}>{h.id}</td>
                   <td>{h.chain}</td>
@@ -298,6 +313,7 @@ function BatchTable({ batch, type }: { batch: BatchJob; type: BatchType }) {
               <th>Status</th>
               <th title={type === "kya" ? "地址自身标签 subjectTags" : "发送方标签 fromTags"}>Tags</th>
               <th>Score · Verdict</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -372,7 +388,57 @@ function ItemRow({ item, type, open, onToggle }: {
           <span style={{ color: riskColorVar(item.risk || "low"), fontWeight: 700 }}>{riskLabel(item.risk || "low")}</span>
         ) : "—"}
       </td>
+      <td style={{ whiteSpace: "nowrap" }}>
+        <RowActions item={item} type={type} />
+      </td>
     </tr>
+  );
+}
+
+/** Copy + jump to the full single-screen report (地址检测 / 交易检测). */
+function RowActions({ item, type }: { item: BatchJob["items"][number]; type: BatchType }) {
+  const copy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(item.subject);
+      showToast("已复制: " + shortenAddr(item.subject), "success");
+    } catch {
+      // Fallback for non-secure contexts
+      const ta = document.createElement("textarea");
+      ta.value = item.subject;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      showToast("已复制: " + shortenAddr(item.subject), "success");
+    }
+  };
+
+  const screenHref = type === "kya"
+    ? `/screening?address=${encodeURIComponent(item.subject)}&chain=${encodeURIComponent(item.chain)}`
+    : `/kyt?tx=${encodeURIComponent(item.subject)}&chain=${encodeURIComponent(item.chain)}`;
+
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <button
+        type="button"
+        className="btn btn-sm btn-secondary"
+        onClick={copy}
+        title="复制地址/交易哈希"
+        style={{ padding: "2px 8px", fontSize: "0.65rem" }}
+      >
+        ⧉ 复制
+      </button>
+      <Link
+        href={screenHref}
+        onClick={(e) => e.stopPropagation()}
+        className="btn btn-sm btn-secondary"
+        title={type === "kya" ? "在地址检测中打开完整报告" : "在交易检测中打开完整报告"}
+        style={{ padding: "2px 8px", fontSize: "0.65rem", textDecoration: "none" }}
+      >
+        {type === "kya" ? "地址检测 →" : "交易检测 →"}
+      </Link>
+    </span>
   );
 }
 
