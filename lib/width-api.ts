@@ -524,6 +524,7 @@ function normalizeHit(raw: Record<string, unknown>): WidthHit {
  * pathNodes[].tags — into the canonical snake_case WidthTag shape.
  */
 function normalizeTag(t: unknown): WidthTag {
+  if (typeof t === "string") return { primary_category: t };
   if (!t || typeof t !== "object") return {};
   const o = t as Record<string, unknown>;
   const pick = (camel: string, snake: string) => {

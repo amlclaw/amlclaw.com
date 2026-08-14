@@ -64,6 +64,9 @@ export async function PUT(req: Request) {
     if (s.maxOpponentPaths !== undefined && (s.maxOpponentPaths < 1 || s.maxOpponentPaths > 200)) {
       return NextResponse.json({ detail: "Max opponent paths must be 1-200" }, { status: 400 });
     }
+    if (s.defaultScoringRulesetId !== undefined && s.defaultScoringRulesetId < 0) {
+      return NextResponse.json({ detail: "Scoring ruleset id must be >= 0" }, { status: 400 });
+    }
   }
   if (body.monitoring) {
     const m = body.monitoring;

@@ -23,7 +23,7 @@ function ScreeningPageInner() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollCountRef = useRef(0);
-  const MAX_POLL_ATTEMPTS = 100; // 100 * 3s = 5 minutes max
+  const MAX_POLL_ATTEMPTS = 150; // 150 * 3s = 7.5min, safely beyond the server's 300s poll cap
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
