@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { loadMonitorRuns } from "@/lib/storage";
+import { loadMonitor, loadMonitorRuns } from "@/lib/storage";
 import { ensureSchedulerInitialized } from "@/lib/scheduler";
 
 export async function GET(
@@ -8,6 +8,12 @@ export async function GET(
 ) {
   ensureSchedulerInitialized();
   const { monitorId } = await params;
+
+  const task = loadMonitor(monitorId);
+  if (!task) {
+    return NextResponse.json({ detail: "Monitor not found" }, { status: 404 });
+  }
+
   const runs = loadMonitorRuns(monitorId, 50);
   return NextResponse.json(runs);
 }

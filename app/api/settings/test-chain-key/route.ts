@@ -22,10 +22,10 @@ export async function POST(req: Request) {
     if (!apiKey) {
       return NextResponse.json({ ok: false, detail: "No Width.info API key configured" });
     }
-    const baseUrl = (typeof body.baseUrl === "string" && body.baseUrl.trim()
-      ? body.baseUrl.trim()
-      : getWidthBaseUrl()
-    ).replace(/\/+$/, "");
+    // Security: always use the STORED base URL for the probe. Accepting a
+    // caller-supplied baseUrl would let an attacker point the server's fetch
+    // (with the real apikey in the query string) at an arbitrary internal URL.
+    const baseUrl = getWidthBaseUrl();
     try {
       // Cheap probe: v3 async submit returns a job_id immediately (no waiting
       // for the screen); an invalid key fails fast with 401 "Invalid API key".

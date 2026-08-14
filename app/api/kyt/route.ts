@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { saveHistoryEntry } from "@/lib/storage";
-import { kytScreen, screenStatusLabel, type KytScreenResult, type KytDirection } from "@/lib/width-api";
+import { kytScreen, screenStatusLabel, screenTimeoutMs, type KytScreenResult, type KytDirection } from "@/lib/width-api";
 import { getSettings } from "@/lib/settings";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
 import { resolveTxEndpoints } from "@/lib/chain-txs";
@@ -141,6 +141,7 @@ async function runKytScreening(
           if (job && job.status === "running") job.progress = screenStatusLabel(s);
         },
       },
+      screenTimeoutMs(),
     );
 
     // Fund score is computed server-side by the width engine — use it directly.

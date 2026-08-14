@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { batchJobs } from "../route";
 import { loadBatchMeta, loadBatchItem } from "@/lib/storage";
 
+/** Batch ids are server-generated (`batch_<ts>_<rand6>`); reject anything else
+ *  before it can reach a filesystem path. */
+const BATCH_ID_RE = /^batch_\d+_[0-9a-f]{6}$/;
+
 /**
  * Batch status / item detail.
  *   GET /api/batch/{batchId}          → batch meta + per-item summaries
@@ -12,6 +16,10 @@ export async function GET(
   { params }: { params: Promise<{ batchId: string }> }
 ) {
   const { batchId } = await params;
+  if (!BATCH_ID_RE.test(batchId)) {
+    return NextResponse.json({ detail: "Batch not found" }, { status: 404 });
+  }
+
   const url = new URL(req.url);
   const itemParam = url.searchParams.get("item");
 

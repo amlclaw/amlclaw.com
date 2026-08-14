@@ -30,7 +30,7 @@ export default function KytForm({ onJobStarted, onLoading, initialTxId, initialC
   const [inflowHops, setInflowHops] = useState("3");
   const [outflowHops, setOutflowHops] = useState("1");
   const [maxNodes, setMaxNodes] = useState("200");
-  const [minAmount, setMinAmount] = useState("10");
+  const [minAmount, setMinAmount] = useState("");
   const [maxOpponentPaths, setMaxOpponentPaths] = useState("50");
   const [penetrateContract, setPenetrateContract] = useState(false);
   const [forceTimeSequence, setForceTimeSequence] = useState(true);
@@ -86,7 +86,7 @@ export default function KytForm({ onJobStarted, onLoading, initialTxId, initialC
             inflow_hops: inflowHops,
             outflow_hops: outflowHops,
             max_nodes: maxNodes,
-            min_amount: minAmount,
+            min_amount: minAmount || undefined,
             max_opponent_paths: maxOpponentPaths,
             is_penetrate_contract: penetrateContract,
             scoring_ruleset_id: scoringRulesetId,
@@ -233,7 +233,7 @@ export default function KytForm({ onJobStarted, onLoading, initialTxId, initialC
                 )}
                 <div style={{ flex: 1 }}>
                   <label className="label">Min Amount</label>
-                  <input type="number" className="input" min={0} step="any" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} />
+                  <input type="number" className="input" min={0} step="any" value={minAmount} placeholder="Default (from Settings)" onChange={(e) => setMinAmount(e.target.value)} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label className="label">Max Opponent Paths</label>

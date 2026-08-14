@@ -34,6 +34,10 @@ export async function POST(req: Request) {
   const body = await req.json();
   const type: MonitorType = body.type === "kyt" ? "kyt" : "address";
   const chain = body.chain || "Tron";
+  const SUPPORTED_CHAINS = ["Tron", "Ethereum"];
+  if (!SUPPORTED_CHAINS.includes(chain)) {
+    return NextResponse.json({ detail: `Unsupported chain: ${chain}` }, { status: 400 });
+  }
 
   // Resolve schedule
   const schedulePreset = body.schedule_preset || settings.monitoring.defaultSchedule || "every_4h";

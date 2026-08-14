@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { saveHistoryEntry } from "@/lib/storage";
-import { kyaScreen, screenStatusLabel, type KyaScreenResult } from "@/lib/width-api";
+import { kyaScreen, screenStatusLabel, screenTimeoutMs, type KyaScreenResult } from "@/lib/width-api";
 import { getSettings } from "@/lib/settings";
 import { sendWebhook, shouldAlert } from "@/lib/webhook";
 import crypto from "crypto";
@@ -140,6 +140,7 @@ async function runKyaScreening(
           if (job && job.status === "running") job.progress = screenStatusLabel(s);
         },
       },
+      screenTimeoutMs(),
     );
 
     // Score is computed server-side by the width engine; use it directly.

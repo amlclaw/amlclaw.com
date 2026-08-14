@@ -60,11 +60,11 @@ File-based with in-memory fallback. History index and monitor index **filter out
 
 Sections: `api` (widthApiKey/widthBaseUrl/etherscanApiKey/trongridApiKey), `screening`, `monitoring`, `notifications` (webhook), `security` (Bearer token), `app`. Empty Etherscan/TronGrid keys → shared defaults (rate-limited). GET `/api/settings` masks secrets; PUT restores masked (`*...`) values from disk.
 
-### Navigation (6 pages)
+### Navigation (8 pages)
 
-Dashboard `/dashboard` · KYA `/screening` · KYT `/kyt` · Address Monitoring `/monitoring` · KYT Monitoring `/kyt-monitoring` · Settings `/settings`. Landing at `/` (route group `(app)` wraps product pages with Sidebar + SetupBanner).
+Dashboard `/dashboard` · KYA `/screening` · KYT `/kyt` · Batch KYA `/batch-screening` · Batch KYT `/batch-kyt` · Address Monitoring `/monitoring` · KYT Monitoring `/kyt-monitoring` · Settings `/settings`. Landing at `/` (route group `(app)` wraps product pages with Sidebar + SetupBanner).
 
-Removed in v3 (do not resurrect): Documents/Policies/Rules (local rule engine — now server-side), Cases, SAR, Audit Log, AI Copilot/providers, batch screening, demo mode.
+Removed in v3 (do not resurrect): Documents/Policies/Rules (local rule engine — now server-side), Cases, SAR, Audit Log, AI Copilot/providers, demo mode. (Batch screening IS implemented since v3.1: `POST /api/batch` + `GET /api/batch/{id}`, pages above, file-based under `data/batches/`, runs the width async pipeline with settings defaults; batch results do NOT enter the normal screening history.)
 
 ## Key Patterns
 

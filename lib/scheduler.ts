@@ -17,7 +17,7 @@ import {
   saveMonitorRun,
   saveHistoryEntry,
 } from "./storage";
-import { kyaScreen, kytScreen, riskRank, normalizeRisk } from "./width-api";
+import { kyaScreen, kytScreen, riskRank, normalizeRisk, screenTimeoutMs } from "./width-api";
 import { fetchNewTxs } from "./chain-txs";
 import {
   appendMonitorTxs,
@@ -308,7 +308,8 @@ async function runAddressMonitor(
         minTimestamp: Math.min(windowStart, tx.timestamp),
         maxTimestamp: nowMs,
         forceTimeSequence: settings.screening.forceTimeSequence,
-      });
+        scoringRulesetId: settings.screening.defaultScoringRulesetId,
+      }, undefined, screenTimeoutMs());
 
       // Fund score is computed server-side by the width engine — use it directly.
       const fundScore = result.score;
@@ -450,7 +451,8 @@ async function runKytMonitor(
     maxTimestamp: Date.now(),
     forceTimeSequence: settings.screening.forceTimeSequence,
     cexImmune: settings.screening.cexImmune,
-  });
+    scoringRulesetId: settings.screening.defaultScoringRulesetId,
+  }, undefined, screenTimeoutMs());
 
   // Fund score is computed server-side by the width engine — use it directly.
   const fundScore = result.score;

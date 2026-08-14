@@ -102,7 +102,6 @@ export default function SettingsForm() {
         body: JSON.stringify({
           provider,
           apiKey,
-          ...(provider === "width" ? { baseUrl: settings.api.widthBaseUrl } : {}),
         }),
       });
       const json = await res.json();

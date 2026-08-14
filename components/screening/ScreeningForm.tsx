@@ -22,7 +22,7 @@ export default function ScreeningForm({ onJobStarted, onLoading, initialAddress,
   const [inflowHops, setInflowHops] = useState("3");
   const [outflowHops, setOutflowHops] = useState("1");
   const [maxNodes, setMaxNodes] = useState("200");
-  const [minAmount, setMinAmount] = useState("10");
+  const [minAmount, setMinAmount] = useState("");
   const [maxOpponentPaths, setMaxOpponentPaths] = useState("50");
   const [penetrateContract, setPenetrateContract] = useState(false);
   const [forceTimeSequence, setForceTimeSequence] = useState(true);
@@ -78,7 +78,7 @@ export default function ScreeningForm({ onJobStarted, onLoading, initialAddress,
             inflow_hops: inflowHops,
             outflow_hops: outflowHops,
             max_nodes: maxNodes,
-            min_amount: minAmount,
+            min_amount: minAmount || undefined,
             max_opponent_paths: maxOpponentPaths,
             is_penetrate_contract: penetrateContract,
             scoring_ruleset_id: scoringRulesetId,
@@ -212,6 +212,7 @@ export default function ScreeningForm({ onJobStarted, onLoading, initialAddress,
                     min={0}
                     step="any"
                     value={minAmount}
+                    placeholder="Default (from Settings)"
                     onChange={(e) => setMinAmount(e.target.value)}
                   />
                 </div>

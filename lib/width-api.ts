@@ -17,8 +17,8 @@
  * Rulesets live server-side: ruleset_id 0 = builtin default (KYA builtin, or
  * KYT-IN / KYT-OUT builtins per direction).
  */
-import { getWidthApiKey, getWidthBaseUrl } from "./settings";
-import type { FundScore } from "./risk-score";
+import { getWidthApiKey, getWidthBaseUrl, getSettings } from "./settings";
+import type { FundScore, ScoreComponent, Verdict } from "./risk-score";
 
 /** Address volume + balance snapshot the engine used as score denominators. */
 export interface ScoreOverview {
@@ -276,10 +276,18 @@ async function getV3(
 const POLL_INTERVAL_MS = 3_000;
 const POLL_TIMEOUT_MS = 300_000; // overall cap across all polls (large addresses)
 const RESULT_MARKERS = ["risk", "address", "transaction"]; // sync-shaped result keys
+/** Transient poll failures tolerated before giving up (network blips are common). */
+const MAX_POLL_FAILURES = 8;
 
 /** Optional hook to observe upstream job status (PENDING | PROCESSING | COMPLETE). */
 export interface ScreenProgress {
   onStatus?: (status: string) => void;
+}
+
+/** Per-screen poll budget from the Settings `pollingTimeout` (seconds). */
+export function screenTimeoutMs(): number {
+  const t = getSettings().screening.pollingTimeout;
+  return (Number.isFinite(t) && t > 0 ? Math.min(t, 600) : 300) * 1000;
 }
 
 /** Human-readable progress label for an upstream job status. */
@@ -313,21 +321,44 @@ async function submitAndPoll(
   endpoint: string,
   submitBody: Record<string, unknown>,
   progress?: ScreenProgress,
+  timeoutMs?: number,
 ): Promise<Record<string, unknown>> {
   const submit = await postV3(endpoint, { ...submitBody, mode: "async" });
 
   // Defensive: a server that ignored async and returned the full result inline.
   if (looksLikeResult(submit)) return submit;
 
-  const jobId = Number(submit.job_id ?? submit.jobId ?? submit.id);
-  if (!Number.isFinite(jobId) || jobId <= 0) {
+  // Keep the raw job id as a string — the API may return numeric or string ids.
+  const jobIdRaw = String(submit.job_id ?? submit.jobId ?? submit.id ?? "").trim();
+  if (!jobIdRaw || jobIdRaw === "0") {
     throw new Error(`Async submit returned no job_id: ${JSON.stringify(submit)}`);
   }
 
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  const deadline = Date.now() + (timeoutMs ?? POLL_TIMEOUT_MS);
+  const startedAt = Date.now();
   let lastStatus = "";
+  let consecutiveFailures = 0;
   for (;;) {
-    const job = await getV3(`/api/v3/screen/result/${jobId}`);
+    // A single transient poll failure (dropped connection, 5xx, timeout) must
+    // NOT kill the whole screen — the upstream job keeps running, so retry
+    // until the deadline. Only terminal states or the deadline abort.
+    let job: Record<string, unknown> | null = null;
+    try {
+      job = await getV3(`/api/v3/screen/result/${jobIdRaw}`);
+      consecutiveFailures = 0;
+    } catch {
+      consecutiveFailures++;
+      if (consecutiveFailures > MAX_POLL_FAILURES) {
+        throw new Error(
+          `Screen job ${jobIdRaw} unreachable after ${consecutiveFailures} poll failures ` +
+            `(last status=${lastStatus || "unknown"})`,
+        );
+      }
+      if (Date.now() > deadline) break;
+      await sleep(POLL_INTERVAL_MS);
+      continue;
+    }
+
     const status = String(job.status ?? "").toUpperCase();
     if (status && status !== lastStatus) {
       lastStatus = status;
@@ -336,21 +367,29 @@ async function submitAndPoll(
     if (status === "COMPLETE") {
       const result = job.result as Record<string, unknown> | undefined;
       if (!result) {
-        throw new Error(`Screen job ${jobId} is COMPLETE but the result payload is missing`);
+        throw new Error(`Screen job ${jobIdRaw} is COMPLETE but the result payload is missing`);
       }
       return result;
     }
     if (status === "FAILED" || status === "ERROR") {
-      throw new Error(`Screen job ${jobId} failed (status=${status})`);
+      throw new Error(
+        `Screen job ${jobIdRaw} failed (status=${status}${job.error ? `: ${String(job.error)}` : ""})`,
+      );
     }
     if (Date.now() > deadline) {
       throw new Error(
-        `Screen job ${jobId} did not complete within ${POLL_TIMEOUT_MS / 1000}s ` +
+        `Screen job ${jobIdRaw} did not complete within ${Math.round((Date.now() - startedAt) / 1000)}s ` +
           `(last status=${lastStatus || "unknown"})`,
       );
     }
     await sleep(POLL_INTERVAL_MS);
   }
+  // Only reachable via the catch-branch `break` when the deadline expired
+  // during a transient poll failure.
+  throw new Error(
+    `Screen job ${jobIdRaw} did not complete within ${Math.round((Date.now() - startedAt) / 1000)}s ` +
+      `(last status=${lastStatus || "unknown"})`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -360,6 +399,7 @@ async function submitAndPoll(
 export async function kyaScreen(
   params: KyaScreenParams,
   progress?: ScreenProgress,
+  timeoutMs?: number,
 ): Promise<KyaScreenResult> {
   assertChain(params.chain);
   const data = await submitAndPoll(
@@ -383,6 +423,7 @@ export async function kyaScreen(
       scenario: params.scenario ?? "all",
     },
     progress,
+    timeoutMs,
   );
   return normalizeKya(data);
 }
@@ -390,6 +431,7 @@ export async function kyaScreen(
 export async function kytScreen(
   params: KytScreenParams,
   progress?: ScreenProgress,
+  timeoutMs?: number,
 ): Promise<KytScreenResult> {
   assertChain(params.chain);
   const data = await submitAndPoll(
@@ -415,6 +457,7 @@ export async function kytScreen(
       scenario: params.scenario ?? "all",
     },
     progress,
+    timeoutMs,
   );
   return normalizeKyt(data);
 }
@@ -496,9 +539,35 @@ function normalizeTag(t: unknown): WidthTag {
   };
 }
 
-/** Pass through the server-side FundScore (shape already matches). */
+/** Pass through the server-side FundScore with defensive coercion, so a
+ *  missing/renamed field degrades the card instead of crashing the report. */
 function parseScore(s: unknown): FundScore | null {
-  return s && typeof s === "object" ? (s as FundScore) : null;
+  if (!s || typeof s !== "object" || Array.isArray(s)) return null;
+  const d = s as Record<string, unknown>;
+  const num = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const numOrNull = (v: unknown): number | null => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+  const VERDICTS = new Set(["accept", "review", "edd", "block"]);
+  const components: ScoreComponent[] = Array.isArray(d.components)
+    ? d.components.filter((c): c is ScoreComponent => !!c && typeof c === "object")
+    : [];
+  return {
+    score: numOrNull(d.score),
+    verdict: VERDICTS.has(String(d.verdict ?? "")) ? String(d.verdict) as Verdict : null,
+    selfHit: d.selfHit === true,
+    selfHitLevel: d.selfHitLevel ? String(d.selfHitLevel).toLowerCase() : null,
+    counterpartyFlagged: d.counterpartyFlagged === true,
+    components,
+    r1: num(d.r1),
+    r2: num(d.r2),
+    rOut: num(d.rOut),
+    directAmount: num(d.directAmount),
+    indirectAmount: num(d.indirectAmount),
+    outflowAmount: num(d.outflowAmount),
+    totalIn: numOrNull(d.totalIn),
+    totalOut: numOrNull(d.totalOut),
+    hitPaths: num(d.hitPaths),
+    riskyEdges: num(d.riskyEdges),
+  };
 }
 
 function parseOverview(o: unknown): ScoreOverview | null {

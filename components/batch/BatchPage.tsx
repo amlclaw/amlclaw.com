@@ -26,7 +26,7 @@ type RiskFilter = (typeof RISK_FILTERS)[number]["value"];
 
 /** Human-readable duration, e.g. 12.3s / 1m23s. */
 function fmtDur(ms?: number): string {
-  if (ms == null || ms < 0) return "—";
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return "—";
   const s = ms / 1000;
   if (s < 60) return `${s.toFixed(1)}s`;
   const m = Math.floor(s / 60);
@@ -36,8 +36,16 @@ function fmtDur(ms?: number): string {
 
 /** Batch wall-clock duration: created_at → completed_at (or now while running). */
 function batchDuration(batch: BatchJob): string {
+  const start = new Date(batch.created_at).getTime();
+  if (!Number.isFinite(start)) return "—";
   const end = batch.completed_at ? new Date(batch.completed_at).getTime() : Date.now();
-  return fmtDur(end - new Date(batch.created_at).getTime());
+  return fmtDur(Number.isFinite(end) ? end - start : undefined);
+}
+
+/** True when the response is a usable batch job payload (guards against
+ *  error bodies being stored as a batch and crashing the table render). */
+function isBatchJob(v: unknown): v is BatchJob {
+  return !!v && typeof v === "object" && Array.isArray((v as BatchJob).items) && typeof (v as BatchJob).id === "string";
 }
 
 export default function BatchPage({ type }: { type: BatchType }) {
@@ -50,18 +58,24 @@ export default function BatchPage({ type }: { type: BatchType }) {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const resultPanelRef = useRef<HTMLDivElement | null>(null);
 
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }, []);
+
   /** Open a stored batch from history (completed/interrupted) and scroll to it. */
   const openHistoryBatch = useCallback((id: string) => {
+    stopPolling(); // don't let a running batch's poll overwrite the opened one
     fetch(`/api/batch/${id}`)
-      .then((r) => r.json())
-      .then((data: BatchJob) => {
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((data: unknown) => {
+        if (!isBatchJob(data)) throw new Error("Malformed batch payload");
         setBatch(data);
         setLoading(false);
         // Scroll once the panel has rendered (below).
         setTimeout(() => resultPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
       })
       .catch(() => showToast("Failed to load batch", "error"));
-  }, []);
+  }, [stopPolling]);
 
   const loadHistory = useCallback(() => {
     fetch("/api/batch")
@@ -79,16 +93,15 @@ export default function BatchPage({ type }: { type: BatchType }) {
     };
   }, [loadHistory]);
 
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-  }, []);
-
   const poll = useCallback((id: string) => {
     stopPolling();
+    let failCount = 0;
     const tick = () => {
       fetch(`/api/batch/${id}`)
-        .then((r) => r.json())
-        .then((data: BatchJob) => {
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then((data: unknown) => {
+          if (!isBatchJob(data)) throw new Error("Malformed batch payload");
+          failCount = 0;
           setBatch(data);
           if (data.status !== "running") {
             stopPolling();
@@ -96,7 +109,15 @@ export default function BatchPage({ type }: { type: BatchType }) {
             loadHistory();
           }
         })
-        .catch(() => { /* keep polling */ });
+        .catch(() => {
+          // Stop after persistent failures instead of hanging "Running…" forever.
+          failCount++;
+          if (failCount >= 10) {
+            stopPolling();
+            setLoading(false);
+            showToast("Batch status unreachable — reload to retry", "error");
+          }
+        });
     };
     tick();
     pollRef.current = setInterval(tick, 3000);
@@ -277,10 +298,11 @@ function BatchTable({ batch, type }: { batch: BatchJob; type: BatchType }) {
   const [openRow, setOpenRow] = useState<number | null>(null);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const requestedIndex = useRef<number | null>(null);
 
   const filtered = batch.items.filter((it) => {
     switch (filter) {
-      case "flagged": return it.status === "completed" && ["critical", "high"].includes(it.risk || "");
+      case "flagged": return it.status === "completed" && (["critical", "high"].includes(it.risk || "") || ["block", "edd"].includes(it.verdict || ""));
       case "critical": return it.status === "completed" && it.risk === "critical";
       case "high": return it.status === "completed" && it.risk === "high";
       case "clean": return it.status === "completed" && ["low", "medium"].includes(it.risk || "low");
@@ -294,17 +316,21 @@ function BatchTable({ batch, type }: { batch: BatchJob; type: BatchType }) {
     setOpenRow(next);
     setDetail(null);
     if (next !== null) {
+      requestedIndex.current = next;
       setDetailLoading(true);
       try {
         const res = await fetch(`/api/batch/${batch.id}?item=${index}`);
-        if (res.ok) setDetail(await res.json());
+        const data = res.ok ? await res.json() : null;
+        // Ignore stale responses — a newer click may have superseded this one.
+        if (requestedIndex.current === index) setDetail(data);
       } catch { /* keep null */ }
+      requestedIndex.current = null;
       setDetailLoading(false);
     }
   };
 
   const jobFor = (index: number): Record<string, unknown> => ({
-    status: "completed",
+    status: (detail?.status as string) ?? "completed",
     type,
     completed_at: batch.completed_at ?? batch.created_at,
     request: { chain: batch.items[index]?.chain },
@@ -312,6 +338,7 @@ function BatchTable({ batch, type }: { batch: BatchJob; type: BatchType }) {
     fund_score: detail?.fund_score ?? null,
     chain_stats: detail?.chain_stats ?? null,
     tx_endpoints: detail?.tx_endpoints ?? null,
+    error: detail?.error ?? null,
   });
 
   return (
@@ -379,6 +406,7 @@ function ItemRow({ item, type, open, onToggle }: {
   const statusColor =
     item.status === "completed" ? "var(--success)"
     : item.status === "error" ? "var(--danger)"
+    : item.status === "skipped" ? "var(--text-tertiary)"
     : "var(--warning)";
 
   return (
@@ -403,6 +431,8 @@ function ItemRow({ item, type, open, onToggle }: {
           <TagChips tags={item.tags} />
         ) : item.error ? (
           <span style={{ color: "var(--danger)", fontSize: "0.62rem" }} title={item.error}>error</span>
+        ) : item.status === "skipped" ? (
+          <span style={{ color: "var(--text-tertiary)", fontSize: "0.62rem" }}>—</span>
         ) : "—"}
       </td>
       <td>
@@ -514,7 +544,14 @@ function exportCsv(batch: BatchJob) {
     it.error ?? "",
   ]);
   const csv = [header, ...rows]
-    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .map((row) => row.map((v) => {
+      let cell = String(v);
+      // CSV formula injection guard: neutralize cells that could run in Excel.
+      if (/^[=+\-@]/.test(cell)) cell = `'${cell}`;
+      // Strip line breaks so one cell never spans multiple rows.
+      cell = cell.replace(/[\r\n]+/g, " ");
+      return `"${cell.replace(/"/g, '""')}"`;
+    }).join(","))
     .join("\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");

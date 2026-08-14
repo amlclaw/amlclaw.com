@@ -138,7 +138,7 @@ export interface BatchItemSummary {
   /** Address (kya) or tx hash (kyt). */
   subject: string;
   chain: string;
-  status: "running" | "completed" | "error";
+  status: "running" | "completed" | "error" | "skipped";
   risk?: string;
   score?: number | null;
   verdict?: string | null;
