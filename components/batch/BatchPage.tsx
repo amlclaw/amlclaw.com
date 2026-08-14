@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import PageGuide from "@/components/shared/PageGuide";
 import { showToast, shortenAddr } from "@/lib/utils";
 import { explorerAddressUrl, explorerTxUrl } from "@/lib/explorers";
-import { riskColorVar, riskLabel, verdictColorVar, verdictZh } from "@/lib/risk-ui";
+import { riskPillClass, riskColorVar, riskLabel, verdictColorVar, verdictZh } from "@/lib/risk-ui";
+import type { WidthTag } from "@/lib/width-api";
 import type { BatchJob, BatchType, BatchIndexEntry } from "@/lib/types";
 import ScreeningResult from "@/components/screening/ScreeningResult";
 import KytResult from "@/components/screening/KytResult";
@@ -282,7 +283,7 @@ function BatchTable({ batch, type }: { batch: BatchJob; type: BatchType }) {
               <th>{type === "kya" ? "Address" : "Tx Hash"}</th>
               <th>Chain</th>
               <th>Status</th>
-              <th>Risk</th>
+              <th title={type === "kya" ? "地址自身标签 subjectTags" : "发送方标签 fromTags"}>Tags</th>
               <th>Score · Verdict</th>
             </tr>
           </thead>
@@ -344,9 +345,7 @@ function ItemRow({ item, type, open, onToggle }: {
       </td>
       <td>
         {item.status === "completed" ? (
-          <span style={{ color: riskColorVar(item.risk || "low"), fontWeight: 700, textTransform: "uppercase" }}>
-            {riskLabel(item.risk || "low")}
-          </span>
+          <TagChips tags={item.tags} />
         ) : item.error ? (
           <span style={{ color: "var(--danger)", fontSize: "0.62rem" }} title={item.error}>error</span>
         ) : "—"}
@@ -361,6 +360,33 @@ function ItemRow({ item, type, open, onToggle }: {
         ) : "—"}
       </td>
     </tr>
+  );
+}
+
+/** The subject's own tags (KYA = subjectTags, KYT = sender fromTags) as pills. */
+function TagChips({ tags }: { tags?: WidthTag[] }) {
+  if (!tags || tags.length === 0) {
+    return <span style={{ color: "var(--text-tertiary)" }}>—</span>;
+  }
+  return (
+    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", maxWidth: 220 }}>
+      {tags.slice(0, 3).map((t, i) => {
+        const label = [t.primary_category, t.tertiary_category].filter(Boolean).join(" · ") || (t.primary_category ?? "tag");
+        return (
+          <span
+            key={i}
+            className={`risk-pill ${riskPillClass(t.risk_level || "low")}`}
+            style={{ fontSize: "0.62rem", whiteSpace: "nowrap" }}
+            title={`${label} · ${t.risk_level || "low"}`}
+          >
+            {label}
+          </span>
+        );
+      })}
+      {tags.length > 3 && (
+        <span style={{ color: "var(--text-tertiary)", fontSize: "0.62rem" }}>+{tags.length - 3}</span>
+      )}
+    </div>
   );
 }
 

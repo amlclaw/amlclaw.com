@@ -1,6 +1,7 @@
 /**
  * Shared TypeScript interfaces for AMLClaw Web (v3 — width.info API era).
  */
+import type { WidthTag } from "./width-api";
 
 // ---------------------------------------------------------------------------
 // Monitoring
@@ -141,6 +142,8 @@ export interface BatchItemSummary {
   risk?: string;
   score?: number | null;
   verdict?: string | null;
+  /** The subject's own tags: KYA = subjectTags, KYT = fromTags (sender). */
+  tags?: WidthTag[];
   error?: string;
 }
 

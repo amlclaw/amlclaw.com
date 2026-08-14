@@ -5,7 +5,7 @@ import {
   upsertBatchIndexEntry,
   saveBatchItem,
 } from "@/lib/storage";
-import { kyaScreen, kytScreen } from "@/lib/width-api";
+import { kyaScreen, kytScreen, type WidthTag } from "@/lib/width-api";
 import { getSettings } from "@/lib/settings";
 import { detectChainFromAddress, detectChainFromTxId } from "@/lib/chain-detect";
 import type { BatchJob, BatchType, BatchIndexEntry } from "@/lib/types";
@@ -157,11 +157,18 @@ async function runBatch(id: string) {
       try {
         const payload = await screenItem(batch.type, item.subject, item.chain);
         saveBatchItem(id, i, payload);
-        const result = payload.result as { risk?: string; score?: { score?: number | null; verdict?: string | null } | null };
+        const result = payload.result as {
+          risk?: string;
+          score?: { score?: number | null; verdict?: string | null } | null;
+          subjectTags?: WidthTag[];
+          fromTags?: WidthTag[];
+        };
         item.status = "completed";
         item.risk = result.risk ?? "low";
         item.score = result.score?.score ?? null;
         item.verdict = result.score?.verdict ?? null;
+        // The subject's own tags: KYA = the address's tags, KYT = sender tags.
+        item.tags = batch.type === "kya" ? (result.subjectTags ?? []) : (result.fromTags ?? []);
         if (item.risk === "high" || item.risk === "critical") batch.flagged++;
       } catch (e) {
         item.status = "error";
