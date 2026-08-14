@@ -120,6 +120,8 @@
   "risk.medium": "Medium",
   "risk.low": "Low",
   "nav.kyt": "Tx Screening",
+  "nav.batchKyt": "Batch TX Screening",
+  "nav.batchScreening": "Batch Screening",
   "nav.kytMonitoring": "TX Monitoring",
   "nav.apiDocs": "API Docs"
 }

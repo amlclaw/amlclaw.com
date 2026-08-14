@@ -4,13 +4,15 @@
  */
 import fs from "fs";
 import path from "path";
-import type { MonitorTask, MonitorRun, HistoryIndexEntry, ScreeningType } from "./types";
+import type { MonitorTask, MonitorRun, HistoryIndexEntry, ScreeningType, BatchJob, BatchIndexEntry } from "./types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const HISTORY_DIR = path.join(DATA_DIR, "history");
 const MONITORS_DIR = path.join(DATA_DIR, "monitors");
+const BATCHES_DIR = path.join(DATA_DIR, "batches");
 
 const HISTORY_CAP = 200;
+const BATCH_INDEX_CAP = 50;
 
 // In-memory fallback for serverless environments
 const memoryStore: Record<string, string> = {};
@@ -187,4 +189,63 @@ export function loadMonitorRun(taskId: string, runId: string): MonitorRun | null
   const raw = readFile(path.join(MONITORS_DIR, taskId, "runs", `${runId}.json`));
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
+}
+
+// ---------------------------------------------------------------------------
+// Batch screening
+// ---------------------------------------------------------------------------
+function batchMetaPath(id: string) {
+  return path.join(BATCHES_DIR, id, "meta.json");
+}
+function batchItemPath(id: string, index: number) {
+  return path.join(BATCHES_DIR, id, "items", `${index}.json`);
+}
+function batchIndexPath() {
+  return path.join(BATCHES_DIR, "_index.json");
+}
+
+export function saveBatchMeta(batch: BatchJob) {
+  ensureDir(path.join(BATCHES_DIR, batch.id));
+  writeFile(batchMetaPath(batch.id), JSON.stringify(batch, null, 2));
+}
+
+export function loadBatchMeta(id: string): BatchJob | null {
+  const raw = readFile(batchMetaPath(id));
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+/** Full per-item payload (job-shaped: {status, result, request, fund_score, …}). */
+export function saveBatchItem(id: string, index: number, payload: Record<string, unknown>) {
+  ensureDir(path.join(BATCHES_DIR, id, "items"));
+  writeFile(batchItemPath(id, index), JSON.stringify(payload, null, 2));
+}
+
+export function loadBatchItem(id: string, index: number): Record<string, unknown> | null {
+  const raw = readFile(batchItemPath(id, index));
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+export function loadBatchIndex(): BatchIndexEntry[] {
+  const raw = readFile(batchIndexPath());
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown[];
+    return parsed.filter((e) => (e as BatchIndexEntry).type === "kya" || (e as BatchIndexEntry).type === "kyt") as unknown as BatchIndexEntry[];
+  } catch { return []; }
+}
+
+function saveBatchIndex(index: BatchIndexEntry[]) {
+  ensureDir(BATCHES_DIR);
+  writeFile(batchIndexPath(), JSON.stringify(index, null, 2));
+}
+
+/** Add or refresh an entry in the batch index (newest first, capped). */
+export function upsertBatchIndexEntry(entry: BatchIndexEntry) {
+  const index = loadBatchIndex();
+  const idx = index.findIndex((e) => e.id === entry.id);
+  if (idx !== -1) index[idx] = entry;
+  else index.unshift(entry);
+  saveBatchIndex(index.slice(0, BATCH_INDEX_CAP));
 }

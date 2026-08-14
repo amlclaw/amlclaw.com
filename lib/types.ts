@@ -121,3 +121,59 @@ export interface HistoryIndexEntry {
   completed_at: string;
   source?: "manual" | "monitor";
 }
+
+// ---------------------------------------------------------------------------
+// Batch screening
+// ---------------------------------------------------------------------------
+
+export type BatchType = "kya" | "kyt";
+
+export type BatchStatus = "running" | "completed" | "error" | "interrupted";
+
+/** Lightweight per-item row — what the poll endpoint returns for the table. */
+export interface BatchItemSummary {
+  /** 0-based position in the submitted list. */
+  index: number;
+  /** Address (kya) or tx hash (kyt). */
+  subject: string;
+  chain: string;
+  status: "running" | "completed" | "error";
+  risk?: string;
+  score?: number | null;
+  verdict?: string | null;
+  error?: string;
+}
+
+/** Batch job — meta lives in data/batches/{id}/meta.json; full per-item
+ *  results in data/batches/{id}/items/{index}.json. */
+export interface BatchJob {
+  id: string;
+  type: BatchType;
+  /** Fallback chain — per-item chain is auto-detected. */
+  chain: string;
+  total: number;
+  status: BatchStatus;
+  done: number;
+  failed: number;
+  /** Count of completed items at high or critical risk. */
+  flagged: number;
+  created_at: string;
+  completed_at?: string;
+  /** Snapshot of the default params this batch was run with. */
+  request: Record<string, unknown>;
+  items: BatchItemSummary[];
+}
+
+/** Entry kept in data/batches/_index.json (no per-item rows). */
+export interface BatchIndexEntry {
+  id: string;
+  type: BatchType;
+  chain: string;
+  total: number;
+  status: BatchStatus;
+  done: number;
+  failed: number;
+  flagged: number;
+  created_at: string;
+  completed_at?: string;
+}

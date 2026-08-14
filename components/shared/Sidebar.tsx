@@ -60,6 +60,19 @@ export default function Sidebar() {
       ),
     },
     {
+      href: "/batch-screening",
+      label: t("nav.batchScreening"),
+      active: pathname.startsWith("/batch-screening"),
+      icon: (
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+      ),
+    },
+    {
       href: "/kyt",
       label: t("nav.kyt"),
       active: pathname.startsWith("/kyt"),
@@ -67,6 +80,19 @@ export default function Sidebar() {
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
           <line x1="7" y1="17" x2="17" y2="7" />
           <polyline points="7 7 17 7 17 17" />
+        </svg>
+      ),
+    },
+    {
+      href: "/batch-kyt",
+      label: t("nav.batchKyt"),
+      active: pathname.startsWith("/batch-kyt"),
+      icon: (
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+          <line x1="6" y1="6" x2="18" y2="18" />
+          <line x1="10" y1="6" x2="18" y2="6" />
+          <line x1="14" y1="18" x2="18" y2="18" />
+          <polyline points="6 18 10 10 14 14 18 8" />
         </svg>
       ),
     },

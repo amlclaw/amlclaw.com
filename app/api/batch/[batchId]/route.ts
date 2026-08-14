@@ -1,0 +1,36 @@
+import { NextResponse } from "next/server";
+import { batchJobs } from "../route";
+import { loadBatchMeta, loadBatchItem } from "@/lib/storage";
+
+/**
+ * Batch status / item detail.
+ *   GET /api/batch/{batchId}          → batch meta + per-item summaries
+ *   GET /api/batch/{batchId}?item=N   → full result payload of item N
+ */
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ batchId: string }> }
+) {
+  const { batchId } = await params;
+  const url = new URL(req.url);
+  const itemParam = url.searchParams.get("item");
+
+  const batch = batchJobs[batchId] ?? loadBatchMeta(batchId);
+  if (!batch) {
+    return NextResponse.json({ detail: "Batch not found" }, { status: 404 });
+  }
+
+  if (itemParam !== null) {
+    const index = parseInt(itemParam, 10);
+    if (!Number.isFinite(index) || index < 0 || index >= batch.total) {
+      return NextResponse.json({ detail: "Invalid item index" }, { status: 400 });
+    }
+    const item = loadBatchItem(batchId, index);
+    if (!item) {
+      return NextResponse.json({ detail: "Item not ready yet" }, { status: 404 });
+    }
+    return NextResponse.json(item);
+  }
+
+  return NextResponse.json(batch);
+}

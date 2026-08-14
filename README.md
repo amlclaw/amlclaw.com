@@ -63,6 +63,10 @@ Add an address and AMLClaw watches its **future** stablecoin transfers (Ethereum
 
 From any KYT result, put the transaction's `from` or `to` address under watch. Each cycle re-runs a KYA screen (1-hop, rolling time window since the last run), tracks the risk trend, and alerts the moment the counterparty is tagged Sanctions/Freeze or its risk level **escalates**.
 
+### 5. Batch screening — many addresses / txs at once
+
+`/batch-screening` (KYA) and `/batch-kyt` (KYT) run up to 50 addresses or transaction hashes per batch through the same width.info async pipeline, using the **Settings → Screening Defaults** as parameters (hops, node caps, `force_time_sequence`, `cex_immune`, scoring/ruleset ids). Chain is auto-detected per item (format / tx prefix), items process with small concurrency to respect rate limits. Results stream in a live table with per-item risk + fund score (server-side), each row expands to the full report, and the summary exports to CSV. Batch jobs persist under `data/batches/` (index + per-item payloads); they do **not** pollute the normal screening history.
+
 ---
 
 ## Features
