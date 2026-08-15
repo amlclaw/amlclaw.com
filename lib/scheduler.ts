@@ -230,6 +230,16 @@ const SCREEN_INTERVAL_MS = 2_000;
  */
 const MONITOR_HOPS = 1;
 
+/** Deduplicated risk categories (Sanctions / Cybercrime / …) hit by a screen. */
+function hitCategories(hits: { category?: string }[]): string[] {
+  const seen = new Set<string>();
+  for (const h of hits || []) {
+    const c = String(h.category ?? "").trim();
+    if (c) seen.add(c);
+  }
+  return [...seen].slice(0, 6);
+}
+
 /**
  * Rolling screen window lower bound for a monitor: only trace fund flows since
  * the last run (first run = when the monitor was created). Leaving min_timestamp
@@ -313,6 +323,7 @@ async function runAddressMonitor(
 
       // Fund score is computed server-side by the width engine — use it directly.
       const fundScore = result.score;
+      const categories = hitCategories(result.hits);
 
       // Save as screening history (cross-link)
       const jobId = crypto.randomUUID().slice(0, 8);
@@ -352,6 +363,7 @@ async function runAddressMonitor(
         risk_level: result.risk,
         score: fundScore?.score ?? null,
         verdict: fundScore?.verdict ?? null,
+        categories,
         job_id: jobId,
         screened_at: completedAt,
         error: undefined,
@@ -363,6 +375,7 @@ async function runAddressMonitor(
         risk_level: result.risk,
         score: fundScore?.score ?? null,
         verdict: fundScore?.verdict ?? null,
+        categories,
         tx_id: tx.tx_id,
         direction: tx.direction,
         token: tx.token,
@@ -456,12 +469,14 @@ async function runKytMonitor(
 
   // Fund score is computed server-side by the width engine — use it directly.
   const fundScore = result.score;
+  const categories = hitCategories(result.hits);
 
   const escalated = riskRank(result.risk) > riskRank(previousRisk);
   updateMonitor(task.id, {
     last_risk_level: result.risk,
     last_score: fundScore?.score ?? null,
     last_verdict: fundScore?.verdict ?? null,
+    last_categories: categories,
   });
 
   // Save as screening history (cross-link)
@@ -517,6 +532,7 @@ async function runKytMonitor(
       risk_level: result.risk,
       score: fundScore?.score ?? null,
       verdict: fundScore?.verdict ?? null,
+      categories,
       previous_risk_level: previousRisk,
       escalated,
     }],

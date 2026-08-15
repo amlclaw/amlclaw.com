@@ -528,6 +528,8 @@ interface LedgerTx {
   error?: string;
   score?: number | null;
   verdict?: string | null;
+  /** Risk categories (Sanctions / Cybercrime / …) hit by the screen. */
+  categories?: string[];
 }
 
 const TIME_PRESETS = [
@@ -817,16 +819,39 @@ function TxRow({ tx, monitorAddress, chain }: { tx: LedgerTx; monitorAddress: st
     }
   };
 
+  // Dual-signal cell: rule-level risk (what flags sanctions etc.) is ALWAYS
+  // visible, with the fund score as the secondary number — a low score must
+  // not hide a critical exposure.
   const kytCell = tx.kyt_status === "screened" ? (
-    tx.score != null ? (
-      <span style={{ color: verdictColorVar(tx.verdict), fontWeight: 800, fontFamily: "var(--mono)" }}>
-        {tx.score}分·{verdictZh(tx.verdict)}
-      </span>
-    ) : (
-      <span style={{ color: riskColorVar(tx.risk_level || "low"), fontWeight: 700, textTransform: "uppercase" }}>
-        {riskLabel(tx.risk_level || "low")}
-      </span>
-    )
+    <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 120 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <span style={{ color: riskColorVar(tx.risk_level || "low"), fontWeight: 800, textTransform: "uppercase", fontSize: "0.68rem" }}>
+          {riskLabel(tx.risk_level || "low")}
+        </span>
+        {tx.score != null && (
+          <span style={{ color: verdictColorVar(tx.verdict), fontWeight: 600, fontFamily: "var(--mono)" }}>
+            {tx.score}分·{verdictZh(tx.verdict)}
+          </span>
+        )}
+      </div>
+      {tx.categories && tx.categories.length > 0 && (
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {tx.categories.map((c) => (
+            <span
+              key={c}
+              className="risk-pill"
+              style={{
+                fontSize: "0.58rem", fontWeight: 700, padding: "1px 5px",
+                color: riskColorVar(tx.risk_level || "low"),
+                border: `1px solid ${riskColorVar(tx.risk_level || "low")}`,
+              }}
+            >
+              {c}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   ) : tx.kyt_status === "pending" ? (
     <span style={{ color: "var(--warning)" }}>Queued</span>
   ) : tx.kyt_status === "error" ? (
@@ -933,6 +958,8 @@ interface KyaScan {
   trigger: string;
   score?: number | null;
   verdict?: string | null;
+  /** Risk categories (Sanctions / Cybercrime / …) hit by the screen. */
+  categories?: string[];
 }
 
 function KyaLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: () => void }) {
@@ -960,6 +987,7 @@ function KyaLedgerModal({ monitor, onClose }: { monitor: MonitorTask; onClose: (
               risk_level: res.risk_level || "low",
               score: (res as { score?: number | null }).score ?? null,
               verdict: (res as { verdict?: string | null }).verdict ?? null,
+              categories: (res as { categories?: string[] }).categories,
               previous_risk_level: res.previous_risk_level,
               escalated: res.escalated,
               job_id: res.job_id,
@@ -1241,15 +1269,35 @@ function KyaScanRow({ scan, chain }: { scan: KyaScan; chain: string }) {
         </td>
         <td>
           {scan.status === "completed" ? (
-            scan.score != null ? (
-              <span style={{ color: verdictColorVar(scan.verdict), fontWeight: 800, fontFamily: "var(--mono)" }}>
-                {scan.score}分·{verdictZh(scan.verdict)}
-              </span>
-            ) : (
-              <span style={{ color: riskColorVar(scan.risk_level), fontWeight: 700, textTransform: "uppercase" }}>
-                {riskLabel(scan.risk_level)}
-              </span>
-            )
+            <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 120 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span style={{ color: riskColorVar(scan.risk_level), fontWeight: 800, textTransform: "uppercase", fontSize: "0.68rem" }}>
+                  {riskLabel(scan.risk_level)}
+                </span>
+                {scan.score != null && (
+                  <span style={{ color: verdictColorVar(scan.verdict), fontWeight: 600, fontFamily: "var(--mono)" }}>
+                    {scan.score}分·{verdictZh(scan.verdict)}
+                  </span>
+                )}
+              </div>
+              {scan.categories && scan.categories.length > 0 && (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {scan.categories.map((c) => (
+                    <span
+                      key={c}
+                      className="risk-pill"
+                      style={{
+                        fontSize: "0.58rem", fontWeight: 700, padding: "1px 5px",
+                        color: riskColorVar(scan.risk_level),
+                        border: `1px solid ${riskColorVar(scan.risk_level)}`,
+                      }}
+                    >
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           ) : (
             <span style={{ color: "var(--danger)" }} title={scan.error}>Error</span>
           )}

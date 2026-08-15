@@ -42,6 +42,8 @@ export interface MonitorTask {
   kya_ruleset_id?: number;
   /** Risk level of the last KYA run (for escalation detection). */
   last_risk_level?: string;
+  /** Risk categories (Sanctions / Cybercrime / …) hit by the last run. */
+  last_categories?: string[];
   /** TX monitors: latest fund-attribution score of the watched counterparty. */
   last_score?: number | null;
   last_verdict?: string | null;
@@ -98,6 +100,8 @@ export interface MonitorRunResult {
   escalated?: boolean;
   score?: number | null;
   verdict?: string | null;
+  /** Risk categories hit by this screen (Sanctions / Cybercrime / …). */
+  categories?: string[];
 }
 
 // ---------------------------------------------------------------------------

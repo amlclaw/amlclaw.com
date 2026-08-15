@@ -36,6 +36,8 @@ export interface MonitorTx {
   /** Fund-attribution score of the screened tx (score-first UI). */
   score?: number | null;
   verdict?: string | null;
+  /** Risk categories (Sanctions / Cybercrime / …) hit by the screen. */
+  categories?: string[];
   /** Screening history job id — links to the full KYT report. */
   job_id?: string;
   error?: string;
