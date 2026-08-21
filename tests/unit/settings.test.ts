@@ -55,11 +55,22 @@ describe("settings", () => {
     it("drops unknown legacy sections", () => {
       mockFs.existsSync.mockReturnValue(true);
       mockFs.readFileSync.mockReturnValue(
-        JSON.stringify({ api: { widthApiKey: "k" }, blockchain: { trustinApiKey: "old" }, ai: { model: "x" } })
+        JSON.stringify({ api: { widthApiKey: "k" }, blockchain: { trustinApiKey: "old" }, sar: { on: true } })
       );
       const s = getSettings() as unknown as Record<string, unknown>;
       expect(s.blockchain).toBeUndefined();
-      expect(s.ai).toBeUndefined();
+      expect(s.sar).toBeUndefined();
+    });
+
+    it("keeps the ai section (DeepSeek reviewer)", () => {
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockReturnValue(
+        JSON.stringify({ api: { widthApiKey: "k" }, ai: { deepseekApiKey: "sk-x", model: "deepseek-reasoner" } })
+      );
+      const s = getSettings();
+      expect(s.ai.deepseekApiKey).toBe("sk-x");
+      expect(s.ai.model).toBe("deepseek-reasoner");
+      expect(s.ai.baseUrl).toBe("https://api.deepseek.com"); // filled from defaults
     });
 
     it("returns defaults on corrupt file", () => {

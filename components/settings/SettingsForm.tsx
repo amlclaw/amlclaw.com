@@ -30,6 +30,11 @@ interface Settings {
     maxTxPerRun: number;
     defaultMinAmount: number;
   };
+  ai: {
+    deepseekApiKey: string;
+    model: string;
+    baseUrl: string;
+  };
   notifications: {
     webhookUrl: string;
     webhookEnabled: boolean;
@@ -89,12 +94,13 @@ export default function SettingsForm() {
   };
 
 
-  const testChainKey = async (provider: "width" | "etherscan" | "trongrid") => {
+  const testChainKey = async (provider: "width" | "etherscan" | "trongrid" | "deepseek") => {
     setKeyTests((t) => ({ ...t, [provider]: { testing: true } }));
     try {
       const apiKey =
         provider === "etherscan" ? settings.api.etherscanApiKey
         : provider === "trongrid" ? settings.api.trongridApiKey
+        : provider === "deepseek" ? settings.ai.deepseekApiKey
         : settings.api.widthApiKey;
       const res = await fetch("/api/settings/test-chain-key", {
         method: "POST",
@@ -266,6 +272,39 @@ export default function SettingsForm() {
           </Field>
           <Field label="Default Min Amount" hint="Token units, e.g. 10 USDT" style={{ flex: 1, minWidth: 140 }}>
             <input className="input" type="number" min={0} step="any" value={settings.monitoring.defaultMinAmount} onChange={(e) => set("monitoring", "defaultMinAmount", parseFloat(e.target.value) || 10)} />
+          </Field>
+        </div>
+      </Section>
+
+      {/* ── AI Reviewer (DeepSeek) ── */}
+      <Section title="AI Reviewer · AI 智能复核（DeepSeek）">
+        <div style={{ fontSize: "var(--text-xs)", color: "var(--text-tertiary)", marginBottom: "var(--sp-2)" }}>
+          在地址/交易筛查结果页启用「AI 复核」——当地址本身高风险、或与制裁/黑客等有直接交互时给出独立意见（即便占比分数偏低）。留空则不启用。
+        </div>
+        <Field label="DeepSeek API Key" hint={<KeyTestHint state={keyTests.deepseek} fallback={<span>Get a key at <a href="https://platform.deepseek.com" target="_blank" rel="noopener" style={{ color: "var(--primary-500)" }}>platform.deepseek.com</a></span>} />}>
+          <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+            <input
+              className="input"
+              type="password"
+              value={settings.ai.deepseekApiKey}
+              onChange={(e) => { set("ai", "deepseekApiKey", e.target.value); setKeyTests((t) => ({ ...t, deepseek: {} })); }}
+              placeholder="sk-..."
+              style={{ flex: 1 }}
+            />
+            <button type="button" className="btn btn-sm btn-secondary" onClick={() => testChainKey("deepseek")} disabled={keyTests.deepseek?.testing}>
+              {keyTests.deepseek?.testing ? "Testing..." : "Test"}
+            </button>
+          </div>
+        </Field>
+        <div style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap" }}>
+          <Field label="默认模型" hint="deepseek-chat = V3（快）· deepseek-reasoner = R1（更强推理）" style={{ flex: 1, minWidth: 200 }}>
+            <select className="input" value={settings.ai.model} onChange={(e) => set("ai", "model", e.target.value)}>
+              <option value="deepseek-chat">deepseek-chat (V3)</option>
+              <option value="deepseek-reasoner">deepseek-reasoner (R1)</option>
+            </select>
+          </Field>
+          <Field label="API Base URL" style={{ flex: 1, minWidth: 200 }}>
+            <input className="input" value={settings.ai.baseUrl} onChange={(e) => set("ai", "baseUrl", e.target.value)} placeholder="https://api.deepseek.com" />
           </Field>
         </div>
       </Section>

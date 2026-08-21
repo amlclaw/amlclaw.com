@@ -50,6 +50,16 @@ export interface Settings {
     defaultMinAmount: number;
   };
 
+  // AI Reviewer (DeepSeek)
+  ai: {
+    /** DeepSeek API key (OpenAI-compatible). Empty = AI reviewer disabled. */
+    deepseekApiKey: string;
+    /** Default model: deepseek-chat (V3) or deepseek-reasoner (R1). */
+    model: string;
+    /** API base URL (OpenAI-compatible). */
+    baseUrl: string;
+  };
+
   // Notifications
   notifications: {
     webhookUrl: string;
@@ -87,6 +97,11 @@ export const DEFAULT_SETTINGS: Settings = {
     maxTxPerRun: 20,
     defaultMinAmount: 100,
   },
+  ai: {
+    deepseekApiKey: "",
+    model: "deepseek-chat",
+    baseUrl: "https://api.deepseek.com",
+  },
   notifications: {
     webhookUrl: "",
     webhookEnabled: false,
@@ -117,7 +132,7 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
 }
 
 /** Sections that belong to the current settings shape. */
-const VALID_SECTIONS = new Set(["api", "screening", "monitoring", "notifications"]);
+const VALID_SECTIONS = new Set(["api", "screening", "monitoring", "ai", "notifications"]);
 
 export function getSettings(): Settings {
   try {

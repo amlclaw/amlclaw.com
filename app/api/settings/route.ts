@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSettings, updateSettings } from "@/lib/settings";
 
-const ALLOWED_SECTIONS = new Set(["api", "screening", "monitoring", "notifications"]);
+const ALLOWED_SECTIONS = new Set(["api", "screening", "monitoring", "ai", "notifications"]);
 
 const SECRET_FIELDS: [section: string, field: string][] = [
   ["api", "widthApiKey"],
   ["api", "etherscanApiKey"],
   ["api", "trongridApiKey"],
+  ["ai", "deepseekApiKey"],
 ];
 
 function maskKey(k: string): string {

@@ -8,6 +8,7 @@ import type { KytScreenResult } from "@/lib/width-api";
 import type { FundScore } from "@/lib/risk-score";
 import FundScoreCard, { ScoreVerdictBadge, PathAnalysisDivider } from "./FundScoreCard";
 import RiskEvidence from "./RiskEvidence";
+import AiReviewer from "./AiReviewer";
 
 interface KytResultProps {
   job: Record<string, unknown> | null;
@@ -175,6 +176,9 @@ function CompletedKytReport({ job }: { job: Record<string, unknown> }) {
             </div>
           </div>
         )}
+
+        {/* ── AI reviewer: catches direct/self high-risk the score may under-weight ── */}
+        <AiReviewer type="kyt" result={r as unknown as Record<string, unknown>} />
 
         {/* ── Everything below is path-level EVIDENCE (rule engine view) ── */}
         {fundScore && <PathAnalysisDivider />}

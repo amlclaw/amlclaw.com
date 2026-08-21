@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getEtherscanApiKey, getTrongridApiKey, getWidthApiKey, getWidthBaseUrl } from "@/lib/settings";
+import { getEtherscanApiKey, getTrongridApiKey, getWidthApiKey, getWidthBaseUrl, getSettings } from "@/lib/settings";
 
 /**
  * Test a Width.info / Etherscan / TronGrid API key with a cheap real request.
@@ -119,5 +119,31 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ detail: "provider must be 'width', 'etherscan' or 'trongrid'" }, { status: 400 });
+  if (provider === "deepseek") {
+    const settings = getSettings();
+    if (!apiKey || apiKey.startsWith("*")) apiKey = settings.ai.deepseekApiKey;
+    if (!apiKey) {
+      return NextResponse.json({ ok: false, detail: "No DeepSeek API key configured" });
+    }
+    const baseUrl = (settings.ai.baseUrl || "https://api.deepseek.com").replace(/\/+$/, "");
+    try {
+      // GET /models validates the key cheaply without spending tokens.
+      const res = await fetch(`${baseUrl}/models`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (res.status === 401 || res.status === 403) {
+        return NextResponse.json({ ok: false, detail: `DeepSeek rejected the key (HTTP ${res.status})` });
+      }
+      const json = (await res.json().catch(() => null)) as { data?: { id?: string }[] } | null;
+      if (res.ok && Array.isArray(json?.data)) {
+        return NextResponse.json({ ok: true, detail: `OK — ${json!.data!.length} models available` });
+      }
+      return NextResponse.json({ ok: false, detail: `DeepSeek error: HTTP ${res.status}` });
+    } catch (e) {
+      return NextResponse.json({ ok: false, detail: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  return NextResponse.json({ detail: "provider must be 'width', 'etherscan', 'trongrid' or 'deepseek'" }, { status: 400 });
 }

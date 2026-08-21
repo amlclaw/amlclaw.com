@@ -7,6 +7,7 @@ import type { KyaScreenResult, ScoreOverview } from "@/lib/width-api";
 import type { FundScore } from "@/lib/risk-score";
 import FundScoreCard, { ScoreVerdictBadge, PathAnalysisDivider } from "./FundScoreCard";
 import RiskEvidence from "./RiskEvidence";
+import AiReviewer from "./AiReviewer";
 
 interface ScreeningResultProps {
   job: Record<string, unknown> | null;
@@ -123,6 +124,9 @@ function CompletedReport({ job }: { job: Record<string, unknown>; jobId: string 
             mode="kya"
           />
         )}
+
+        {/* ── AI reviewer: catches direct/self high-risk the score may under-weight ── */}
+        <AiReviewer type="kya" result={r as unknown as Record<string, unknown>} />
 
         {/* ── Everything below is path-level EVIDENCE (rule engine view) ── */}
         {job.fund_score != null && <PathAnalysisDivider />}
