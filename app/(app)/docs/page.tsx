@@ -19,8 +19,8 @@ export default function ApiDocsPage() {
       </h1>
       <p style={{ color: "var(--text-tertiary)", fontSize: "var(--text-sm)", marginBottom: "var(--sp-5)" }}>
         {tr(
-          "AMLClaw 自托管实例的 REST API。所有筛查由 width.info V3 引擎驱动，合规规则集在服务端运行。",
-          "REST API of your self-hosted AMLClaw instance. All screening is powered by the width.info V3 engine — compliance rulesets run server-side."
+          "AMLClaw 自托管实例的 REST API。所有筛查由 width.info V3 引擎驱动 —— 合规规则集与资金占比评分（0–100 分 + 处置裁定）均在服务端计算。",
+          "REST API of your self-hosted AMLClaw instance. All screening is powered by the width.info V3 engine — both the compliance rulesets and the fund-attribution score (0–100 + verdict) are computed server-side."
         )}
       </p>
 
@@ -72,8 +72,15 @@ export default function ApiDocsPage() {
               "核心信号是 risk（等级），由你的规则集决定：low → medium → high → critical。riskScore 只是等级的固定映射（low=10 / medium=60 / high=80 / critical=90），无独立含义，仅一处例外有用：riskScore=0 表示无任何规则命中（干净），可与「low 级规则命中」（=10）区分",
               "The core signal is risk (the level), determined by your ruleset: low → medium → high → critical. riskScore is just a fixed mapping of the level (low=10 / medium=60 / high=80 / critical=90) with no meaning of its own — except that 0 means NO rule triggered at all (clean), distinguishing it from a low-severity hit (=10)"
             )],
+            [tr("资金占比分数", "Fund score"), tr(
+              "V3 引擎服务端计算的资金归因分数：score（0–100，涉险资金占总流量的加权占比）+ verdict（accept 放行 / review 复核 / edd 加强尽调 / block 拦截）。与「风险等级」互补 —— 等级看命中了什么规则，分数看被污染资金有多大占比。注意：分数可能偏低（涉险占比小）但地址本身或直接对手方仍是高风险，此时不能只看分数（AI Reviewer 正是为此而设）。",
+              "The fund-attribution score computed server-side by the V3 engine: score (0–100, weighted share of tainted funds in total flow) + verdict (accept / review / edd / block). Complements the risk level — the level says which rule hit, the score says how large the tainted share is. Note: a low score (small tainted share) can still hide a genuinely high-risk address or direct counterparty — don't read the score alone (this is exactly what the AI Reviewer guards against)."
+            )],
             [tr("处置动作", "Actions"), tr("block（拦截）/ review（人工复核）/ alert（告警）/ monitor（持续观察）", "block / review / alert / monitor")],
             ["ruleset_id", tr("服务端规则集 ID。0 = 内置默认（KYA 默认集；KYT 按方向用 KYT-IN / KYT-OUT 内置集）。规则集在 width.info 平台管理。", "Server-side ruleset id. 0 = builtin default (KYA default; KYT uses KYT-IN / KYT-OUT builtins per direction). Rulesets are managed on width.info.")],
+            ["scoring_ruleset_id", tr("服务端评分规则集 ID（资金占比分数矩阵）。0 = 内置评分矩阵。与命中规则集（ruleset_id）相互独立。", "Server-side scoring ruleset id (the fund-score matrix). 0 = builtin matrix. Independent of the hit ruleset (ruleset_id).")],
+            ["force_time_sequence", tr("强制沿链上时间顺序追溯路径（默认 true）—— 只把「先入后出」等符合时间因果的路径计入评分。", "Force chronological ordering along traced paths (default true) — only time-causal paths (in-before-out) count toward the score.")],
+            ["cex_immune", tr("KYA：将已知中心化交易所地址视为免疫（分数 0）（默认 true）—— 避免把「资金流向交易所」误判为风险。", "KYA: treat known CEX addresses as immune (score 0) (default true) — so funds simply reaching an exchange aren't mis-scored as risk.")],
             [tr("异步任务", "Async jobs"), tr("筛查接口立即返回 job_id，客户端每 3 秒轮询任务接口直到 status 为 completed 或 error。", "Screening endpoints return a job_id immediately; poll the job endpoint every ~3s until status is completed or error.")],
             [tr("支持链", "Chains"), "Ethereum · Tron"],
             [tr("支持代币", "Tokens"), tr("usdt / usdc（Tron 仅 usdt）", "usdt / usdc (Tron: usdt only)")],
@@ -90,7 +97,10 @@ export default function ApiDocsPage() {
             ["chain", "string", "Tron", tr("Ethereum | Tron", "Ethereum | Tron")],
             ["address", "string", tr("必填", "required"), tr("要筛查的钱包地址", "Wallet address to screen")],
             ["token", "string", "usdt", "usdt | usdc"],
-            ["ruleset_id", "number", "0", tr("服务端规则集 ID，0 = 默认", "Server-side ruleset id, 0 = default")],
+            ["ruleset_id", "number", "0", tr("服务端命中规则集 ID，0 = 默认", "Server-side hit ruleset id, 0 = default")],
+            ["scoring_ruleset_id", "number", "0", tr("服务端评分规则集 ID（资金占比分数矩阵），0 = 内置", "Server-side scoring ruleset id (fund-score matrix), 0 = builtin")],
+            ["force_time_sequence", "boolean", "true", tr("按链上时间顺序追溯路径", "Trace paths in chronological order")],
+            ["cex_immune", "boolean", "true", tr("已知交易所地址视为免疫（分数 0）", "Treat known exchanges as immune (score 0)")],
             ["inflow_hops", "number", "3", tr("入金追溯层数 0–5", "Inflow tracing depth 0–5")],
             ["outflow_hops", "number", "3", tr("出金追溯层数 0–5", "Outflow tracing depth 0–5")],
             ["max_nodes", "number", "200", tr("每层最大扩展节点数", "Max nodes expanded per hop")],
@@ -116,6 +126,9 @@ export default function ApiDocsPage() {
           head={[tr("字段", "Field"), tr("说明", "Description")]}
           rows={[
             ["risk / riskScore", tr("综合风险等级（核心信号）；riskScore 为等级固定映射仅作参考，0 = 无命中", "Overall risk level (the core signal); riskScore is a fixed mapping for reference only, 0 = no hits")],
+            ["score", tr("资金占比分数对象（服务端计算，FundScore）：score（0–100）、verdict（accept/review/edd/block）、selfHit（地址本身是否被标记）、components[]（逐格 base×weight×ratio=points 明细）、directAmount/indirectAmount/outflowAmount 等。denominators 缺失时 score=null", "Fund-attribution score object (server-side, FundScore): score (0–100), verdict (accept/review/edd/block), selfHit (is the address itself flagged), components[] (per-cell base×weight×ratio=points), directAmount/indirectAmount/outflowAmount… score=null when denominators are unavailable")],
+            ["scoreOverview", tr("对象链上总量概览：inTotal / outTotal / balance / inCount / outCount 等（评分的分母）", "Subject's on-chain volume overview: inTotal / outTotal / balance / inCount / outCount… (the scoring denominators)")],
+            ["subjectTags", tr("对象地址自身的标签（如本身被制裁/冻结/黑客）", "The subject address's own tags (e.g. it is itself sanctioned / frozen / hacker)")],
             ["riskReason", tr("最高风险命中的人类可读说明", "Human-readable summary of the top finding")],
             ["addressIdentifications[]", tr("地址自身身份命中（如地址本身被制裁）", "Identity-level findings (e.g. the address itself is sanctioned)")],
             ["exposures[]", tr("按类别/方向聚合的风险敞口金额", "Aggregated exposure amounts by category and direction")],
@@ -146,10 +159,13 @@ export default function ApiDocsPage() {
           ]}
         />
         <Endpoint method="GET" path="/api/kyt/{jobId}" desc={tr("轮询任务状态与结果。", "Poll job status and result.")} />
-        <P>{tr("result 除 hits 外还包含 Chainalysis 风格的 alerts：", "Besides hits, the result carries Chainalysis-style alerts:")}</P>
+        <P>{tr("result 除 hits、Chainalysis 风格的 alerts 外，还包含服务端资金占比评分（按方向拆分）：", "Besides hits and Chainalysis-style alerts, the result carries the server-side fund score (split by direction):")}</P>
         <Table
           head={[tr("字段", "Field"), tr("说明", "Description")]}
           rows={[
+            ["score / inScore / outScore", tr("资金占比分数对象（FundScore，同 KYA 的 score）：score 为综合分，inScore / outScore 为资金来源 / 资金去向两个方向的子分。", "Fund score objects (FundScore, same shape as KYA's score): score is the overall, inScore / outScore are the source-of-funds / destination sub-scores.")],
+            ["scoreOverview / inScoreOverview / outScoreOverview", tr("对应的链上总量概览（评分分母）", "Corresponding on-chain volume overviews (scoring denominators)")],
+            ["fromTags", tr("发起方（from）地址自身的标签", "The sender (from) address's own tags")],
             ["alerts[].alertLevel", "low | medium | high | critical"],
             ["alerts[].category", tr("告警类别（如 Sanctions / Cybercrime）", "Alert category (e.g. Sanctions / Cybercrime)")],
             ["alerts[].exposureType", tr("DIRECT（≤1 跳）或 INDIRECT（>1 跳）", "DIRECT (≤1 hop) or INDIRECT (>1 hop)")],
@@ -158,6 +174,29 @@ export default function ApiDocsPage() {
             ["alerts[].opponentAddress / action", tr("风险对手方地址 / 建议动作", "Risk counterparty address / recommended action")],
           ]}
         />
+      </Section>
+
+      {/* ── AI Reviewer ── */}
+      <Section title={tr("AI 智能复核（DeepSeek）", "AI Reviewer (DeepSeek)")}>
+        <P>
+          {tr(
+            "针对「资金占比分数偏低、但地址本身或直接对手方确实高风险」这一盲区，KYA / KYT 结果页内置一个 AI 复核模块。它先做确定性判定（不依赖任何模型）：只要存在自身命中（selfHit）或与高风险实体的直接（≤1 跳）交互，无论分数高低都直接给出 alert；随后可选调用 DeepSeek 给出合规官口吻的独立复核意见。DeepSeek 的裁定不能弱化确定性结论（deterministic floor）。",
+            "For the blind spot where the fund score is low but the address itself — or a direct counterparty — is genuinely high-risk, the KYA / KYT result pages embed an AI reviewer. It first runs a deterministic check (no model needed): any self-hit or direct (≤1 hop) interaction with a high-risk entity raises an alert regardless of score; then it can optionally call DeepSeek for an independent compliance-officer opinion. The model's verdict can never soften the deterministic conclusion (a deterministic floor)."
+          )}
+        </P>
+        <Endpoint method="POST" path="/api/ai-review" desc={tr("对一次 KYA/KYT 结果运行 AI 复核。请求体为从结果页提取的紧凑 ReviewInput（type=kya|kyt + 对象、分数、自身/直接高风险命中摘要）。未配置 DeepSeek Key 时返回 400。", "Run an AI review over a KYA/KYT result. Body is the compact ReviewInput extracted from the result page (type=kya|kyt + subject, score, self/direct high-risk findings). Returns 400 when no DeepSeek key is configured.")} />
+        <Code>{`// → { "ok": true, "review": {
+//   "flag": "alert" | "caution" | "clear",
+//   "headline": "${zh ? "一句话结论" : "one-line verdict"}",
+//   "reasons": ["..."],
+//   "recommendation": "${zh ? "建议处置" : "recommended action"}",
+//   "model": "deepseek-v4-flash" } }`}</Code>
+        <P>
+          {tr(
+            "配置在 设置 → AI Reviewer：DeepSeek API Key、默认模型（deepseek-v4-flash 快 / deepseek-v4-pro 强）、Base URL。留空 Key 则模块仅显示确定性判定，不发起模型调用。",
+            "Configured under Settings → AI Reviewer: DeepSeek API key, default model (deepseek-v4-flash fast / deepseek-v4-pro stronger), base URL. With no key, the module shows only the deterministic verdict and makes no model call."
+          )}
+        </P>
       </Section>
 
       {/* ── History ── */}
@@ -245,8 +284,9 @@ export default function ApiDocsPage() {
           head={["Section", tr("内容", "Contents")]}
           rows={[
             ["api", tr("widthApiKey（必填）、widthBaseUrl、etherscanApiKey、trongridApiKey", "widthApiKey (required), widthBaseUrl, etherscanApiKey, trongridApiKey")],
-            ["screening", tr("追溯默认值：hops、max_nodes(200)、max_opponent_paths(50)、min_amount、默认规则集 ID", "Tracing defaults: hops, max_nodes (200), max_opponent_paths (50), min_amount, default ruleset ids")],
+            ["screening", tr("追溯与评分默认值：hops、max_nodes(200)、max_opponent_paths(50)、min_amount、命中规则集 ID、评分规则集 ID、forceTimeSequence、cexImmune", "Tracing & scoring defaults: hops, max_nodes (200), max_opponent_paths (50), min_amount, hit ruleset ids, scoring ruleset id, forceTimeSequence, cexImmune")],
             ["monitoring", tr("默认调度、单轮筛查上限（maxTxPerRun）、默认最小金额", "Default schedule, per-run screening cap (maxTxPerRun), default min amount")],
+            ["ai", tr("AI Reviewer：deepseekApiKey、model（默认 deepseek-v4-flash）、baseUrl", "AI Reviewer: deepseekApiKey, model (default deepseek-v4-flash), baseUrl")],
             ["notifications", tr("高风险告警 Webhook URL 与开关", "High-risk alert webhook URL and toggle")],
           ]}
         />
@@ -280,15 +320,19 @@ export default function ApiDocsPage() {
     "chain_name": "Tron", "address": "T...", "token": "usdt",
     "inflow_hops": 3, "outflow_hops": 3,
     "max_nodes_per_hop": 200, "max_opponent_paths": 50,
-    "min_amount": 10, "ruleset_id": 0, "scenario": "all",
-    "mode": "sync"
+    "min_amount": 10, "ruleset_id": 0, "scoring_ruleset_id": 0,
+    "force_time_sequence": true, "cex_immune": true,
+    "scenario": "all", "mode": "sync"
   }'
-# → { "code": 0, "data": { "risk": "critical", "hits": [...], ... } }`}</Code>
+# → { "code": 0, "data": { "risk": "critical",
+#       "score": { "score": 82, "verdict": "block", "selfHit": true, ... },
+#       "scoreOverview": { "inTotal": ..., "balance": ... },
+#       "hits": [...], "subjectTags": [...] } }`}</Code>
 
         <P>
           {tr(
-            "词汇对齐：风险等级 low/medium/high/critical；处置动作 block/review/alert/monitor；hits[].pathNodes 为完整路径节点（含标签与金额），deep=0 是风险实体。",
-            "Vocabulary: risk levels low/medium/high/critical; actions block/review/alert/monitor; hits[].pathNodes are full path nodes (with tags & amounts), deep=0 = the risk entity."
+            "词汇对齐：风险等级 low/medium/high/critical；处置动作 block/review/alert/monitor；资金占比分数 score（0–100）+ verdict（accept/review/edd/block）由服务端计算并原样透传；hits[].pathNodes 为完整路径节点（含标签与金额），deep=0 是风险实体。",
+            "Vocabulary: risk levels low/medium/high/critical; actions block/review/alert/monitor; the fund score (0–100) + verdict (accept/review/edd/block) are computed server-side and passed through as-is; hits[].pathNodes are full path nodes (with tags & amounts), deep=0 = the risk entity."
           )}
         </P>
       </Section>
