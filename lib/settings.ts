@@ -54,7 +54,8 @@ export interface Settings {
   ai: {
     /** DeepSeek API key (OpenAI-compatible). Empty = AI reviewer disabled. */
     deepseekApiKey: string;
-    /** Default model: deepseek-chat (V3) or deepseek-reasoner (R1). */
+    /** Default model: deepseek-v4-flash (fast) or deepseek-v4-pro (stronger).
+     *  Legacy deepseek-chat/deepseek-reasoner aliases were retired 2026-07-24. */
     model: string;
     /** API base URL (OpenAI-compatible). */
     baseUrl: string;
@@ -99,7 +100,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   ai: {
     deepseekApiKey: "",
-    model: "deepseek-chat",
+    model: "deepseek-v4-flash",
     baseUrl: "https://api.deepseek.com",
   },
   notifications: {

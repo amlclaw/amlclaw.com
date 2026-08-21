@@ -297,10 +297,12 @@ export default function SettingsForm() {
           </div>
         </Field>
         <div style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap" }}>
-          <Field label="默认模型" hint="deepseek-chat = V3（快）· deepseek-reasoner = R1（更强推理）" style={{ flex: 1, minWidth: 200 }}>
+          <Field label="默认模型" hint="deepseek-v4-flash = 快 · deepseek-v4-pro = 更强（含思考模式）" style={{ flex: 1, minWidth: 200 }}>
             <select className="input" value={settings.ai.model} onChange={(e) => set("ai", "model", e.target.value)}>
-              <option value="deepseek-chat">deepseek-chat (V3)</option>
-              <option value="deepseek-reasoner">deepseek-reasoner (R1)</option>
+              <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+              <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+              <option value="deepseek-chat">deepseek-chat (已废弃别名)</option>
+              <option value="deepseek-reasoner">deepseek-reasoner (已废弃别名)</option>
             </select>
           </Field>
           <Field label="API Base URL" style={{ flex: 1, minWidth: 200 }}>

@@ -75,7 +75,7 @@ export async function runAiReview(input: ReviewInput): Promise<AiReviewResult> {
   if (!deepseekApiKey) {
     throw new Error("DeepSeek API key not configured. Set it in Settings → AI Reviewer.");
   }
-  const useModel = model || "deepseek-chat";
+  const useModel = model || "deepseek-v4-flash";
   const body: Record<string, unknown> = {
     model: useModel,
     messages: [
@@ -83,11 +83,12 @@ export async function runAiReview(input: ReviewInput): Promise<AiReviewResult> {
       { role: "user", content: buildUserPrompt(input) },
     ],
     temperature: 0.2,
-    max_tokens: 1200,
+    max_tokens: 2000,
     stream: false,
   };
-  // json_object mode is supported by deepseek-chat; the reasoner reasons in prose first.
-  if (!useModel.includes("reasoner")) body.response_format = { type: "json_object" };
+  // DeepSeek V4 has thinking mode on by default and may emit reasoning before
+  // the answer, so we don't force response_format — the JSON is requested in
+  // the prompt and extracted leniently (handles fences / reasoning prefixes).
 
   const url = `${(baseUrl || "https://api.deepseek.com").replace(/\/+$/, "")}/chat/completions`;
   const res = await fetch(url, {
